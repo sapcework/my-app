@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx create-vite@latest kakeiboWeb --template react-ts)",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

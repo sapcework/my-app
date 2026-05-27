@@ -1,0 +1,116 @@
+import { useState, useRef, useEffect } from 'react'
+import { formatYearMonth, prevMonth, nextMonth, toYearMonth } from '../utils/date'
+
+type Props = {
+  month: string
+  onChange: (month: string) => void
+  disableFuture?: boolean
+}
+
+export const MonthSwitcher = ({ month, onChange, disableFuture = true }: Props) => {
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickerYear, setPickerYear] = useState(Number(month.split('-')[0]))
+  const popupRef = useRef<HTMLDivElement>(null)
+
+  const currentMonth = toYearMonth(new Date())
+  const isAtMax = disableFuture && month >= currentMonth
+
+  useEffect(() => {
+    if (!showPicker) return
+    const handler = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showPicker])
+
+  const openPicker = () => {
+    setPickerYear(Number(month.split('-')[0]))
+    setShowPicker(true)
+  }
+
+  const selectMonth = (m: number) => {
+    const ym = `${pickerYear}-${String(m).padStart(2, '0')}`
+    if (disableFuture && ym > currentMonth) return
+    onChange(ym)
+    setShowPicker(false)
+  }
+
+  const selectedM = Number(month.split('-')[1])
+  const selectedY = Number(month.split('-')[0])
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(prevMonth(month))}
+        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl"
+      >
+        ‹
+      </button>
+
+      <div ref={popupRef} className="relative">
+        <button
+          onClick={openPicker}
+          className="text-base font-semibold min-w-28 text-center px-2 py-1 rounded-lg hover:bg-gray-100"
+        >
+          {formatYearMonth(month)}
+        </button>
+
+        {showPicker && (
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-white shadow-xl rounded-2xl p-4 z-50 w-60 border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <button
+                onClick={() => setPickerYear((y) => y - 1)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+              >
+                ‹
+              </button>
+              <span className="font-semibold text-gray-800">{pickerYear}年</span>
+              <button
+                onClick={() => setPickerYear((y) => y + 1)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+              >
+                ›
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+                const ym = `${pickerYear}-${String(m).padStart(2, '0')}`
+                const isSelected = m === selectedM && pickerYear === selectedY
+                const isFuture = disableFuture && ym > currentMonth
+                return (
+                  <button
+                    key={m}
+                    onClick={() => selectMonth(m)}
+                    disabled={isFuture}
+                    className={`py-2 rounded-xl text-sm font-medium transition-colors ${
+                      isSelected
+                        ? 'bg-blue-600 text-white'
+                        : isFuture
+                          ? 'text-gray-300 cursor-not-allowed'
+                          : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {m}月
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={() => !isAtMax && onChange(nextMonth(month))}
+        disabled={isAtMax}
+        className={`w-8 h-8 flex items-center justify-center rounded-full text-xl ${
+          isAtMax ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100 text-gray-500'
+        }`}
+      >
+        ›
+      </button>
+    </div>
+  )
+}
