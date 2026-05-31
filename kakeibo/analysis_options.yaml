@@ -1,0 +1,13 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    invalid_annotation_target: ignore # Freezed/Riverpod生成コードのアノテーション警告を抑制
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - avoid_print
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_fields
