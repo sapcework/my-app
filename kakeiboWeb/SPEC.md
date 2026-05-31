@@ -1,0 +1,467 @@
+# kakeiboWeb 仕様書
+
+## 概要
+
+シンプルな個人支出管理 Web アプリ。スマートフォンでの利用を主眼に置いたモバイルファーストの PWA 対応 SPA。
+
+- **バージョン**: 1.0.0
+- **ビルド**: 2025.05
+- **リポジトリ**: `kakeiboWeb/`
+
+---
+
+## 技術スタック
+
+| 分類 | ライブラリ / ツール | バージョン |
+|------|-------------------|-----------|
+| UI フレームワーク | React | ^19.2.5 |
+| 言語 | TypeScript | ~6.0.2 |
+| ビルドツール | Vite | ^8.0.10 |
+| CSS | Tailwind CSS v4 | ^4.1.8 |
+| ルーティング | React Router v7 | ^7.6.1 |
+| 状態管理 | Zustand v5 + persist | ^5.0.4 |
+| チャート | Recharts | ^3.8.1 |
+| アイコン | Lucide React | ^1.16.0 |
+| デプロイ | Vercel | — |
+
+### ビルド・開発コマンド
+
+```bash
+npm run dev       # 開発サーバー起動
+npm run build     # tsc -b && vite build
+npm run lint      # ESLint
+npm run preview   # ビルド成果物のプレビュー
+```
+
+---
+
+## データモデル
+
+### Category（カテゴリ）
+
+```ts
+type Category = {
+  id: string      // UUID
+  name: string    // カテゴリ名
+  color: string   // 表示色（hex）
+  icon: string    // 絵文字アイコン
+}
+```
+
+**初期データ（7件）**
+
+| id | name | color | icon |
+|----|------|-------|------|
+| 1 | 食費 | #FF9800 | 🍽️ |
+| 2 | 交通費 | #2196F3 | 🚗 |
+| 3 | 日用品 | #4CAF50 | 🛒 |
+| 4 | 娯楽 | #9C27B0 | 🎮 |
+| 5 | 医療 | #F44336 | 🏥 |
+| 6 | 住居 | #009688 | 🏠 |
+| 7 | その他 | #9E9E9E | 📦 |
+
+### Expense（支出）
+
+```ts
+type Expense = {
+  id: string          // crypto.randomUUID()
+  amount: number      // 金額（円）
+  categoryId: string  // Category.id への参照
+  itemName?: string   // 項目名（任意）
+  note: string        // メモ（任意）
+  date: string        // YYYY-MM-DD
+  createdAt: string   // ISO 8601（自動セット）
+  updatedAt?: string  // ISO 8601（更新時に自動セット）
+}
+```
+
+### Budget（予算）
+
+```ts
+type Budget = {
+  month: string   // YYYY-MM
+  amount: number  // 予算金額（円）
+}
+```
+
+### RecurringExpense（定期支出）
+
+```ts
+type RecurringExpense = {
+  id: string        // UUID
+  amount: number    // 金額（円）
+  categoryId: string
+  name: string      // 支出名（必須）
+  dayOfMonth: number // 毎月の発生日（1〜31）
+}
+```
+
+---
+
+## データ永続化
+
+Zustand の `persist` ミドルウェアで **localStorage** に保存。
+
+| ストア | localStorage キー |
+|--------|-----------------|
+| expenseStore | `kakeibo-expenses` |
+| categoryStore | `kakeibo-categories` |
+| budgetStore | `kakeibo-budgets` |
+| recurringStore | `kakeibo-recurring` |
+
+---
+
+## 画面構成・ルーティング
+
+```
+/               → ホーム（HomePage）
+/expenses       → 支出一覧（ExpenseListPage）
+/expenses/new   → 支出追加（ExpenseFormPage）
+/expenses/:id/edit → 支出編集（ExpenseFormPage）
+/stats          → 統計（StatsPage）
+/table          → 月別支出表（TablePage）
+/settings       → 設定（SettingsPage）
+/categories     → カテゴリ管理（CategoryPage）
+/budget         → 予算設定（BudgetPage）
+/recurring      → 定期支出（RecurringPage）
+```
+
+全ルートは `Layout` コンポーネントでラップされ、下部ナビゲーションバーが共通表示される。
+
+### ナビゲーションバー（Navbar）
+
+5タブ構成。アクティブタブはインジゴ色でハイライト。
+
+| タブ | アイコン | パス |
+|------|---------|------|
+| ホーム | Home | / |
+| 支出 | Receipt | /expenses |
+| 表 | Grid3X3 | /table |
+| 統計 | PieChart | /stats |
+| 設定 | Settings | /settings |
+
+---
+
+## 各画面の仕様
+
+### ホーム（HomePage）
+
+**パス**: `/`
+
+**表示内容**
+- 月選択スイッチャー（`MonthSwitcher`）
+- KPI カード
+  - 今月の支出合計
+  - 件数
+  - 予算設定時: 残額 or 超過額バッジ（緑 / 赤）
+  - 予算設定時: 使用率プログレスバー（0〜79%: インジゴ、80〜99%: アンバー、超過: ローズ）
+- 最近の支出リスト（直近5件、日付降順）
+  - カテゴリアイコン・カテゴリ名・項目名 or メモ・日付・金額
+  - タップで編集画面へ遷移
+- FAB（右下固定）: 支出追加 → `/expenses/new`
+
+---
+
+### 支出一覧（ExpenseListPage）
+
+**パス**: `/expenses`
+
+**表示内容**
+- 月選択スイッチャー
+- キーワード検索バー（項目名・メモ・金額に対してインクリメンタル検索）
+- カテゴリフィルターチップ（「すべて」＋各カテゴリ）
+- 件数・合計金額サマリー
+- 支出リスト（日付グループ表示、日付降順）
+  - 日付ヘッダー帯: `YYYY年M月D日(曜日)` ＋ 日計金額（隣接表示）
+  - 各支出アイテム: 左端にカテゴリカラー帯 → アイコン → カテゴリ名・項目名 → 金額・削除ボタン
+  - アイテムタップで編集画面へ遷移
+  - 削除ボタン: confirm ダイアログ後に削除
+- FAB（右下固定）: 支出追加 → `/expenses/new`
+
+---
+
+### 支出追加・編集（ExpenseFormPage）
+
+**パス**: `/expenses/new`, `/expenses/:id/edit`
+
+**フォーム項目**
+
+| フィールド | 入力方法 | 必須 |
+|-----------|---------|------|
+| 金額 | 電卓（Calculator）ボタン起動 | ○ |
+| カテゴリ | グリッドボタン選択（3列） | ○ |
+| 日付 | `<input type="date">` | ○ |
+| 項目名 | テキスト入力（既存項目名のサジェスト付き） | — |
+| メモ | テキストエリア（2行） | — |
+
+**動作**
+- 新規: `addExpense` → `createdAt` 自動セット
+- 編集: `updateExpense` → `updatedAt` 自動セット
+- 削除ボタン（編集時のみ）: confirm ダイアログ後に削除、前画面に戻る
+- 金額が 0 の場合は送信ボタンを無効化
+- デフォルト日付: 当月なら今日、それ以外なら月初1日
+
+---
+
+### 統計（StatsPage）
+
+**パス**: `/stats`
+
+**表示内容**
+- 月選択スイッチャー
+- 合計金額カード ＋ CSV 出力ボタン
+- ドーナツパイチャート（recharts）
+  - カテゴリ別色分け
+  - タップ: カテゴリ詳細モーダル表示
+  - ツールチップ: `¥{金額}`
+  - 凡例表示
+- カテゴリ別リスト（金額降順）
+  - アイコン・カテゴリ名・割合(%)・金額
+  - タップ: カテゴリ詳細モーダル表示
+- カテゴリ詳細モーダル（ボトムシート）
+  - カテゴリ名・件数・合計金額
+  - 支出リスト（日付降順）
+  - 各アイテムタップで編集画面へ遷移
+
+**CSV 出力**（当月分）
+- ファイル名: `kakeibo_YYYY-MM.csv`
+- 列: 日付, カテゴリ, 項目名, メモ, 金額, 登録日時, 更新日時
+- 登録・更新日時フォーマット: `YYYYMMDDHHMMSS`（ローカル時刻）
+- BOM 付き UTF-8（Excel 対応）
+
+---
+
+### 月別支出表（TablePage）
+
+**パス**: `/table`
+
+**表示内容**
+- 直近12ヶ月分（支出が存在する月 ＋ 当月）の横断テーブル
+- 行: カテゴリ、列: 年月 ＋ 平均列
+- 合計行: 月合計（予算超過時はローズ色）
+- 予算行: 月別予算額（設定がある月のみ表示）
+- 平均列: 支出がある月のみで平均計算
+- セルタップ: 詳細モーダル（ボトムシート）で明細一覧
+- 空データ時はプレースホルダー表示
+
+---
+
+### 設定（SettingsPage）
+
+**パス**: `/settings`
+
+#### データ管理セクション
+
+| 機能 | 説明 |
+|------|------|
+| バックアップ | 全データ（支出・カテゴリ・予算・定期支出）を JSON ファイルに書き出し |
+| 復元 | JSON バックアップファイルから全ストアを上書き復元 |
+| 全明細 CSV 出力 | 全年月分の支出明細を1ファイルに出力（`kakeibo_all_YYYY-MM-DD.csv`）|
+| 月別支出表 CSV 出力 | 行=年月・列=カテゴリの集計表（`kakeibo_monthly_YYYY-MM-DD.csv`）|
+
+**バックアップ JSON 形式**
+```json
+{
+  "version": "1",
+  "exportedAt": "ISO 8601",
+  "expenses": [...],
+  "categories": [...],
+  "budgets": [...],
+  "recurring": [...]
+}
+```
+
+**全明細 CSV 列**: 日付, カテゴリ, 項目名, メモ, 金額, 登録日時, 更新日時
+
+**月別支出表 CSV 列**: 年月, [使用カテゴリ名...], 合計
+
+#### 管理セクション
+
+| メニュー | 遷移先 |
+|---------|--------|
+| カテゴリ | /categories |
+| 予算設定 | /budget |
+| 定期支出 | /recurring |
+
+#### バージョン情報セクション
+
+| 項目 | 値 |
+|------|---|
+| バージョン | 1.0.0 |
+| ビルド | 2025.05 |
+| プラットフォーム | Web (PWA対応) |
+| データ保存 | ローカルストレージ |
+
+---
+
+### カテゴリ管理（CategoryPage）
+
+**パス**: `/categories`（設定 → カテゴリから遷移）
+
+**機能**
+- カテゴリ一覧表示（アイコン・色・名前）
+- 新規追加: 名前・絵文字アイコン・カラーピッカー入力
+- 編集: インライン編集
+- 削除: ゴミ箱ボタン
+- 戻るボタン → `/settings`
+
+---
+
+### 予算設定（BudgetPage）
+
+**パス**: `/budget`（設定 → 予算設定から遷移）
+
+**機能**
+- 月選択スイッチャー
+- 当月の支出合計・予算残額・使用率プログレスバー表示
+- 予算金額入力（電卓起動ボタン）
+- 保存ボタン
+- 戻るボタン → `/settings`
+
+---
+
+### 定期支出（RecurringPage）
+
+**パス**: `/recurring`（設定 → 定期支出から遷移）
+
+**機能**
+- 登録済み定期支出リスト（カテゴリ・名前・金額・毎月何日）
+- 追加ボタン → ボトムシートフォーム
+  - カテゴリ選択グリッド
+  - 支出名入力
+  - 金額入力（電卓起動ボタン）
+  - 毎月何日（1〜31）入力
+- 削除: ゴミ箱ボタン
+- 戻るボタン → `/settings`
+
+---
+
+## コンポーネント仕様
+
+### Calculator
+
+**ファイル**: `src/components/Calculator.tsx`
+
+フルスクリーンオーバーレイ（`fixed inset-0 z-50`）のボトムシート型電卓。
+
+| Props | 型 | 説明 |
+|-------|----|------|
+| initialValue | number (任意) | 初期表示値 |
+| onConfirm | (value: number) => void | = ボタン押下時、`Math.round()` した整数値を返す |
+| onClose | () => void | 背景タップまたはキャンセル時 |
+
+- 四則演算（+, −, ×, ÷）対応
+- 演算式を上段に表示
+- AC（全クリア）・バックスペースボタン
+- 現在アクティブな演算子をインジゴ色でハイライト
+- 結果は整数に丸め（`Math.round`）
+
+### MonthSwitcher
+
+**ファイル**: `src/components/MonthSwitcher.tsx`
+
+`◀ YYYY年M月 ▶` 形式の月切り替えコンポーネント。
+
+| Props | 型 | 説明 |
+|-------|----|------|
+| month | string | YYYY-MM 形式 |
+| onChange | (month: string) => void | 月変更時コールバック |
+
+### Layout
+
+**ファイル**: `src/components/Layout.tsx`
+
+全ページ共通ラッパー。`<Outlet>` + `<Navbar>` を組み合わせ、下部ナビゲーションを固定配置。
+
+---
+
+## ストア仕様
+
+### expenseStore
+
+| アクション | 説明 |
+|-----------|------|
+| `addExpense(data)` | id・createdAt を自動付与して追加 |
+| `updateExpense(id, data)` | updatedAt を自動セットして更新 |
+| `deleteExpense(id)` | 指定 id を削除 |
+| `getMonthlyExpenses(month)` | YYYY-MM 形式で当月分をフィルタ |
+| `restoreExpenses(expenses)` | バックアップ復元用（全件上書き） |
+
+### categoryStore
+
+| アクション | 説明 |
+|-----------|------|
+| `addCategory(data)` | id を自動付与して追加 |
+| `updateCategory(id, data)` | 指定フィールドを更新 |
+| `deleteCategory(id)` | 指定 id を削除 |
+| `restoreCategories(categories)` | バックアップ復元用 |
+
+### budgetStore
+
+| アクション | 説明 |
+|-----------|------|
+| `setBudget(month, amount)` | 月別予算を設定（upsert） |
+| `getBudget(month)` | 月別予算取得（未設定時は 0） |
+| `restoreBudgets(budgets)` | バックアップ復元用 |
+
+### recurringStore
+
+| アクション | 説明 |
+|-----------|------|
+| `addRecurring(data)` | id を自動付与して追加 |
+| `updateRecurring(id, data)` | 指定フィールドを更新 |
+| `deleteRecurring(id)` | 指定 id を削除 |
+| `restoreRecurring(recurring)` | バックアップ復元用 |
+
+### uiStore
+
+| 状態 | 型 | 初期値 | 説明 |
+|------|----|----- --|------|
+| selectedMonth | string | 当月（YYYY-MM） | 全画面共通の選択月 |
+| setSelectedMonth | (month: string) => void | — | 月切り替え |
+
+---
+
+## セキュリティ設定（Vercel）
+
+`vercel.json` で全レスポンスに以下のセキュリティヘッダーを付与。
+
+| ヘッダー | 値 |
+|---------|---|
+| X-Content-Type-Options | nosniff |
+| X-Frame-Options | DENY |
+| X-XSS-Protection | 0 |
+| Referrer-Policy | strict-origin-when-cross-origin |
+| Permissions-Policy | camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=() |
+| Strict-Transport-Security | max-age=63072000; includeSubDomains; preload |
+| Cross-Origin-Opener-Policy | same-origin |
+| Cross-Origin-Resource-Policy | same-origin |
+| Content-Security-Policy | default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; |
+
+SPA ルーティング: すべてのパスを `/index.html` にリライト。
+
+ビルド設定: `sourcemap: false`（ソースコード非露出）。
+
+---
+
+## ユーティリティ関数（`src/utils/date.ts`）
+
+| 関数 | 説明 |
+|------|------|
+| `toYearMonth(date)` | Date → `YYYY-MM` |
+| `firstDayOfMonth(month)` | `YYYY-MM` → `YYYY-MM-01` |
+| `formatDateWithDay(date)` | `YYYY-MM-DD` → `YYYY年M月D日(曜)` |
+| `formatYearMonth(month)` | `YYYY-MM` → `YYYY年M月` |
+| `formatTableMonth(month, currentYear)` | テーブル用短縮表示 |
+
+---
+
+## UI デザイン原則
+
+- **モバイルファースト**: 最大幅 `max-w-lg`、下部ナビゲーション固定
+- **ダークモード**: システム設定に自動追従（Tailwind `dark:` クラス使用）
+- **カラースキーム**: インジゴ（#4F46E5）をプライマリ、カテゴリ別のカスタムカラーを各所で使用
+- **タイポグラフィ**: `tabular-nums` で金額を等幅表示、`tracking-tight` で見出し
+- **インタラクション**: `active:scale-95` によるタップフィードバック、`transition-colors` によるホバー遷移
+- **FAB**: 右下固定（`bottom-20 right-4`）、支出追加への導線
+- **ボトムシート**: 詳細・電卓表示に使用（`fixed inset-0 z-50 flex flex-col justify-end`）

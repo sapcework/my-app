@@ -7,6 +7,7 @@ type CategoryStore = {
   addCategory: (category: Omit<Category, 'id'>) => void
   updateCategory: (id: string, data: Partial<Category>) => void
   deleteCategory: (id: string) => void
+  restoreCategories: (categories: Category[]) => void
 }
 
 export const useCategoryStore = create<CategoryStore>()(
@@ -31,6 +32,7 @@ export const useCategoryStore = create<CategoryStore>()(
         })),
       deleteCategory: (id) =>
         set((s) => ({ categories: s.categories.filter((c) => c.id !== id) })),
+      restoreCategories: (categories) => set({ categories }),
     }),
     { name: 'kakeibo-categories' }
   )

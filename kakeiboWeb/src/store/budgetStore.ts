@@ -6,6 +6,7 @@ type BudgetStore = {
   budgets: Budget[]
   setBudget: (month: string, amount: number) => void
   getBudget: (month: string) => number
+  restoreBudgets: (budgets: Budget[]) => void
 }
 
 export const useBudgetStore = create<BudgetStore>()(
@@ -21,6 +22,7 @@ export const useBudgetStore = create<BudgetStore>()(
           return { budgets: [...s.budgets, { month, amount }] }
         }),
       getBudget: (month) => get().budgets.find((b) => b.month === month)?.amount ?? 0,
+      restoreBudgets: (budgets) => set({ budgets }),
     }),
     { name: 'kakeibo-budgets' }
   )

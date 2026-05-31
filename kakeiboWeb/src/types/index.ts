@@ -13,6 +13,7 @@ export type Expense = {
   note: string      // メモ（任意）
   date: string      // ISO 8601 (YYYY-MM-DD)
   createdAt: string
+  updatedAt?: string
 }
 
 export type Budget = {

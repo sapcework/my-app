@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Trash2, Calculator as CalcIcon } from 'lucide-react'
 import { Calculator } from '../components/Calculator'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
-import { firstDayOfMonth, formatDateWithDay } from '../utils/date'
+import { firstDayOfMonth, formatDateWithDay, toYearMonth } from '../utils/date'
 
 export const ExpenseFormPage = () => {
   const navigate = useNavigate()
@@ -14,7 +15,12 @@ export const ExpenseFormPage = () => {
   const { selectedMonth } = useUIStore()
 
   const existing = id ? expenses.find((e) => e.id === id) : undefined
-  const defaultDate = existing?.date ?? firstDayOfMonth(selectedMonth)
+
+  const todayStr = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
+  const defaultDate = existing?.date ?? (selectedMonth === toYearMonth(new Date()) ? todayStr : firstDayOfMonth(selectedMonth))
 
   const [amount, setAmount] = useState(existing?.amount ?? 0)
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? categories[0]?.id ?? '')
@@ -23,7 +29,6 @@ export const ExpenseFormPage = () => {
   const [date, setDate] = useState(defaultDate)
   const [showCalc, setShowCalc] = useState(false)
 
-  // 過去の項目名サジェスト（重複除去）
   const suggestions = [...new Set(
     expenses
       .filter((e) => e.itemName && e.itemName.trim())
@@ -49,12 +54,21 @@ export const ExpenseFormPage = () => {
     }
   }
 
+  const inputClass = "w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2"
+
   return (
-    <div className="pt-6 space-y-4">
+    <div className="pt-5 space-y-4">
+      {/* ヘッダー */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-gray-500 text-xl">‹</button>
-          <h1 className="text-xl font-bold text-gray-800">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">
             {existing ? '支出を編集' : '支出を追加'}
           </h1>
         </div>
@@ -62,97 +76,112 @@ export const ExpenseFormPage = () => {
           <button
             type="button"
             onClick={handleDelete}
-            className="text-sm text-red-500 font-medium px-3 py-1 rounded-lg hover:bg-red-50"
+            className="flex items-center gap-1.5 text-xs text-rose-500 font-medium px-3 py-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
           >
+            <Trash2 size={13} />
             削除
           </button>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
-        {/* 金額（電卓で入力） */}
-        <div>
-          <label className="block text-sm text-gray-500 mb-1">金額</label>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 金額 */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
+          <label className={labelClass}>金額</label>
           <button
             type="button"
             onClick={() => setShowCalc(true)}
-            className="w-full flex items-center border rounded-xl px-3 py-3 text-left hover:bg-gray-50"
+            className={`w-full flex items-center justify-between border rounded-xl px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.99] transition-all ${
+              amount > 0
+                ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20'
+                : 'border-slate-200 dark:border-slate-700'
+            }`}
           >
-            <span className="text-gray-400 mr-1">¥</span>
-            <span className={`flex-1 text-lg font-semibold ${amount === 0 ? 'text-gray-300' : 'text-gray-800'}`}>
-              {amount === 0 ? '0' : amount.toLocaleString()}
-            </span>
-            <span className="text-gray-300 text-sm">🔢</span>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-sm">¥</span>
+              <span className={`text-2xl font-bold tracking-tight tabular-nums ${
+                amount === 0 ? 'text-slate-300 dark:text-slate-600' : 'text-slate-900 dark:text-slate-50'
+              }`}>
+                {amount === 0 ? '0' : amount.toLocaleString()}
+              </span>
+            </div>
+            <CalcIcon size={16} className="text-slate-400" />
           </button>
         </div>
 
         {/* カテゴリ */}
-        <div>
-          <label className="block text-sm text-gray-500 mb-1">カテゴリ</label>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
+          <label className={labelClass}>カテゴリ</label>
           <div className="grid grid-cols-3 gap-2">
             {categories.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => setCategoryId(c.id)}
-                className={`flex items-center gap-2 p-2 rounded-xl border text-sm transition-colors ${
-                  categoryId === c.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                  categoryId === c.id
+                    ? 'border-transparent text-white'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
+                style={categoryId === c.id ? { backgroundColor: c.color } : {}}
               >
-                <span>{c.icon}</span>
+                <span className="text-base">{c.icon}</span>
                 <span className="truncate">{c.name}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* 日付 */}
-        <div>
-          <label className="block text-sm text-gray-500 mb-1">日付</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full border rounded-xl px-3 py-2 outline-none"
-            required
-          />
-          {date && (
-            <p className="text-sm text-gray-500 mt-1.5 pl-1">{formatDateWithDay(date)}</p>
-          )}
-        </div>
+        {/* 日付・項目名・メモ */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 space-y-4">
+          {/* 日付 */}
+          <div>
+            <label className={labelClass}>日付</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className={inputClass}
+              required
+            />
+            {date && (
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 pl-1">{formatDateWithDay(date)}</p>
+            )}
+          </div>
 
-        {/* 項目名（サジェスト付き） */}
-        <div>
-          <label className="block text-sm text-gray-500 mb-1">項目名（任意）</label>
-          <input
-            type="text"
-            list="item-suggestions"
-            value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
-            className="w-full border rounded-xl px-3 py-2 outline-none"
-            placeholder="例：スーパーABC"
-          />
-          <datalist id="item-suggestions">
-            {suggestions.map((s) => <option key={s} value={s} />)}
-          </datalist>
-        </div>
+          {/* 項目名 */}
+          <div>
+            <label className={labelClass}>項目名（任意）</label>
+            <input
+              type="text"
+              list="item-suggestions"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              className={inputClass}
+              placeholder="例：スーパーABC"
+            />
+            <datalist id="item-suggestions">
+              {suggestions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+          </div>
 
-        {/* メモ（複数行） */}
-        <div>
-          <label className="block text-sm text-gray-500 mb-1">メモ（任意）</label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full border rounded-xl px-3 py-2 outline-none resize-none"
-            placeholder="メモを入力"
-            rows={2}
-          />
+          {/* メモ */}
+          <div>
+            <label className={labelClass}>メモ（任意）</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className={inputClass + ' resize-none'}
+              placeholder="メモを入力"
+              rows={2}
+            />
+          </div>
         </div>
 
         <button
           type="submit"
           disabled={amount === 0}
-          className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-indigo-600/20"
         >
           {existing ? '更新する' : '追加する'}
         </button>

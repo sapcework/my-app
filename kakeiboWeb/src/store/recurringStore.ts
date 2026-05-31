@@ -7,6 +7,7 @@ type RecurringStore = {
   addRecurring: (data: Omit<RecurringExpense, 'id'>) => void
   updateRecurring: (id: string, data: Partial<RecurringExpense>) => void
   deleteRecurring: (id: string) => void
+  restoreRecurring: (recurring: RecurringExpense[]) => void
 }
 
 export const useRecurringStore = create<RecurringStore>()(
@@ -23,6 +24,7 @@ export const useRecurringStore = create<RecurringStore>()(
         })),
       deleteRecurring: (id) =>
         set((s) => ({ recurring: s.recurring.filter((r) => r.id !== id) })),
+      restoreRecurring: (recurring) => set({ recurring }),
     }),
     { name: 'kakeibo-recurring' }
   )

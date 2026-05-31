@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Plus, X, Repeat2, Calculator as CalcIcon } from 'lucide-react'
+import { Calculator } from '../components/Calculator'
 import { useRecurringStore } from '../store/recurringStore'
 import { useCategoryStore } from '../store/categoryStore'
 import type { RecurringExpense } from '../types'
@@ -18,11 +21,13 @@ const emptyForm = (defaultCatId: string): FormState => ({
 })
 
 export const RecurringPage = () => {
+  const navigate = useNavigate()
   const { recurring, addRecurring, updateRecurring, deleteRecurring } = useRecurringStore()
   const { categories } = useCategoryStore()
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showCalc, setShowCalc] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm(categories[0]?.id ?? ''))
 
   const getCat = (id: string) => categories.find((c) => c.id === id)
@@ -42,6 +47,7 @@ export const RecurringPage = () => {
   const closeForm = () => {
     setShowForm(false)
     setEditingId(null)
+    setShowCalc(false)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -69,61 +75,92 @@ export const RecurringPage = () => {
   }
 
   const total = recurring.reduce((s, r) => s + r.amount, 0)
-
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }))
 
+  const inputClass = "w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2"
+
   return (
-    <div className="pt-6 space-y-4">
+    <div className="pt-5 space-y-4">
+      {/* ヘッダー */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-800">定期支出</h1>
-        <button onClick={openAdd} className="text-sm text-blue-600 font-medium">
-          + 追加
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate('/settings')}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">定期支出</h1>
+        </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-3 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+        >
+          <Plus size={14} />
+          追加
         </button>
       </div>
 
-      {/* 追加・編集フォーム（ボトムシート） */}
+      {/* フォーム（ボトムシート） */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={closeForm} />
-          <div className="relative bg-white rounded-t-3xl p-5 pb-8 max-w-lg mx-auto w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-gray-800">{editingId ? '定期支出を編集' : '定期支出を追加'}</h2>
-              <button onClick={closeForm} className="text-gray-400 w-8 h-8 flex items-center justify-center">✕</button>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeForm} />
+          <div className="relative bg-white dark:bg-slate-900 rounded-t-3xl p-5 pb-10 max-w-lg mx-auto w-full">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                {editingId ? '定期支出を編集' : '定期支出を追加'}
+              </h2>
+              <button
+                onClick={closeForm}
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-500 mb-1">支出名</label>
+                <label className={labelClass}>支出名</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={set('name')}
-                  className="w-full border rounded-xl px-3 py-2 outline-none"
+                  className={inputClass}
                   placeholder="例：家賃、サブスク"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">金額</label>
-                <div className="flex items-center border rounded-xl px-3 py-2">
-                  <span className="text-gray-400 mr-1">¥</span>
-                  <input
-                    type="number"
-                    value={form.amount}
-                    onChange={set('amount')}
-                    className="flex-1 outline-none"
-                    placeholder="0"
-                    min="1"
-                    required
-                  />
-                </div>
+                <label className={labelClass}>金額</label>
+                <button
+                  type="button"
+                  onClick={() => setShowCalc(true)}
+                  className={`w-full flex items-center justify-between border rounded-xl px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.99] transition-all ${
+                    Number(form.amount) > 0
+                      ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20'
+                      : 'border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 text-sm">¥</span>
+                    <span className={`text-xl font-bold tracking-tight tabular-nums ${
+                      !form.amount || Number(form.amount) === 0
+                        ? 'text-slate-300 dark:text-slate-600'
+                        : 'text-slate-900 dark:text-slate-50'
+                    }`}>
+                      {!form.amount || Number(form.amount) === 0 ? '0' : Number(form.amount).toLocaleString()}
+                    </span>
+                  </div>
+                  <CalcIcon size={15} className="text-slate-400" />
+                </button>
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">カテゴリ</label>
+                <label className={labelClass}>カテゴリ</label>
                 <select
                   value={form.categoryId}
                   onChange={set('categoryId')}
-                  className="w-full border rounded-xl px-3 py-2 outline-none bg-white"
+                  className={inputClass + ' bg-white dark:bg-slate-900'}
                 >
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
@@ -131,30 +168,31 @@ export const RecurringPage = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">毎月何日</label>
+                <label className={labelClass}>毎月何日</label>
                 <select
                   value={form.day}
                   onChange={set('day')}
-                  className="w-full border rounded-xl px-3 py-2 outline-none bg-white"
+                  className={inputClass + ' bg-white dark:bg-slate-900'}
                 >
                   {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                     <option key={d} value={d}>毎月{d}日に自動登録</option>
                   ))}
                 </select>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-1">
                 {editingId && (
                   <button
                     type="button"
                     onClick={() => handleDelete(editingId, form.name)}
-                    className="flex-1 border border-red-300 text-red-500 py-3 rounded-xl font-semibold hover:bg-red-50"
+                    className="flex-1 border border-rose-200 dark:border-rose-900 text-rose-500 dark:text-rose-400 py-3 rounded-xl text-sm font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
                   >
                     削除
                   </button>
                 )}
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700"
+                  disabled={!form.amount || Number(form.amount) === 0}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-indigo-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {editingId ? '更新する' : '追加する'}
                 </button>
@@ -164,15 +202,39 @@ export const RecurringPage = () => {
         </div>
       )}
 
+      {/* 電卓（ボトムシートの上に重なる） */}
+      {showCalc && (
+        <Calculator
+          initialValue={Number(form.amount) || 0}
+          onConfirm={(v) => { setForm((f) => ({ ...f, amount: v.toString() })); setShowCalc(false) }}
+          onClose={() => setShowCalc(false)}
+        />
+      )}
+
+      {/* 月間合計 */}
       {recurring.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm p-4 flex justify-between">
-          <span className="text-gray-500 text-sm">月間合計</span>
-          <span className="font-bold text-gray-800">¥{total.toLocaleString()}</span>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-800/60 px-4 py-3 flex justify-between items-center">
+          <span className="text-xs font-medium text-slate-400 dark:text-slate-500">月間合計</span>
+          <span className="text-lg font-bold text-slate-900 dark:text-slate-50 tabular-nums tracking-tight">
+            ¥{total.toLocaleString()}
+          </span>
         </div>
       )}
 
+      {/* リスト */}
       {recurring.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">定期支出がありません</div>
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <Repeat2 size={24} className="text-slate-400 dark:text-slate-500" strokeWidth={1.5} />
+          </div>
+          <p className="text-sm text-slate-400 dark:text-slate-500">定期支出がありません</p>
+          <button
+            onClick={openAdd}
+            className="text-xs text-indigo-600 dark:text-indigo-400 font-medium"
+          >
+            最初の定期支出を追加する
+          </button>
+        </div>
       ) : (
         <ul className="space-y-2">
           {recurring.map((r) => {
@@ -180,28 +242,30 @@ export const RecurringPage = () => {
             return (
               <li
                 key={r.id}
-                className="bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between"
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ backgroundColor: (cat?.color ?? '#9E9E9E') + '22' }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                    style={{ backgroundColor: (cat?.color ?? '#9E9E9E') + '20' }}
                   >
                     {cat?.icon ?? '📦'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold" style={{ color: cat?.color ?? '#9E9E9E' }}>
+                    <p className="text-sm font-bold" style={{ color: cat?.color ?? '#9E9E9E' }}>
                       {cat?.name ?? '不明'}
                     </p>
-                    <p className="font-medium text-gray-800 truncate">{r.name}</p>
-                    <p className="text-xs text-gray-400">毎月{r.dayOfMonth}日</p>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{r.name}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">毎月{r.dayOfMonth}日</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="font-semibold text-gray-800">¥{r.amount.toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+                    ¥{r.amount.toLocaleString()}
+                  </span>
                   <button
                     onClick={() => openEdit(r)}
-                    className="text-blue-400 text-sm hover:text-blue-600"
+                    className="text-xs font-medium text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
                   >
                     編集
                   </button>

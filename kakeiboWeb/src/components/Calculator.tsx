@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Delete } from 'lucide-react'
 
 type Props = {
   initialValue?: number
@@ -70,44 +71,48 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
     setDisplay(d => d.length <= 1 ? '0' : d.slice(0, -1))
   }
 
-  const num = 'h-14 rounded-2xl bg-gray-100 text-xl font-medium text-gray-800 hover:bg-gray-200 active:scale-95 transition-transform'
-  const fn = 'h-14 rounded-2xl bg-orange-100 text-xl font-medium text-orange-600 hover:bg-orange-200 active:scale-95 transition-transform'
-  const eq = 'h-14 rounded-2xl bg-blue-600 text-xl font-medium text-white hover:bg-blue-700 active:scale-95 transition-transform'
-  const opCls = (o: string) =>
-    `h-14 rounded-2xl text-xl font-medium active:scale-95 transition-transform ${
-      op === o && clearNext ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+  const numBtn = 'h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-lg font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all'
+  const fnBtn = 'h-14 rounded-2xl bg-slate-200 dark:bg-slate-700 text-base font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 active:scale-95 transition-all'
+  const eqBtn = 'h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-lg font-semibold text-white active:scale-95 transition-all shadow-sm shadow-indigo-600/30'
+  const opBtn = (o: string) =>
+    `h-14 rounded-2xl text-lg font-semibold active:scale-95 transition-all ${
+      op === o && clearNext
+        ? 'bg-indigo-600 text-white'
+        : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/60'
     }`
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-t-3xl p-4 pb-8 max-w-lg mx-auto w-full shadow-2xl">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-t-3xl p-4 pb-10 max-w-lg mx-auto w-full shadow-2xl">
         {/* 表示エリア */}
-        <div className="bg-gray-50 rounded-2xl p-4 mb-3 text-right">
-          <p className="text-sm text-gray-400 min-h-5">{expression || ' '}</p>
-          <p className="text-4xl font-bold text-gray-800 mt-1">
+        <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 mb-3 text-right">
+          <p className="text-xs text-slate-400 dark:text-slate-500 min-h-4 font-mono">{expression || ' '}</p>
+          <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1 tracking-tight tabular-nums">
             ¥{(parseFloat(display) || 0).toLocaleString()}
           </p>
         </div>
         {/* ボタングリッド */}
         <div className="grid grid-cols-4 gap-2">
-          <button className={fn} onClick={pressAC}>AC</button>
-          <button className={fn} onClick={pressBack}>⌫</button>
+          <button className={fnBtn} onClick={pressAC}>AC</button>
+          <button className={fnBtn} onClick={pressBack}>
+            <Delete size={18} className="mx-auto" />
+          </button>
           <div />
-          <button className={opCls('÷')} onClick={() => pressOp('÷')}>÷</button>
+          <button className={opBtn('÷')} onClick={() => pressOp('÷')}>÷</button>
 
-          {['7', '8', '9'].map(d => <button key={d} className={num} onClick={() => pressDigit(d)}>{d}</button>)}
-          <button className={opCls('×')} onClick={() => pressOp('×')}>×</button>
+          {['7', '8', '9'].map(d => <button key={d} className={numBtn} onClick={() => pressDigit(d)}>{d}</button>)}
+          <button className={opBtn('×')} onClick={() => pressOp('×')}>×</button>
 
-          {['4', '5', '6'].map(d => <button key={d} className={num} onClick={() => pressDigit(d)}>{d}</button>)}
-          <button className={opCls('-')} onClick={() => pressOp('-')}>−</button>
+          {['4', '5', '6'].map(d => <button key={d} className={numBtn} onClick={() => pressDigit(d)}>{d}</button>)}
+          <button className={opBtn('-')} onClick={() => pressOp('-')}>−</button>
 
-          {['1', '2', '3'].map(d => <button key={d} className={num} onClick={() => pressDigit(d)}>{d}</button>)}
-          <button className={opCls('+')} onClick={() => pressOp('+')}>+</button>
+          {['1', '2', '3'].map(d => <button key={d} className={numBtn} onClick={() => pressDigit(d)}>{d}</button>)}
+          <button className={opBtn('+')} onClick={() => pressOp('+')}>+</button>
 
-          <button className={`${num} col-span-2`} onClick={() => pressDigit('0')}>0</button>
-          <button className={num} onClick={() => pressDigit('.')}>.</button>
-          <button className={eq} onClick={pressEq}>=</button>
+          <button className={`${numBtn} col-span-2`} onClick={() => pressDigit('0')}>0</button>
+          <button className={numBtn} onClick={() => pressDigit('.')}>.</button>
+          <button className={eqBtn} onClick={pressEq}>=</button>
         </div>
       </div>
     </div>

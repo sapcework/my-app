@@ -8,6 +8,7 @@ import { CategoryPage } from './pages/CategoryPage'
 import { BudgetPage } from './pages/BudgetPage'
 import { RecurringPage } from './pages/RecurringPage'
 import { TablePage } from './pages/TablePage'
+import { SettingsPage } from './pages/SettingsPage'
 
 export const App = () => (
   <BrowserRouter>
@@ -19,6 +20,7 @@ export const App = () => (
         <Route path="/expenses/:id/edit" element={<ExpenseFormPage />} />
         <Route path="/stats" element={<StatsPage />} />
         <Route path="/table" element={<TablePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="/categories" element={<CategoryPage />} />
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/recurring" element={<RecurringPage />} />

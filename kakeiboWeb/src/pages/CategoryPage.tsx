@@ -1,15 +1,17 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Plus, Trash2, Tag } from 'lucide-react'
 import { useCategoryStore } from '../store/categoryStore'
 
-// Flutter版に準拠した12色・12アイコン
 const COLORS = [
   '#FF9800', '#2196F3', '#4CAF50', '#9C27B0',
   '#F44336', '#009688', '#E91E63', '#3F51B5',
   '#FF5722', '#795548', '#607D8B', '#9E9E9E',
 ]
-const ICONS = ['🍽️','🚗','🛒','🎮','🏥','🏠','💼','🎓','☕','✈️','💪','📦']
+const ICONS = ['🍽️', '🚗', '🛒', '🎮', '🏥', '🏠', '💼', '🎓', '☕', '✈️', '💪', '📦']
 
 export const CategoryPage = () => {
+  const navigate = useNavigate()
   const { categories, addCategory, deleteCategory } = useCategoryStore()
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
@@ -26,106 +28,146 @@ export const CategoryPage = () => {
     setShowForm(false)
   }
 
+  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2"
+
   return (
-    <div className="pt-6 space-y-4">
+    <div className="pt-5 space-y-4">
+      {/* ヘッダー */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-800">カテゴリ</h1>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate('/settings')}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">カテゴリ</h1>
+        </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="text-sm text-blue-600 font-medium"
+          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-colors ${
+            showForm
+              ? 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
+              : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100'
+          }`}
         >
-          {showForm ? 'キャンセル' : '+ 追加'}
+          {!showForm && <Plus size={14} />}
+          {showForm ? 'キャンセル' : '追加'}
         </button>
       </div>
 
+      {/* 追加フォーム */}
       {showForm && (
-        <form onSubmit={handleAdd} className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <form
+          onSubmit={handleAdd}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 space-y-4"
+        >
+          {/* 名前入力 */}
           <div>
-            <label className="block text-sm text-gray-500 mb-1">名前</label>
+            <label className={labelClass}>名前</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border rounded-xl px-3 py-2 outline-none"
+              className="w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
               placeholder="カテゴリ名"
               required
             />
           </div>
+
+          {/* アイコン選択 */}
           <div>
-            <label className="block text-sm text-gray-500 mb-2">アイコン</label>
+            <label className={labelClass}>アイコン</label>
             <div className="flex flex-wrap gap-2">
               {ICONS.map((ic) => (
                 <button
                   key={ic}
                   type="button"
                   onClick={() => setIcon(ic)}
-                  className={`text-xl p-2 rounded-xl transition-colors ${
+                  className={`text-xl p-2.5 rounded-xl transition-all ${
                     icon === ic
-                      ? 'ring-2 ring-blue-500'
-                      : 'bg-gray-100 hover:bg-gray-200'
+                      ? 'ring-2 ring-offset-1 ring-indigo-400'
+                      : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
-                  style={icon === ic ? { backgroundColor: color + '33' } : {}}
+                  style={icon === ic ? { backgroundColor: color + '30' } : {}}
                 >
                   {ic}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* カラー選択 */}
           <div>
-            <label className="block text-sm text-gray-500 mb-2">カラー</label>
+            <label className={labelClass}>カラー</label>
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`w-9 h-9 rounded-full transition-transform ${
-                    color === c ? 'ring-2 ring-offset-2 ring-gray-500 scale-110' : ''
+                  className={`w-9 h-9 rounded-full transition-transform active:scale-90 ${
+                    color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : ''
                   }`}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
           </div>
+
           {/* プレビュー */}
-          <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl">
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-xl"
-              style={{ backgroundColor: color + '33' }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+              style={{ backgroundColor: color + '30' }}
             >
               {icon}
             </div>
-            <span className="font-bold" style={{ color }}>{name || 'プレビュー'}</span>
+            <span className="text-sm font-bold" style={{ color }}>{name || 'プレビュー'}</span>
           </div>
-          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-xl font-semibold">
+
+          <button
+            type="submit"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-indigo-600/20"
+          >
             追加する
           </button>
         </form>
       )}
 
-      <ul className="space-y-2">
-        {categories.map((c) => (
-          <li
-            key={c.id}
-            className="bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-xl"
-                style={{ backgroundColor: c.color + '22' }}
-              >
-                {c.icon}
-              </div>
-              <span className="font-bold" style={{ color: c.color }}>{c.name}</span>
-            </div>
-            <button
-              onClick={() => { if (confirm(`「${c.name}」を削除しますか？`)) deleteCategory(c.id) }}
-              className="text-red-400 text-sm hover:text-red-600"
+      {/* カテゴリリスト */}
+      {categories.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <Tag size={24} className="text-slate-400 dark:text-slate-500" strokeWidth={1.5} />
+          </div>
+          <p className="text-sm text-slate-400 dark:text-slate-500">カテゴリがありません</p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {categories.map((c) => (
+            <li
+              key={c.id}
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 flex items-center justify-between"
             >
-              削除
-            </button>
-          </li>
-        ))}
-      </ul>
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                  style={{ backgroundColor: c.color + '20' }}
+                >
+                  {c.icon}
+                </div>
+                <span className="text-sm font-bold" style={{ color: c.color }}>{c.name}</span>
+              </div>
+              <button
+                onClick={() => { if (confirm(`「${c.name}」を削除しますか？`)) deleteCategory(c.id) }}
+                className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

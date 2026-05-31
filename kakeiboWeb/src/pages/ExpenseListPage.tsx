@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Search, X, Plus, Trash2 } from 'lucide-react'
 import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
 import { formatDateWithDay } from '../utils/date'
+import type { Expense } from '../types'
+
+type DayGroup = { date: string; items: Expense[] }
 
 export const ExpenseListPage = () => {
   const navigate = useNavigate()
@@ -31,29 +35,41 @@ export const ExpenseListPage = () => {
   const total = filtered.reduce((sum, e) => sum + e.amount, 0)
   const getCat = (id: string) => categories.find((c) => c.id === id)
 
+  // 日付ごとにグループ化（filtered はすでに日付降順）
+  const groupedDays = filtered.reduce<DayGroup[]>((acc, e) => {
+    const last = acc[acc.length - 1]
+    if (last?.date === e.date) {
+      last.items.push(e)
+    } else {
+      acc.push({ date: e.date, items: [e] })
+    }
+    return acc
+  }, [])
+
   return (
-    <div className="pt-6 space-y-3">
+    <div className="pt-5 space-y-3">
+      {/* ヘッダー */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-800">支出一覧</h1>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">支出一覧</h1>
         <MonthSwitcher month={selectedMonth} onChange={setSelectedMonth} />
       </div>
 
       {/* 検索バー */}
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="キーワードで検索..."
-          className="w-full bg-white rounded-xl pl-8 pr-4 py-2.5 text-sm border border-gray-200 outline-none focus:border-blue-400"
+          className="w-full bg-white dark:bg-slate-900 rounded-xl pl-9 pr-9 py-2.5 text-sm border border-slate-200/60 dark:border-slate-800/60 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all placeholder:text-slate-400 dark:text-slate-200"
         />
         {search && (
           <button
             onClick={() => setSearch('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
           >
-            ✕
+            <X size={15} />
           </button>
         )}
       </div>
@@ -62,8 +78,10 @@ export const ExpenseListPage = () => {
       <div className="flex overflow-x-auto gap-2 pb-1 scrollbar-none">
         <button
           onClick={() => setFilterCatId(null)}
-          className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 font-medium transition-colors ${
-            !filterCatId ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-colors ${
+            !filterCatId
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-50'
           }`}
         >
           すべて
@@ -72,79 +90,107 @@ export const ExpenseListPage = () => {
           <button
             key={c.id}
             onClick={() => setFilterCatId(filterCatId === c.id ? null : c.id)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 font-medium transition-colors ${
-              filterCatId === c.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-colors border ${
+              filterCatId === c.id
+                ? 'text-white border-transparent'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-50'
             }`}
             style={filterCatId === c.id ? { backgroundColor: c.color } : {}}
           >
-            <span>{c.icon}</span>
+            <span className="text-sm">{c.icon}</span>
             <span>{c.name}</span>
           </button>
         ))}
       </div>
 
       {/* 件数・合計 */}
-      <div className="bg-white rounded-2xl shadow-sm p-4 flex justify-between items-center">
-        <span className="text-gray-500 text-sm">{filtered.length}件</span>
-        <span className="text-xl font-bold text-gray-800">¥{total.toLocaleString()}</span>
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-800/60 px-4 py-3 flex justify-between items-center">
+        <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{filtered.length}件</span>
+        <span className="text-lg font-bold text-slate-900 dark:text-slate-50 tabular-nums tracking-tight">
+          ¥{total.toLocaleString()}
+        </span>
       </div>
 
+      {/* リスト（日付グループ） */}
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          {allExpenses.length === 0 ? '支出がありません' : '該当する支出がありません'}
+        <div className="flex flex-col items-center justify-center py-16 gap-2">
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            {allExpenses.length === 0 ? '支出がありません' : '該当する支出がありません'}
+          </p>
         </div>
       ) : (
-        <ul className="space-y-2">
-          {filtered.map((e) => {
-            const cat = getCat(e.categoryId)
-            const title = e.itemName || e.note || cat?.name || '支出'
+        <div className="space-y-3">
+          {groupedDays.map(({ date, items }) => {
+            const dayTotal = items.reduce((s, e) => s + e.amount, 0)
             return (
-              <li
-                key={e.id}
-                className="bg-white rounded-2xl shadow-sm p-4 flex items-center"
-              >
-                <div
-                  className="w-1 self-stretch rounded-full mr-3 flex-shrink-0"
-                  style={{ backgroundColor: cat?.color ?? '#9E9E9E' }}
-                />
-                <div
-                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                  onClick={() => navigate(`/expenses/${e.id}/edit`)}
-                >
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ backgroundColor: (cat?.color ?? '#9E9E9E') + '22' }}
-                  >
-                    {cat?.icon ?? '📦'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold truncate" style={{ color: cat?.color ?? '#9E9E9E' }}>
-                      {cat?.name ?? '不明'}
-                    </p>
-                    <p className="text-sm text-gray-700 truncate">{title}</p>
-                    <p className="text-xs text-gray-400">{formatDateWithDay(e.date)}</p>
-                  </div>
+              <div key={date} className="space-y-1.5">
+                {/* 日付ヘッダー（帯型） */}
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/60">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {formatDateWithDay(date)}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                    ¥{dayTotal.toLocaleString()}
+                  </span>
                 </div>
-                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                  <span className="font-semibold text-gray-800">¥{e.amount.toLocaleString()}</span>
-                  <button
-                    onClick={() => { if (confirm('削除しますか？')) deleteExpense(e.id) }}
-                    className="text-red-400 text-xs hover:text-red-600"
-                  >
-                    削除
-                  </button>
-                </div>
-              </li>
+                {/* その日の支出 */}
+                <ul className="space-y-1.5">
+                  {items.map((e) => {
+                    const cat = getCat(e.categoryId)
+                    const title = e.itemName || e.note || cat?.name || '支出'
+                    return (
+                      <li
+                        key={e.id}
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex items-center overflow-hidden"
+                      >
+                        <div
+                          className="w-1 self-stretch flex-shrink-0"
+                          style={{ backgroundColor: cat?.color ?? '#9E9E9E' }}
+                        />
+                        <div
+                          className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer px-3 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 transition-colors"
+                          onClick={() => navigate(`/expenses/${e.id}/edit`)}
+                        >
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                            style={{ backgroundColor: (cat?.color ?? '#9E9E9E') + '20' }}
+                          >
+                            {cat?.icon ?? '📦'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold" style={{ color: cat?.color ?? '#9E9E9E' }}>
+                              {cat?.name ?? '不明'}
+                            </p>
+                            <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{title}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0 pr-3.5 py-3">
+                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+                            ¥{e.amount.toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => { if (confirm('削除しますか？')) deleteExpense(e.id) }}
+                            className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
             )
           })}
-        </ul>
+        </div>
       )}
 
+      {/* FAB */}
       <button
         onClick={() => navigate('/expenses/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg text-2xl flex items-center justify-center hover:bg-blue-700"
+        className="fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center transition-all"
       >
-        +
+        <Plus size={24} strokeWidth={2.5} />
       </button>
     </div>
   )
