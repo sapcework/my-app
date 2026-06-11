@@ -98,7 +98,11 @@ CREATE POLICY "messages_insert_member" ON messages FOR INSERT
   );
 
 -- RLSポリシー: room_reads
-CREATE POLICY "room_reads_select_own" ON room_reads FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "room_reads_select_member" ON room_reads FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM room_members
+    WHERE room_id = room_reads.room_id AND user_id = auth.uid()
+  ));
 CREATE POLICY "room_reads_upsert_own" ON room_reads FOR INSERT WITH CHECK (user_id = auth.uid());
 CREATE POLICY "room_reads_update_own" ON room_reads FOR UPDATE USING (user_id = auth.uid());
 

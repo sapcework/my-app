@@ -20,6 +20,20 @@ export function useReadStatus(roomId: string, userId: string | null, lastMessage
     if (lastMessageId) markAsRead(lastMessageId);
   }, [lastMessageId, markAsRead]);
 
+  // 相手の初期既読状態を取得
+  const getOtherLastRead = useCallback(async (): Promise<string | null> => {
+    if (!userId) return null;
+    const { data } = await supabase
+      .from('room_reads')
+      .select('last_read_message_id')
+      .eq('room_id', roomId)
+      .neq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+    return (data as { last_read_message_id: string | null } | null)?.last_read_message_id ?? null;
+  }, [roomId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 相手の既読状態をリアルタイムで購読
   const subscribeToReads = useCallback(
     (onUpdate: (userId: string, messageId: string) => void) => {
@@ -39,5 +53,5 @@ export function useReadStatus(roomId: string, userId: string | null, lastMessage
     [roomId, userId] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  return { markAsRead, subscribeToReads };
+  return { markAsRead, subscribeToReads, getOtherLastRead };
 }

@@ -7,7 +7,7 @@ import { MessageWithStatus } from '@/lib/types';
 interface Props {
   messages: MessageWithStatus[];
   currentUserId: string;
-  readMessageIds: Set<string>; // 既読済みメッセージIDセット
+  otherLastReadMessageId: string | null;
 }
 
 function isSameDay(a: string, b: string) {
@@ -24,8 +24,13 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, readMessageIds }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 相手が最後に読んだメッセージのインデックス
+  const lastReadIdx = otherLastReadMessageId
+    ? messages.findIndex((m) => m.id === otherLastReadMessageId)
+    : -1;
 
   // 新着メッセージで自動スクロール
   useEffect(() => {
@@ -37,6 +42,8 @@ export function MessageList({ messages, currentUserId, readMessageIds }: Props) 
       {messages.map((msg, i) => {
         const prev = messages[i - 1];
         const showDateLabel = !prev || !isSameDay(prev.created_at, msg.created_at);
+        const isOwn = msg.sender_id === currentUserId;
+        const isRead = isOwn && lastReadIdx >= 0 && i <= lastReadIdx; // 自分のメッセージかつ既読範囲内
 
         return (
           <div key={msg.id}>
@@ -49,8 +56,8 @@ export function MessageList({ messages, currentUserId, readMessageIds }: Props) 
             )}
             <MessageBubble
               message={msg}
-              isOwn={msg.sender_id === currentUserId}
-              isRead={readMessageIds.has(msg.id)}
+              isOwn={isOwn}
+              isRead={isRead}
               sender={msg.sender}
             />
           </div>

@@ -23,11 +23,11 @@ export default function ChatPage({ params }: Props) {
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage } = useMessages(roomId, profile?.id ?? null);
   const [room, setRoom] = useState<Room | null>(null);
-  const [readMessageIds, setReadMessageIds] = useState<Set<string>>(new Set());
+  const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
   const onlineMap = useOnlineUsers(roomId);
 
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
-  const { subscribeToReads } = useReadStatus(roomId, profile?.id ?? null, lastMessageId);
+  const { subscribeToReads, getOtherLastRead } = useReadStatus(roomId, profile?.id ?? null, lastMessageId);
 
   // ルーム情報取得
   useEffect(() => {
@@ -37,15 +37,17 @@ export default function ChatPage({ params }: Props) {
     });
   }, [roomId]);
 
+  // 初期既読状態を取得
+  useEffect(() => {
+    if (!profile) return;
+    getOtherLastRead().then((id) => { if (id) setOtherLastReadMessageId(id); });
+  }, [profile, getOtherLastRead]);
+
   // 既読状態をリアルタイム購読
   useEffect(() => {
     if (!profile) return;
     const unsub = subscribeToReads((_, messageId) => {
-      setReadMessageIds((prev) => {
-        const next = new Set(prev);
-        next.add(messageId);
-        return next;
-      });
+      setOtherLastReadMessageId(messageId);
     });
     return unsub;
   }, [profile, subscribeToReads]);
@@ -89,7 +91,7 @@ export default function ChatPage({ params }: Props) {
         <MessageList
           messages={messages}
           currentUserId={profile.id}
-          readMessageIds={readMessageIds}
+          otherLastReadMessageId={otherLastReadMessageId}
         />
       )}
 
