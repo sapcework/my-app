@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --line-green: #4CAF50;
+  --line-bg: #b2d8ea;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  background: #efefef;
+  max-width: 430px;
+  margin: 0 auto;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+}
