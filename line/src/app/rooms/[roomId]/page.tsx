@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMessages } from '@/hooks/useMessages';
 import { useReadStatus } from '@/hooks/useReadStatus';
 import { useOnlineUsers } from '@/hooks/useOnline';
+import { useRooms } from '@/hooks/useRooms';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { createClient } from '@/lib/supabase/client';
@@ -22,8 +23,12 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage } = useMessages(roomId, profile?.id ?? null);
+  const { leaveRoom } = useRooms(profile?.id ?? null);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const onlineMap = useOnlineUsers(roomId);
 
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
@@ -52,6 +57,13 @@ export default function ChatPage({ params }: Props) {
     return unsub;
   }, [profile, subscribeToReads]);
 
+  const handleLeave = async () => {
+    setLeaving(true);
+    await leaveRoom(roomId);
+    setLeaving(false);
+    router.push('/rooms');
+  };
+
   if (authLoading) {
     return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
   }
@@ -79,7 +91,7 @@ export default function ChatPage({ params }: Props) {
             </span>
           )}
         </div>
-        <button className="text-white text-xl">☰</button>
+        <button onClick={() => setShowMenu(true)} className="text-white text-xl">☰</button>
       </header>
 
       {/* メッセージ一覧 */}
@@ -99,6 +111,51 @@ export default function ChatPage({ params }: Props) {
       <div className="flex-shrink-0">
         <MessageInput onSend={sendMessage} />
       </div>
+
+      {/* サイドメニュー */}
+      {showMenu && (
+        <div className="fixed inset-0 z-50 flex" onClick={() => setShowMenu(false)}>
+          <div className="flex-1" />
+          <div className="w-64 bg-white h-full shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#4CAF50] text-white px-4 py-4">
+              <p className="font-bold text-lg truncate">{room?.name ?? '...'}</p>
+            </div>
+            <div className="flex-1 p-4">
+              <button
+                onClick={() => { setShowMenu(false); setShowLeaveConfirm(true); }}
+                className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
+              >
+                トークを退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 退出確認ダイアログ */}
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold mb-2">トークを退出</h2>
+            <p className="text-gray-500 text-sm mb-6">このトークから退出しますか？</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleLeave}
+                disabled={leaving}
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold disabled:opacity-50"
+              >
+                {leaving ? '退出中...' : '退出'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -53,5 +53,11 @@ export function useRooms(userId: string | null) {
     await fetchRooms();
   };
 
-  return { rooms, memberRoomIds, loading, createRoom, joinRoom, refetch: fetchRooms };
+  const leaveRoom = async (roomId: string) => {
+    if (!userId) return;
+    await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', userId);
+    await fetchRooms();
+  };
+
+  return { rooms, memberRoomIds, loading, createRoom, joinRoom, leaveRoom, refetch: fetchRooms };
 }

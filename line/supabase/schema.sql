@@ -87,6 +87,8 @@ CREATE POLICY "room_members_select_member" ON room_members FOR SELECT
   USING (user_id = auth.uid());
 CREATE POLICY "room_members_insert_authenticated" ON room_members FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "room_members_delete_own" ON room_members FOR DELETE
+  USING (user_id = auth.uid());
 
 -- RLSポリシー: messages（同じルームのメンバーのみ）
 CREATE POLICY "messages_select_member" ON messages FOR SELECT
