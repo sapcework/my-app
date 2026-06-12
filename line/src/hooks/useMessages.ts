@@ -9,6 +9,7 @@ export function useMessages(roomId: string, userId: string | null) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const latestIdRef = useRef<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const toWithStatus = (msg: Message): MessageWithStatus => ({
     ...msg,
@@ -35,7 +36,18 @@ export function useMessages(roomId: string, userId: string | null) {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtimeで新着メッセージを購読（room単位のみ）
+  const deleteMessage = async (messageId: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== messageId)); // 楽観的削除
+    await supabase.from('messages').delete().eq('id', messageId);
+    // broadcastで他ユーザーにリアルタイム通知
+    await channelRef.current?.send({
+      type: 'broadcast',
+      event: 'message_deleted',
+      payload: { messageId },
+    });
+  };
+
+  // Realtimeで新着メッセージ・削除を購読
   useEffect(() => {
     const channel = supabase
       .channel(`room:${roomId}`)
@@ -44,7 +56,6 @@ export function useMessages(roomId: string, userId: string | null) {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
         async (payload) => {
           const newMsg = payload.new as Message;
-          // senderを別途取得してattach
           const { data: sender } = await supabase
             .from('users')
             .select('*')
@@ -58,9 +69,18 @@ export function useMessages(roomId: string, userId: string | null) {
           latestIdRef.current = newMsg.id;
         }
       )
+      .on(
+        'broadcast',
+        { event: 'message_deleted' },
+        ({ payload }) => {
+          const { messageId } = payload as { messageId: string };
+          setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        }
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    channelRef.current = channel;
+    return () => { supabase.removeChannel(channel); channelRef.current = null; };
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = async (content: string, type: 'text' | 'stamp' = 'text') => {
@@ -89,11 +109,11 @@ export function useMessages(roomId: string, userId: string | null) {
       return;
     }
 
-    // 楽観的更新を確定メッセージに差し替え（Realtimeで届く前に二重表示防止）
+    // 楽観的更新を確定メッセージに差し替え
     setMessages((prev) =>
       prev.map((m) => (m.id === optimistic.id ? { ...data as Message, status: 'sent' as const } : m))
     );
   };
 
-  return { messages, loading, sendMessage };
+  return { messages, loading, sendMessage, deleteMessage };
 }

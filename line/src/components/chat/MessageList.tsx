@@ -8,6 +8,7 @@ interface Props {
   messages: MessageWithStatus[];
   currentUserId: string;
   otherLastReadMessageId: string | null;
+  onDelete?: (messageId: string) => void;
 }
 
 function isSameDay(a: string, b: string) {
@@ -24,7 +25,7 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, otherLastReadMessageId }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // 相手が最後に読んだメッセージのインデックス
@@ -59,6 +60,7 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId }:
               isOwn={isOwn}
               isRead={isRead}
               sender={msg.sender}
+              onDelete={onDelete}
             />
           </div>
         );

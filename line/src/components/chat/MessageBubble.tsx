@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { MessageWithStatus, User } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
 
@@ -8,6 +9,7 @@ interface Props {
   isOwn: boolean;
   isRead: boolean;
   sender?: User;
+  onDelete?: (messageId: string) => void;
 }
 
 const STATUS_ICON: Record<string, string> = {
@@ -21,8 +23,9 @@ function formatTime(iso: string) {
   return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function MessageBubble({ message, isOwn, isRead, sender }: Props) {
+export function MessageBubble({ message, isOwn, isRead, sender, onDelete }: Props) {
   const isStamp = message.type === 'stamp';
+  const [showMenu, setShowMenu] = useState(false);
 
   return (
     <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -37,18 +40,39 @@ export function MessageBubble({ message, isOwn, isRead, sender }: Props) {
 
         <div className={`flex items-end gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* 吹き出し */}
-          <div
-            className={[
-              'px-3 py-2 max-w-full break-words',
-              isStamp ? 'text-4xl bg-transparent px-0 py-0' : '',
-              !isStamp && isOwn
-                ? 'bg-[#4CAF50] text-white rounded-[18px_4px_18px_18px]'
-                : !isStamp
-                ? 'bg-white text-gray-900 rounded-[4px_18px_18px_18px] shadow-sm'
-                : '',
-            ].join(' ')}
-          >
-            {message.content}
+          <div className="relative">
+            <div
+              onClick={() => isOwn && onDelete && setShowMenu((v) => !v)}
+              className={[
+                'px-3 py-2 max-w-full break-words',
+                isOwn && onDelete ? 'cursor-pointer' : '',
+                isStamp ? 'text-4xl bg-transparent px-0 py-0' : '',
+                !isStamp && isOwn
+                  ? 'bg-[#4CAF50] text-white rounded-[18px_4px_18px_18px]'
+                  : !isStamp
+                  ? 'bg-white text-gray-900 rounded-[4px_18px_18px_18px] shadow-sm'
+                  : '',
+              ].join(' ')}
+            >
+              {message.content}
+            </div>
+            {/* 削除メニュー */}
+            {showMenu && (
+              <div className="absolute bottom-full mb-1 right-0 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-10">
+                <button
+                  onClick={() => { onDelete?.(message.id); setShowMenu(false); }}
+                  className="px-4 py-2 text-sm text-red-500 font-medium whitespace-nowrap hover:bg-gray-50"
+                >
+                  削除
+                </button>
+                <button
+                  onClick={() => setShowMenu(false)}
+                  className="px-4 py-2 text-sm text-gray-400 whitespace-nowrap hover:bg-gray-50 border-t border-gray-100"
+                >
+                  キャンセル
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 時刻＋既読 */}
