@@ -73,6 +73,8 @@ ALTER TABLE room_reads ENABLE ROW LEVEL SECURITY;
 -- RLSポリシー: users
 CREATE POLICY "users_select_all" ON users FOR SELECT USING (true);
 CREATE POLICY "users_update_own" ON users FOR UPDATE USING (auth.uid() = id);
+-- INSERTはhandle_new_userトリガー（SECURITY DEFINER）のみ許可。直接挿入は不可
+CREATE POLICY "users_insert_deny" ON users FOR INSERT WITH CHECK (false);
 
 -- RLSポリシー: rooms（メンバーのみ参照可）
 CREATE POLICY "rooms_select_member" ON rooms FOR SELECT
@@ -81,6 +83,9 @@ CREATE POLICY "rooms_select_creator" ON rooms FOR SELECT
   USING (created_by = auth.uid());
 CREATE POLICY "rooms_insert_authenticated" ON rooms FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
+-- グループ名変更：作成者のみ許可（メンバー全員への開放は意図的に行わない）
+CREATE POLICY "rooms_update_creator" ON rooms FOR UPDATE
+  USING (created_by = auth.uid());
 
 -- RLSポリシー: room_members
 CREATE POLICY "room_members_select_member" ON room_members FOR SELECT
@@ -98,6 +103,9 @@ CREATE POLICY "messages_insert_member" ON messages FOR INSERT
     sender_id = auth.uid() AND
     EXISTS (SELECT 1 FROM room_members WHERE room_id = messages.room_id AND user_id = auth.uid())
   );
+-- 自分が送信したメッセージのみ削除可
+CREATE POLICY "messages_delete_own" ON messages FOR DELETE
+  USING (sender_id = auth.uid());
 
 -- RLSポリシー: room_reads
 CREATE POLICY "room_reads_select_member" ON room_reads FOR SELECT
