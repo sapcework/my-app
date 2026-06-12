@@ -59,5 +59,13 @@ export function useRooms(userId: string | null) {
     await fetchRooms();
   };
 
-  return { rooms, memberRoomIds, loading, createRoom, joinRoom, leaveRoom, refetch: fetchRooms };
+  const updateRoomName = async (roomId: string, name: string): Promise<boolean> => {
+    if (!userId || !name.trim()) return false;
+    const { error } = await supabase.from('rooms').update({ name: name.trim() }).eq('id', roomId);
+    if (error) { console.error('room name update error:', error); return false; }
+    await fetchRooms();
+    return true;
+  };
+
+  return { rooms, memberRoomIds, loading, createRoom, joinRoom, leaveRoom, updateRoomName, refetch: fetchRooms };
 }

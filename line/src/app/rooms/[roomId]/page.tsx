@@ -23,12 +23,15 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage } = useMessages(roomId, profile?.id ?? null);
-  const { leaveRoom } = useRooms(profile?.id ?? null);
+  const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const onlineMap = useOnlineUsers(roomId);
 
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
@@ -62,6 +65,21 @@ export default function ChatPage({ params }: Props) {
     await leaveRoom(roomId);
     setLeaving(false);
     router.push('/rooms');
+  };
+
+  const handleRenameOpen = () => {
+    setNewRoomName(room?.name ?? '');
+    setEditingName(true);
+    setShowMenu(false);
+  };
+
+  const handleRenameSave = async () => {
+    if (!newRoomName.trim()) return;
+    setSavingName(true);
+    const ok = await updateRoomName(roomId, newRoomName);
+    if (ok) setRoom((prev) => prev ? { ...prev, name: newRoomName.trim() } : prev);
+    setSavingName(false);
+    setEditingName(false);
   };
 
   if (authLoading) {
@@ -122,10 +140,48 @@ export default function ChatPage({ params }: Props) {
             </div>
             <div className="flex-1 p-4">
               <button
+                onClick={handleRenameOpen}
+                className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
+              >
+                グループ名を変更
+              </button>
+              <button
                 onClick={() => { setShowMenu(false); setShowLeaveConfirm(true); }}
                 className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
               >
                 トークを退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* グループ名変更ダイアログ */}
+      {editingName && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold mb-4">グループ名を変更</h2>
+            <input
+              type="text"
+              value={newRoomName}
+              onChange={(e) => setNewRoomName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameSave()}
+              autoFocus
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50]"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setEditingName(false)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleRenameSave}
+                disabled={savingName || !newRoomName.trim()}
+                className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold disabled:opacity-50"
+              >
+                {savingName ? '保存中...' : '保存'}
               </button>
             </div>
           </div>
