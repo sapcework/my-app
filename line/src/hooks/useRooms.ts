@@ -59,6 +59,13 @@ export function useRooms(userId: string | null) {
     await fetchRooms();
   };
 
+  const addMember = async (roomId: string, targetUserId: string): Promise<boolean> => {
+    if (!userId) return false;
+    const { error } = await supabase.from('room_members').insert({ room_id: roomId, user_id: targetUserId });
+    if (error) { console.error('add member error:', error); return false; }
+    return true;
+  };
+
   const updateRoomName = async (roomId: string, name: string): Promise<boolean> => {
     if (!userId || !name.trim()) return false;
     const { error } = await supabase.from('rooms').update({ name: name.trim() }).eq('id', roomId);
@@ -67,5 +74,5 @@ export function useRooms(userId: string | null) {
     return true;
   };
 
-  return { rooms, memberRoomIds, loading, createRoom, joinRoom, leaveRoom, updateRoomName, refetch: fetchRooms };
+  return { rooms, memberRoomIds, loading, createRoom, joinRoom, leaveRoom, addMember, updateRoomName, refetch: fetchRooms };
 }

@@ -13,7 +13,8 @@ import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { createClient } from '@/lib/supabase/client';
 import { useTabNotification } from '@/hooks/useTabNotification';
-import { Room } from '@/lib/types';
+import { UserSearchInput } from '@/components/ui/UserSearchInput';
+import { Room, User } from '@/lib/types';
 
 interface Props {
   params: Promise<{ roomId: string }>;
@@ -24,7 +25,7 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage } = useMessages(roomId, profile?.id ?? null);
-  const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
+  const { leaveRoom, updateRoomName, addMember } = useRooms(profile?.id ?? null);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -33,6 +34,9 @@ export default function ChatPage({ params }: Props) {
   const [editingName, setEditingName] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addMemberUsers, setAddMemberUsers] = useState<User[]>([]);
+  const [addingMembers, setAddingMembers] = useState(false);
   const { notify, setBaseTitle } = useTabNotification();
   const initializedRef = useRef(false);
   const prevMsgCountRef = useRef(0);
@@ -84,6 +88,15 @@ export default function ChatPage({ params }: Props) {
     await leaveRoom(roomId);
     setLeaving(false);
     router.push('/rooms');
+  };
+
+  const handleAddMembers = async () => {
+    if (!addMemberUsers.length) return;
+    setAddingMembers(true);
+    await Promise.all(addMemberUsers.map((u) => addMember(roomId, u.id)));
+    setAddingMembers(false);
+    setAddMemberUsers([]);
+    setShowAddMember(false);
   };
 
   const handleRenameOpen = () => {
@@ -159,6 +172,12 @@ export default function ChatPage({ params }: Props) {
             </div>
             <div className="flex-1 p-4">
               <button
+                onClick={() => { setShowMenu(false); setShowAddMember(true); }}
+                className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
+              >
+                メンバーを追加
+              </button>
+              <button
                 onClick={handleRenameOpen}
                 className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
               >
@@ -169,6 +188,36 @@ export default function ChatPage({ params }: Props) {
                 className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
               >
                 トークを退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* メンバー追加ダイアログ */}
+      {showAddMember && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold mb-4">メンバーを追加</h2>
+            <UserSearchInput
+              selectedUsers={addMemberUsers}
+              onAdd={(u) => setAddMemberUsers((prev) => [...prev, u])}
+              onRemove={(id) => setAddMemberUsers((prev) => prev.filter((u) => u.id !== id))}
+              excludeIds={profile ? [profile.id] : []}
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => { setShowAddMember(false); setAddMemberUsers([]); }}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleAddMembers}
+                disabled={addingMembers || !addMemberUsers.length}
+                className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold disabled:opacity-50"
+              >
+                {addingMembers ? '追加中...' : '追加'}
               </button>
             </div>
           </div>

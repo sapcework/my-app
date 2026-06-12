@@ -10,6 +10,8 @@ import { useRooms } from '@/hooks/useRooms';
 import { RoomListItem } from '@/components/room/RoomListItem';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { Avatar } from '@/components/ui/Avatar';
+import { UserSearchInput } from '@/components/ui/UserSearchInput';
+import { User } from '@/lib/types';
 
 export default function RoomsPage() {
   const router = useRouter();
@@ -17,6 +19,7 @@ export default function RoomsPage() {
   const { rooms, memberRoomIds, loading: roomsLoading, createRoom, joinRoom } = useRooms(profile?.id ?? null);
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
+  const [inviteUsers, setInviteUsers] = useState<User[]>([]);
   const [creating, setCreating] = useState(false);
 
   if (authLoading) {
@@ -31,10 +34,11 @@ export default function RoomsPage() {
   const handleCreate = async () => {
     if (!roomName.trim() || creating) return;
     setCreating(true);
-    const room = await createRoom(roomName.trim(), []);
+    const room = await createRoom(roomName.trim(), inviteUsers.map((u) => u.id));
     setCreating(false);
     if (room) {
       setRoomName('');
+      setInviteUsers([]);
       setShowCreate(false);
       router.push(`/rooms/${room.id}`);
     }
@@ -79,7 +83,7 @@ export default function RoomsPage() {
       {/* ルーム作成モーダル */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowCreate(false)}>
-          <div className="bg-white w-full rounded-t-2xl p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white w-full rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">新しいトークを作成</h2>
             <input
               type="text"
@@ -88,7 +92,14 @@ export default function RoomsPage() {
               onChange={(e) => setRoomName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               autoFocus
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50]"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] mb-4"
+            />
+            <p className="text-xs text-gray-400 mb-2">メンバーを招待（任意）</p>
+            <UserSearchInput
+              selectedUsers={inviteUsers}
+              onAdd={(u) => setInviteUsers((prev) => [...prev, u])}
+              onRemove={(id) => setInviteUsers((prev) => prev.filter((u) => u.id !== id))}
+              excludeIds={profile ? [profile.id] : []}
             />
             <div className="flex gap-3 mt-4">
               <button
