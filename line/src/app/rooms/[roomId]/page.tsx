@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessages } from '@/hooks/useMessages';
@@ -12,6 +12,7 @@ import { useRooms } from '@/hooks/useRooms';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { createClient } from '@/lib/supabase/client';
+import { useTabNotification } from '@/hooks/useTabNotification';
 import { Room } from '@/lib/types';
 
 interface Props {
@@ -32,6 +33,9 @@ export default function ChatPage({ params }: Props) {
   const [editingName, setEditingName] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const { notify, setBaseTitle } = useTabNotification();
+  const initializedRef = useRef(false);
+  const prevMsgCountRef = useRef(0);
   const onlineMap = useOnlineUsers(roomId);
 
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
@@ -41,9 +45,24 @@ export default function ChatPage({ params }: Props) {
   useEffect(() => {
     const supabase = createClient();
     supabase.from('rooms').select('*').eq('id', roomId).single().then(({ data }) => {
-      if (data) setRoom(data as Room);
+      if (data) { setRoom(data as Room); setBaseTitle(`${(data as Room).name} | LINE Chat`); }
     });
-  }, [roomId]);
+  }, [roomId, setBaseTitle]);
+
+  // 他ユーザーのメッセージ到着時にタブ通知
+  useEffect(() => {
+    if (msgLoading) return;
+    if (!initializedRef.current) { // 初回ロード時はカウントのみ記録
+      initializedRef.current = true;
+      prevMsgCountRef.current = messages.length;
+      return;
+    }
+    if (messages.length > prevMsgCountRef.current) {
+      const added = messages.slice(prevMsgCountRef.current);
+      if (added.some((m) => m.sender_id !== profile?.id)) notify();
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages, msgLoading, profile?.id, notify]);
 
   // 初期既読状態を取得
   useEffect(() => {
