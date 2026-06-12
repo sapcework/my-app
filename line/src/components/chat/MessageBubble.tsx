@@ -1,6 +1,7 @@
 'use client';
 
 import { MessageWithStatus, User } from '@/lib/types';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface Props {
   message: MessageWithStatus;
@@ -26,15 +27,7 @@ export function MessageBubble({ message, isOwn, isRead, sender }: Props) {
   return (
     <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* アバター（相手のみ） */}
-      {!isOwn && (
-        <div className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
-          {sender?.avatar_url ? (
-            <img src={sender.avatar_url} alt={sender.display_name} className="w-full h-full object-cover" />
-          ) : (
-            sender?.display_name?.[0]?.toUpperCase() ?? '?'
-          )}
-        </div>
-      )}
+      {!isOwn && <Avatar user={sender} size="sm" />}
 
       <div className={`flex flex-col max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
         {/* 送信者名（相手のみ） */}

@@ -3,11 +3,13 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useRooms } from '@/hooks/useRooms';
 import { RoomListItem } from '@/components/room/RoomListItem';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function RoomsPage() {
   const router = useRouter();
@@ -45,12 +47,9 @@ export default function RoomsPage() {
         <h1 className="text-lg font-bold">トーク</h1>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowCreate(true)} className="text-white text-2xl leading-none">＋</button>
-          <button
-            onClick={signOut}
-            className="text-xs bg-white/20 px-3 py-1 rounded-full"
-          >
-            {profile.display_name}
-          </button>
+          <Link href="/settings">
+            <Avatar user={profile} size="sm" className="ring-2 ring-white/70" />
+          </Link>
         </div>
       </header>
 
