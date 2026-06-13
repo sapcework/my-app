@@ -7,6 +7,8 @@ export interface User {
   avatar_url: string | null;
   last_seen: string;
   created_at: string;
+  is_admin?: boolean;
+  is_suspended?: boolean;
 }
 
 export interface Room {

@@ -37,6 +37,8 @@ export default function ChatPage({ params }: Props) {
   const [showAddMember, setShowAddMember] = useState(false);
   const [addMemberUsers, setAddMemberUsers] = useState<User[]>([]);
   const [addingMembers, setAddingMembers] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { notify, setBaseTitle } = useTabNotification();
   const initializedRef = useRef(false);
   const prevMsgCountRef = useRef(0);
@@ -141,8 +143,23 @@ export default function ChatPage({ params }: Props) {
             </span>
           )}
         </div>
+        <button onClick={() => { setShowSearch((v) => !v); setSearchQuery(''); }} className="text-white text-xl mr-1">🔍</button>
         <button onClick={() => setShowMenu(true)} className="text-white text-xl">☰</button>
       </header>
+
+      {/* 検索バー */}
+      {showSearch && (
+        <div className="bg-[#4CAF50] px-3 pb-2 flex-shrink-0">
+          <input
+            type="search"
+            autoFocus
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="メッセージを検索..."
+            className="w-full rounded-xl px-4 py-2 text-sm outline-none bg-white text-gray-900 placeholder-gray-400"
+          />
+        </div>
+      )}
 
       {/* メッセージ一覧 */}
       {msgLoading ? (
@@ -155,6 +172,7 @@ export default function ChatPage({ params }: Props) {
           currentUserId={profile.id}
           otherLastReadMessageId={otherLastReadMessageId}
           onDelete={deleteMessage}
+          searchQuery={showSearch ? searchQuery : undefined}
         />
       )}
 

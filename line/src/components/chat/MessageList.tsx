@@ -9,6 +9,7 @@ interface Props {
   currentUserId: string;
   otherLastReadMessageId: string | null;
   onDelete?: (messageId: string) => void;
+  searchQuery?: string;
 }
 
 function isSameDay(a: string, b: string) {
@@ -25,26 +26,41 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, searchQuery }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // 相手が最後に読んだメッセージのインデックス
   const lastReadIdx = otherLastReadMessageId
     ? messages.findIndex((m) => m.id === otherLastReadMessageId)
     : -1;
 
-  // 新着メッセージで自動スクロール
+  // 検索時は最下部へのスクロールを抑制
   useEffect(() => {
+    if (searchQuery) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [messages.length, searchQuery]);
+
+  const query = searchQuery?.trim().toLowerCase() ?? '';
+  const filtered = query
+    ? messages.filter((m) => m.type !== 'image' && m.content.toLowerCase().includes(query))
+    : messages;
 
   return (
     <div className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5 bg-[#b2d8ea]">
-      {messages.map((msg, i) => {
-        const prev = messages[i - 1];
+      {/* 検索中のバナー */}
+      {query && (
+        <div className="flex justify-center mb-2">
+          <span className="bg-black/20 text-white text-xs px-3 py-1 rounded-full">
+            {filtered.length > 0 ? `${filtered.length}件ヒット` : '該当なし'}
+          </span>
+        </div>
+      )}
+
+      {filtered.map((msg, i) => {
+        const prev = filtered[i - 1];
         const showDateLabel = !prev || !isSameDay(prev.created_at, msg.created_at);
         const isOwn = msg.sender_id === currentUserId;
-        const isRead = isOwn && lastReadIdx >= 0 && i <= lastReadIdx; // 自分のメッセージかつ既読範囲内
+        const origIdx = messages.indexOf(msg);
+        const isRead = isOwn && lastReadIdx >= 0 && origIdx <= lastReadIdx;
 
         return (
           <div key={msg.id}>
@@ -61,6 +77,7 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
               isRead={isRead}
               sender={msg.sender}
               onDelete={onDelete}
+              searchQuery={query}
             />
           </div>
         );

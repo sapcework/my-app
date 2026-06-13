@@ -101,6 +101,18 @@ export default function SettingsPage() {
           </button>
         </div>
 
+        {/* 管理者リンク */}
+        {profile.is_admin && (
+          <div className="bg-white px-4 py-4 mb-3">
+            <button
+              onClick={() => router.push('/admin')}
+              className="w-full py-3 text-[#4CAF50] font-medium text-sm text-center border border-[#4CAF50]/30 rounded-xl"
+            >
+              管理者画面
+            </button>
+          </div>
+        )}
+
         {/* ログアウト */}
         <div className="bg-white px-4 py-4">
           <button

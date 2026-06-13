@@ -10,6 +10,17 @@ interface Props {
   isRead: boolean;
   sender?: User;
   onDelete?: (messageId: string) => void;
+  searchQuery?: string;
+}
+
+function highlightText(text: string, query: string) {
+  if (!query) return text;
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} className="bg-yellow-300 text-gray-900 rounded-sm">{part}</mark>
+      : part
+  );
 }
 
 const STATUS_ICON: Record<string, string> = {
@@ -23,7 +34,7 @@ function formatTime(iso: string) {
   return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function MessageBubble({ message, isOwn, isRead, sender, onDelete }: Props) {
+export function MessageBubble({ message, isOwn, isRead, sender, onDelete, searchQuery }: Props) {
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const [showMenu, setShowMenu] = useState(false);
@@ -64,7 +75,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete }: Prop
                   onClick={(e) => { e.stopPropagation(); window.open(message.content, '_blank'); }}
                   onContextMenu={(e) => { e.preventDefault(); isOwn && onDelete && setShowMenu((v) => !v); }}
                 />
-              ) : message.content}
+              ) : searchQuery ? highlightText(message.content, searchQuery) : message.content}
             </div>
             {/* 削除メニュー */}
             {showMenu && (
