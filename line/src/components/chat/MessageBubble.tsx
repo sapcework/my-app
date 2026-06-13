@@ -72,8 +72,8 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, search
                   src={message.content}
                   alt="画像"
                   className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); window.open(message.content, '_blank'); }}
-                  onContextMenu={(e) => { e.preventDefault(); isOwn && onDelete && setShowMenu((v) => !v); }}
+                  onClick={(e) => { e.stopPropagation(); if (message.content.startsWith('https://')) window.open(message.content, '_blank', 'noopener,noreferrer'); }}
+                  onContextMenu={(e) => { e.preventDefault(); if (isOwn && onDelete) setShowMenu((v) => !v); }}
                 />
               ) : searchQuery ? highlightText(message.content, searchQuery) : message.content}
             </div>

@@ -14,12 +14,19 @@ export function MessageInput({ onSend, onSendImage, disabled }: Props) {
   const [text, setText] = useState('');
   const [showStamps, setShowStamps] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sizeError, setSizeError] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onSendImage) return;
+    if (file.size > 10 * 1024 * 1024) { // 10MB上限
+      setSizeError(true);
+      setTimeout(() => setSizeError(false), 3000);
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     await onSendImage(file);
     setUploading(false);
@@ -48,6 +55,10 @@ export function MessageInput({ onSend, onSendImage, disabled }: Props) {
 
   return (
     <div className="bg-[#f0f0f0] border-t border-gray-200">
+      {/* サイズエラー */}
+      {sizeError && (
+        <p className="text-xs text-red-500 px-4 pt-2">画像は10MB以下にしてください</p>
+      )}
       {/* スタンプパレット */}
       {showStamps && (
         <div className="flex flex-wrap gap-2 p-3 bg-white border-b border-gray-200">

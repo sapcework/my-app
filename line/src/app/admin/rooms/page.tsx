@@ -20,6 +20,7 @@ export default function AdminRoomsPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [opError, setOpError] = useState('');
 
   useEffect(() => {
     getRooms().then(async (data) => {
@@ -34,8 +35,13 @@ export default function AdminRoomsPage() {
 
   const handleDelete = async (roomId: string) => {
     setDeleting(roomId);
-    await deleteRoom(roomId);
-    setRooms((prev) => prev.filter((r) => r.id !== roomId));
+    const ok = await deleteRoom(roomId);
+    if (ok) {
+      setRooms((prev) => prev.filter((r) => r.id !== roomId));
+    } else {
+      setOpError('削除に失敗しました');
+      setTimeout(() => setOpError(''), 3000);
+    }
     setDeleting(null);
     setConfirmDelete(null);
   };
@@ -50,6 +56,7 @@ export default function AdminRoomsPage() {
         </div>
       ) : (
         <div className="p-4 space-y-3">
+          {opError && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{opError}</p>}
           <p className="text-xs text-gray-400">{rooms.length}件</p>
           {rooms.map((room) => (
             <div key={room.id} className="bg-white rounded-xl shadow-sm p-4">

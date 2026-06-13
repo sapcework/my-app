@@ -27,6 +27,10 @@ export function useAuth() {
         .select('*')
         .eq('id', userId)
         .single();
+      if (data?.is_suspended) { // 停止済みユーザーは即時サインアウト
+        await supabase.auth.signOut();
+        return null;
+      }
       return data as User | null;
     };
 

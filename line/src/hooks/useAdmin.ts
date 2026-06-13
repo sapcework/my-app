@@ -34,8 +34,9 @@ export function useAdmin() {
     return (data ?? []) as User[];
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const suspendUser = useCallback(async (userId: string, suspended: boolean) => {
-    await supabase.from('users').update({ is_suspended: suspended }).eq('id', userId);
+  const suspendUser = useCallback(async (userId: string, suspended: boolean): Promise<boolean> => {
+    const { error } = await supabase.from('users').update({ is_suspended: suspended }).eq('id', userId);
+    return !error;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getRooms = useCallback(async (): Promise<Room[]> => {
@@ -59,8 +60,9 @@ export function useAdmin() {
     return counts;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const deleteRoom = useCallback(async (roomId: string) => {
-    await supabase.from('rooms').delete().eq('id', roomId);
+  const deleteRoom = useCallback(async (roomId: string): Promise<boolean> => {
+    const { error } = await supabase.from('rooms').delete().eq('id', roomId);
+    return !error;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getMessages = useCallback(async (roomId: string): Promise<Message[]> => {
@@ -73,8 +75,9 @@ export function useAdmin() {
     return (data ?? []) as unknown as Message[];
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const deleteMessage = useCallback(async (messageId: string) => {
-    await supabase.from('messages').delete().eq('id', messageId);
+  const deleteMessage = useCallback(async (messageId: string): Promise<boolean> => {
+    const { error } = await supabase.from('messages').delete().eq('id', messageId);
+    return !error;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { getStats, getUsers, suspendUser, getRooms, getMemberCounts, deleteRoom, getMessages, deleteMessage };

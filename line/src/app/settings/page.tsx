@@ -18,16 +18,20 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile) setDisplayName(profile.display_name);
   }, [profile]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && !profile) router.push('/login');
+  }, [loading, profile, router]);
+
+  if (loading || !profile) {
     return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
   }
-  if (!profile) { router.push('/login'); return null; }
 
   const displayUser = {
     display_name: displayName || profile.display_name,
@@ -37,6 +41,11 @@ export default function SettingsPage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { // 5MB上限
+      setAvatarError('画像は5MB以下にしてください');
+      return;
+    }
+    setAvatarError('');
     setPreviewUrl(URL.createObjectURL(file)); // アップロード前のローカルプレビュー
     setUploading(true);
     const url = await uploadAvatar(file);
@@ -73,7 +82,10 @@ export default function SettingsPage() {
               {uploading ? '…' : '📷'}
             </span>
           </button>
-          <p className="text-xs text-gray-400 mt-3">タップして変更</p>
+          {avatarError
+            ? <p className="text-xs text-red-500 mt-3">{avatarError}</p>
+            : <p className="text-xs text-gray-400 mt-3">タップして変更</p>
+          }
           <input
             ref={fileInputRef}
             type="file"

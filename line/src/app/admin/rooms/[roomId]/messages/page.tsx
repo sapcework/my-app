@@ -24,6 +24,7 @@ export default function AdminMessagesPage({ params }: Props) {
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [opError, setOpError] = useState('');
 
   useEffect(() => {
     const supabase = createClient();
@@ -39,8 +40,13 @@ export default function AdminMessagesPage({ params }: Props) {
 
   const handleDelete = async (messageId: string) => {
     setDeleting(messageId);
-    await deleteMessage(messageId);
-    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    const ok = await deleteMessage(messageId);
+    if (ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } else {
+      setOpError('削除に失敗しました');
+      setTimeout(() => setOpError(''), 3000);
+    }
     setDeleting(null);
   };
 
@@ -65,6 +71,7 @@ export default function AdminMessagesPage({ params }: Props) {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {opError && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{opError}</p>}
           {messages.map((msg) => (
             <div key={msg.id} className="bg-white rounded-xl shadow-sm p-3 flex items-start gap-3">
               <div className="w-8 h-8 rounded-full bg-[#4CAF50] flex items-center justify-center text-white text-sm font-bold flex-shrink-0">

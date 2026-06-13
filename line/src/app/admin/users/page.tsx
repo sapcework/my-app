@@ -16,6 +16,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [opError, setOpError] = useState('');
 
   useEffect(() => {
     getUsers().then((data) => { setUsers(data); setLoading(false); });
@@ -23,10 +24,13 @@ export default function AdminUsersPage() {
 
   const handleToggleSuspend = async (user: User) => {
     setUpdating(user.id);
-    await suspendUser(user.id, !user.is_suspended);
-    setUsers((prev) =>
-      prev.map((u) => u.id === user.id ? { ...u, is_suspended: !u.is_suspended } : u)
-    );
+    const ok = await suspendUser(user.id, !user.is_suspended);
+    if (ok) {
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, is_suspended: !u.is_suspended } : u));
+    } else {
+      setOpError('操作に失敗しました');
+      setTimeout(() => setOpError(''), 3000);
+    }
     setUpdating(null);
   };
 
@@ -38,6 +42,7 @@ export default function AdminUsersPage() {
         </div>
       ) : (
         <div className="p-4 space-y-3">
+          {opError && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{opError}</p>}
           <p className="text-xs text-gray-400">{users.length}件</p>
           {users.map((user) => (
             <div key={user.id} className="bg-white rounded-xl shadow-sm p-4">

@@ -116,13 +116,12 @@ export default function ChatPage({ params }: Props) {
     setEditingName(false);
   };
 
-  if (authLoading) {
-    return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
-  }
+  useEffect(() => {
+    if (!authLoading && !profile) router.push('/login');
+  }, [authLoading, profile, router]);
 
-  if (!profile) {
-    router.push('/login');
-    return null;
+  if (authLoading || !profile) {
+    return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
   }
 
   // 相手のオンライン状態（自分以外の最初のメンバー）
