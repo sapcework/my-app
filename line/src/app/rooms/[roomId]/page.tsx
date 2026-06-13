@@ -24,7 +24,7 @@ export default function ChatPage({ params }: Props) {
   const { roomId } = use(params);
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
-  const { messages, loading: msgLoading, sendMessage, deleteMessage } = useMessages(roomId, profile?.id ?? null);
+  const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage } = useMessages(roomId, profile?.id ?? null);
   const { leaveRoom, updateRoomName, addMember } = useRooms(profile?.id ?? null);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
@@ -160,7 +160,7 @@ export default function ChatPage({ params }: Props) {
 
       {/* 入力バー */}
       <div className="flex-shrink-0">
-        <MessageInput onSend={sendMessage} />
+        <MessageInput onSend={sendMessage} onSendImage={sendImage} />
       </div>
 
       {/* サイドメニュー */}

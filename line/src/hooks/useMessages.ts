@@ -83,7 +83,17 @@ export function useMessages(roomId: string, userId: string | null) {
     return () => { supabase.removeChannel(channel); channelRef.current = null; };
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMessage = async (content: string, type: 'text' | 'stamp' = 'text') => {
+  const sendImage = async (file: File) => {
+    if (!userId) return;
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const path = `${userId}/${roomId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('chat-images').upload(path, file);
+    if (error) { console.error('image upload error:', error); return; }
+    const { data } = supabase.storage.from('chat-images').getPublicUrl(path);
+    await sendMessage(data.publicUrl, 'image');
+  };
+
+  const sendMessage = async (content: string, type: 'text' | 'stamp' | 'image' = 'text') => {
     if (!userId || !content.trim()) return;
 
     const optimistic: MessageWithStatus = {
@@ -115,5 +125,5 @@ export function useMessages(roomId: string, userId: string | null) {
     );
   };
 
-  return { messages, loading, sendMessage, deleteMessage };
+  return { messages, loading, sendMessage, sendImage, deleteMessage };
 }

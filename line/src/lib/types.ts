@@ -1,4 +1,4 @@
-export type MessageType = 'text' | 'stamp';
+export type MessageType = 'text' | 'stamp' | 'image';
 
 export interface User {
   id: string;

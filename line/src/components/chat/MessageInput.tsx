@@ -6,13 +6,25 @@ const STAMPS = ['😂', '😍', '👍', '❤️', '🎉', '😭', '🔥', '✨',
 
 interface Props {
   onSend: (content: string, type: 'text' | 'stamp') => void;
+  onSendImage?: (file: File) => Promise<void>;
   disabled?: boolean;
 }
 
-export function MessageInput({ onSend, disabled }: Props) {
+export function MessageInput({ onSend, onSendImage, disabled }: Props) {
   const [text, setText] = useState('');
   const [showStamps, setShowStamps] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onSendImage) return;
+    setUploading(true);
+    await onSendImage(file);
+    setUploading(false);
+    e.target.value = ''; // 同じファイルを再選択できるようリセット
+  };
 
   const handleSend = () => {
     if (!text.trim() || disabled) return;
@@ -59,6 +71,28 @@ export function MessageInput({ onSend, disabled }: Props) {
         >
           😊
         </button>
+
+        {/* 画像送信ボタン */}
+        {onSendImage && (
+          <>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || disabled}
+              className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-white text-gray-500 text-lg disabled:opacity-40"
+            >
+              {uploading ? (
+                <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              ) : '📷'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+          </>
+        )}
 
         {/* テキスト入力 */}
         <textarea

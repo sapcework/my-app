@@ -25,6 +25,7 @@ function formatTime(iso: string) {
 
 export function MessageBubble({ message, isOwn, isRead, sender, onDelete }: Props) {
   const isStamp = message.type === 'stamp';
+  const isImage = message.type === 'image';
   const [showMenu, setShowMenu] = useState(false);
 
   return (
@@ -42,19 +43,28 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete }: Prop
           {/* 吹き出し */}
           <div className="relative">
             <div
-              onClick={() => isOwn && onDelete && setShowMenu((v) => !v)}
+              onClick={() => isOwn && onDelete && !isImage && setShowMenu((v) => !v)}
               className={[
-                'px-3 py-2 max-w-full break-words',
-                isOwn && onDelete ? 'cursor-pointer' : '',
+                'max-w-full break-words',
+                isOwn && onDelete && !isImage ? 'cursor-pointer' : '',
+                isImage ? '' : 'px-3 py-2',
                 isStamp ? 'text-4xl bg-transparent px-0 py-0' : '',
-                !isStamp && isOwn
+                !isStamp && !isImage && isOwn
                   ? 'bg-[#4CAF50] text-white rounded-[18px_4px_18px_18px]'
-                  : !isStamp
+                  : !isStamp && !isImage
                   ? 'bg-white text-gray-900 rounded-[4px_18px_18px_18px] shadow-sm'
                   : '',
               ].join(' ')}
             >
-              {message.content}
+              {isImage ? (
+                <img
+                  src={message.content}
+                  alt="画像"
+                  className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); window.open(message.content, '_blank'); }}
+                  onContextMenu={(e) => { e.preventDefault(); isOwn && onDelete && setShowMenu((v) => !v); }}
+                />
+              ) : message.content}
             </div>
             {/* 削除メニュー */}
             {showMenu && (
