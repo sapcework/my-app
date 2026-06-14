@@ -23,16 +23,43 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const err = mode === 'signin'
-      ? await signIn(email, password)
-      : await signUp(email, password, displayName);
+    // サインアップはそのまま
+    if (mode === 'signup') {
+      const err = await signUp(email, password, displayName);
+      setLoading(false);
+      if (err) { setError(err.message); } else { router.push('/rooms'); }
+      return;
+    }
 
+    // サインインはAPIルート経由（レート制限付き）
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json() as {
+      ok?: boolean;
+      error?: string;
+      remainingMinutes?: number;
+      remaining?: number;
+    };
     setLoading(false);
 
-    if (err) {
-      setError(err.message);
-    } else {
+    if (data.ok) {
       router.push('/rooms');
+      return;
+    }
+
+    if (data.error === 'locked') {
+      setError(`ログインが${5}回連続で失敗しました。あと${data.remainingMinutes}分後に再試行できます。`);
+    } else if (data.error === 'invalid_credentials') {
+      if ((data.remaining ?? 0) === 0) {
+        setError('メールアドレスまたはパスワードが正しくありません。アカウントがロックされました。');
+      } else {
+        setError(`メールアドレスまたはパスワードが正しくありません。あと${data.remaining}回失敗するとロックされます。`);
+      }
+    } else {
+      setError('エラーが発生しました。もう一度お試しください。');
     }
   };
 
