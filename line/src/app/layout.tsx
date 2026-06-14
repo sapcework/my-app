@@ -5,6 +5,11 @@ export const metadata: Metadata = {
   title: 'LINE Chat',
   description: 'LINE風リアルタイムチャット',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'LINE Chat',
+  },
 };
 
 export const viewport: Viewport = {
@@ -12,12 +17,30 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: '#4CAF50',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className="h-full">
-      <body className="h-full antialiased">{children}</body>
+      <head>
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
+      <body className="h-full antialiased">
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js').catch(() => {});
+                });
+              }
+            `,
+          }}
+        />
+      </body>
     </html>
   );
 }
