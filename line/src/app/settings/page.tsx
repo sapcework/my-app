@@ -159,7 +159,7 @@ export default function SettingsPage() {
             disabled={notifStatus === 'requesting' || notifStatus === 'granted'}
             className="w-full py-3 rounded-xl font-medium text-sm disabled:opacity-50 border border-[#4CAF50]/30 text-[#4CAF50]"
           >
-            {notifStatus === 'granted' ? '通知が有効になりました ✓' :
+            {notifStatus === 'granted' ? '通知が有効化されています' :
              notifStatus === 'denied' ? '通知が拒否されています（端末設定から変更）' :
              notifStatus === 'requesting' ? '許可を確認中...' :
              '通知を有効にする'}
