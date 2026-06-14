@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['web-push'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co' },
