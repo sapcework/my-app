@@ -3,11 +3,16 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { PushSubscriptionData } from '@/lib/notifications';
 
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL ?? '',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '',
-  process.env.VAPID_PRIVATE_KEY ?? '',
-);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// VAPID未設定時は起動時に警告（サイレントフェイル防止）
+const vapidEmail = process.env.VAPID_EMAIL;
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (vapidEmail && vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey);
+}
 
 interface WebhookPayload {
   type: string;
@@ -22,13 +27,17 @@ interface WebhookPayload {
 }
 
 export async function POST(req: NextRequest) {
-  // Supabase webhookシークレット検証
+  // Webhookシークレット必須検証（未設定時は全拒否）
   const secret = process.env.SUPABASE_WEBHOOK_SECRET;
-  if (secret) {
-    const auth = req.headers.get('authorization');
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  if (!secret) return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+  const auth = req.headers.get('authorization');
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // VAPIDクレデンシャル確認
+  if (!vapidEmail || !vapidPublicKey || !vapidPrivateKey) {
+    return NextResponse.json({ error: 'VAPID not configured' }, { status: 500 });
   }
 
   const payload = await req.json() as WebhookPayload;
@@ -37,6 +46,12 @@ export async function POST(req: NextRequest) {
   }
 
   const msg = payload.record;
+
+  // UUIDバリデーション（不正な値でDBクエリしない）
+  if (!UUID_RE.test(msg.room_id) || !UUID_RE.test(msg.sender_id)) {
+    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+  }
+
   const supabase = createAdminClient();
 
   // ルーム名取得
