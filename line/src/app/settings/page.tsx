@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Avatar } from '@/components/ui/Avatar';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { requestNotificationPermission, subscribeToPush } from '@/lib/notifications';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -19,7 +20,25 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [avatarError, setAvatarError] = useState('');
+  const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleEnableNotification = async () => {
+    setNotifStatus('requesting');
+    const permission = await requestNotificationPermission();
+    if (permission !== 'granted') { setNotifStatus('denied'); return; }
+    const sub = await subscribeToPush();
+    if (sub) {
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: sub }),
+      });
+      setNotifStatus('granted');
+    } else {
+      setNotifStatus('denied');
+    }
+  };
 
   useEffect(() => {
     if (profile) setDisplayName(profile.display_name);
@@ -124,6 +143,21 @@ export default function SettingsPage() {
             </button>
           </div>
         )}
+
+        {/* 通知設定 */}
+        <div className="bg-white px-4 py-4 mb-3">
+          <p className="text-xs text-gray-400 mb-2">プッシュ通知</p>
+          <button
+            onClick={handleEnableNotification}
+            disabled={notifStatus === 'requesting' || notifStatus === 'granted'}
+            className="w-full py-3 rounded-xl font-medium text-sm disabled:opacity-50 border border-[#4CAF50]/30 text-[#4CAF50]"
+          >
+            {notifStatus === 'granted' ? '通知が有効になりました ✓' :
+             notifStatus === 'denied' ? '通知が拒否されています（端末設定から変更）' :
+             notifStatus === 'requesting' ? '許可を確認中...' :
+             '通知を有効にする'}
+          </button>
+        </div>
 
         {/* ログアウト */}
         <div className="bg-white px-4 py-4">
