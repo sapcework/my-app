@@ -6,16 +6,25 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useRooms } from '@/hooks/useRooms';
+import { useNotification } from '@/hooks/useNotification';
 import { RoomListItem } from '@/components/room/RoomListItem';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { Avatar } from '@/components/ui/Avatar';
 import { UserSearchInput } from '@/components/ui/UserSearchInput';
+import { NotificationToast } from '@/components/ui/NotificationToast';
 import { User } from '@/lib/types';
 
 export default function RoomsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { rooms, memberRoomIds, unreadCounts, loading: roomsLoading, createRoom, joinRoom } = useRooms(profile?.id ?? null);
+  const roomNames = Object.fromEntries(rooms.map((r) => [r.id, r.name]));
+  const { toasts, dismissToast } = useNotification({
+    userId: profile?.id ?? null,
+    currentRoomId: null,
+    memberRoomIds,
+    roomNames,
+  });
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [inviteUsers, setInviteUsers] = useState<User[]>([]);
@@ -93,6 +102,7 @@ export default function RoomsPage() {
       </main>
 
       <BottomNav />
+      <NotificationToast toasts={toasts} onDismiss={dismissToast} />
 
       {/* ルーム作成モーダル */}
       {showCreate && (

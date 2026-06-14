@@ -13,7 +13,9 @@ import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { createClient } from '@/lib/supabase/client';
 import { useTabNotification } from '@/hooks/useTabNotification';
+import { useNotification } from '@/hooks/useNotification';
 import { UserSearchInput } from '@/components/ui/UserSearchInput';
+import { NotificationToast } from '@/components/ui/NotificationToast';
 import { Room, User } from '@/lib/types';
 
 interface Props {
@@ -25,7 +27,12 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage } = useMessages(roomId, profile?.id ?? null);
-  const { leaveRoom, updateRoomName, addMember } = useRooms(profile?.id ?? null);
+  const { leaveRoom, updateRoomName, addMember, memberRoomIds } = useRooms(profile?.id ?? null);
+  const { toasts, dismissToast } = useNotification({
+    userId: profile?.id ?? null,
+    currentRoomId: roomId,
+    memberRoomIds,
+  });
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -299,6 +306,8 @@ export default function ChatPage({ params }: Props) {
           </div>
         </div>
       )}
+
+      <NotificationToast toasts={toasts} onDismiss={dismissToast} />
 
       {/* 退出確認ダイアログ */}
       {showLeaveConfirm && (

@@ -27,6 +27,34 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Push通知受信（バックグラウンド）
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  const { title, body, roomId } = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: roomId, // 同じルームの通知は上書き
+      data: { roomId },
+    })
+  );
+});
+
+// 通知タップ → 該当ルームへ遷移
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const { roomId } = event.notification.data;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((c) => c.url.includes('/rooms/'));
+      if (existing) { existing.focus(); return existing.navigate(`/rooms/${roomId}`); }
+      return self.clients.openWindow(`/rooms/${roomId}`);
+    })
+  );
+});
+
 // フェッチ：Supabase・API はネットワーク優先、その他はキャッシュ優先
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
