@@ -36,8 +36,10 @@ self.addEventListener('push', (event) => {
       body,
       icon: '/icon.svg',
       badge: '/icon.svg',
-      tag: roomId, // 同じルームの通知は上書き
+      tag: roomId,        // 同じルームの通知は上書き
       data: { roomId },
+      silent: false,      // OS のデフォルト通知音を鳴らす
+      vibrate: [200, 100, 200], // バイブレーションパターン
     })
   );
 });

@@ -5,11 +5,21 @@ function getCtx(): AudioContext {
   return audioCtx;
 }
 
-export function playNotificationSound(): void {
+// タッチ・フォーカス復帰時に呼ぶ（suspended → running へ事前解除）
+export function warmUpAudio(): void {
   if (typeof window === 'undefined') return;
   try {
     const ctx = getCtx();
     if (ctx.state === 'suspended') void ctx.resume();
+  } catch { /* ignore */ }
+}
+
+export async function playNotificationSound(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const ctx = getCtx();
+    if (ctx.state === 'suspended') await ctx.resume(); // resume を待ってから再生
+    if (ctx.state !== 'running') return; // resume 失敗時はスキップ
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -26,7 +36,5 @@ export function playNotificationSound(): void {
 
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.32);
-  } catch {
-    // AudioContext非対応は無視
-  }
+  } catch { /* AudioContext非対応は無視 */ }
 }

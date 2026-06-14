@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Message } from '@/lib/types';
-import { playNotificationSound } from '@/lib/sound';
+import { playNotificationSound, warmUpAudio } from '@/lib/sound';
 import { requestNotificationPermission, subscribeToPush } from '@/lib/notifications';
 
 export interface ToastData {
@@ -35,6 +35,20 @@ export function useNotification({
   useEffect(() => { memberRoomIdsRef.current = memberRoomIds; }, [memberRoomIds]);
   useEffect(() => { roomNamesRef.current = roomNames; }, [roomNames]);
   useEffect(() => { currentRoomIdRef.current = currentRoomId; }, [currentRoomId]);
+
+  // タッチ・フォーカス復帰で AudioContext を事前 resume（モバイル autoplay policy 対策）
+  useEffect(() => {
+    const warm = () => warmUpAudio();
+    const onVisible = () => { if (document.visibilityState === 'visible') warmUpAudio(); };
+    window.addEventListener('touchstart', warm, { passive: true });
+    window.addEventListener('click', warm, { passive: true });
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('touchstart', warm);
+      window.removeEventListener('click', warm);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // Push通知許可 + 購読登録（初回のみ）
   useEffect(() => {
@@ -71,7 +85,7 @@ export function useNotification({
           if (msg.room_id === currentRoomIdRef.current) return; // 同じルームは無視
           if (memberRoomIdsRef.current && !memberRoomIdsRef.current.has(msg.room_id)) return; // 非メンバーは無視
 
-          playNotificationSound();
+          await playNotificationSound(); // resume を待ってから再生
           navigator.vibrate?.(100);
 
           // ルーム名（キャッシュ優先、なければDB取得）
