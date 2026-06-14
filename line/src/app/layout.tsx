@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { GlobalNotificationProvider } from '@/components/ui/GlobalNotificationProvider';
 
 export const metadata: Metadata = {
   title: 'LINE Chat',
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="h-full antialiased">
+        <GlobalNotificationProvider />
         {children}
         <script
           dangerouslySetInnerHTML={{
