@@ -51,12 +51,14 @@ export default function LoginPage() {
     }
 
     if (data.error === 'locked') {
-      setError(`ログインが${5}回連続で失敗しました。あと${data.remainingMinutes}分後に再試行できます。`);
+      setError(`ログインが連続5回失敗しました。あと${data.remainingMinutes}分後に再試行できます。`);
     } else if (data.error === 'invalid_credentials') {
       if ((data.remaining ?? 0) === 0) {
         setError('メールアドレスまたはパスワードが正しくありません。アカウントがロックされました。');
+      } else if ((data.remaining ?? 0) === 1) {
+        setError('メールアドレスまたはパスワードが正しくありません。あと1回失敗するとロックされます。');
       } else {
-        setError(`メールアドレスまたはパスワードが正しくありません。あと${data.remaining}回失敗するとロックされます。`);
+        setError('メールアドレスまたはパスワードが正しくありません。');
       }
     } else {
       setError('エラーが発生しました。もう一度お試しください。');
