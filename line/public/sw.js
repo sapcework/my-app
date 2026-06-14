@@ -1,4 +1,4 @@
-const CACHE_NAME = 'line-chat-v2';
+const CACHE_NAME = 'line-chat-v3';
 
 // キャッシュするスタティックアセット
 const STATIC_CACHE = [
