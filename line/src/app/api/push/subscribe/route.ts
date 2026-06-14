@@ -25,6 +25,13 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // 同一ユーザーの古いエンドポイントを削除（再起動後に変わった場合のクリーンアップ）
+  await supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('user_id', user.id)
+    .neq('endpoint', subscription.endpoint);
+
   const { error } = await supabase
     .from('push_subscriptions')
     .upsert(

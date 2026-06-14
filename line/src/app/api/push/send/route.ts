@@ -74,19 +74,26 @@ export async function POST(req: NextRequest) {
 
   const memberIds = (members as { user_id: string }[]).map((m) => m.user_id);
   const { data: subs } = await supabase
-    .from('push_subscriptions').select('subscription').in('user_id', memberIds);
+    .from('push_subscriptions').select('endpoint, subscription').in('user_id', memberIds);
 
   if (!subs?.length) return NextResponse.json({ ok: true });
 
   const pushPayload = JSON.stringify({ title, body, roomId: msg.room_id });
 
   await Promise.allSettled(
-    (subs as { subscription: PushSubscriptionData }[]).map((row) =>
-      webpush.sendNotification(
-        row.subscription as unknown as webpush.PushSubscription,
-        pushPayload
-      )
-    )
+    (subs as { endpoint: string; subscription: PushSubscriptionData }[]).map(async (row) => {
+      try {
+        await webpush.sendNotification(
+          row.subscription as unknown as webpush.PushSubscription,
+          pushPayload
+        );
+      } catch (err) {
+        // 410 = 購読が無効（再起動後など）→ DBから削除してクリーンアップ
+        if ((err as { statusCode?: number }).statusCode === 410) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', row.endpoint);
+        }
+      }
+    })
   );
 
   return NextResponse.json({ ok: true });

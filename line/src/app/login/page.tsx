@@ -12,7 +12,9 @@ export default function LoginPage() {
   const router = useRouter();
   const { signIn, signUp } = useAuth();
   const [mode, setMode] = useState<Mode>('signin');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() =>
+    typeof window !== 'undefined' ? (localStorage.getItem('lastLoginEmail') ?? '') : ''
+  );
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
@@ -46,6 +48,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (data.ok) {
+      localStorage.setItem('lastLoginEmail', email); // 成功時にメールを保存
       router.push('/rooms');
       return;
     }

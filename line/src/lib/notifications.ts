@@ -17,17 +17,32 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
+const PUSH_ENDPOINT_KEY = 'push_endpoint'; // ローカルに保存した前回エンドポイント
+
 export async function subscribeToPush(): Promise<PushSubscriptionData | null> {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!('serviceWorker' in navigator) || !publicKey) return null;
   try {
     const reg = await navigator.serviceWorker.ready;
-    const existing = await reg.pushManager.getSubscription();
-    const sub = existing ?? await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
-    });
-    return sub.toJSON() as PushSubscriptionData;
+    let sub = await reg.pushManager.getSubscription();
+    const stored = localStorage.getItem(PUSH_ENDPOINT_KEY);
+
+    // 再起動等でエンドポイントが変わった場合は強制再登録
+    if (sub && sub.endpoint !== stored) {
+      await sub.unsubscribe();
+      sub = null;
+    }
+
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
+      });
+    }
+
+    const data = sub.toJSON() as PushSubscriptionData;
+    localStorage.setItem(PUSH_ENDPOINT_KEY, data.endpoint); // 最新エンドポイントを保存
+    return data;
   } catch {
     return null;
   }
