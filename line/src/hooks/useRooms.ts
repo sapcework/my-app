@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Room } from '@/lib/types';
 
@@ -10,6 +10,9 @@ export function useRooms(userId: string | null) {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+  const memberRoomIdsRef = useRef(memberRoomIds); // Realtimeコールバック内で最新値を参照するためのref
+
+  useEffect(() => { memberRoomIdsRef.current = memberRoomIds; }, [memberRoomIds]);
 
   const fetchRooms = useCallback(async () => {
     if (!userId) return;
@@ -34,6 +37,41 @@ export function useRooms(userId: string | null) {
   useEffect(() => {
     fetchRooms();
   }, [fetchRooms]);
+
+  // 新着メッセージをリアルタイムで受信 → 未読カウント増加・ルーム順序更新
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel('rooms-unread-updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new as { room_id: string; sender_id: string };
+          if (msg.sender_id === userId) return; // 自分の送信は無視
+          if (!memberRoomIdsRef.current.has(msg.room_id)) return; // 非メンバーは無視
+
+          // 未読カウントを1増やす
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [msg.room_id]: (prev[msg.room_id] ?? 0) + 1,
+          }));
+
+          // 対象ルームをリスト最上部に移動
+          setRooms((prev) => {
+            const idx = prev.findIndex((r) => r.id === msg.room_id);
+            if (idx <= 0) return prev;
+            const updated = [...prev];
+            const [moved] = updated.splice(idx, 1);
+            return [moved, ...updated];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createRoom = async (name: string, memberIds: string[]) => {
     if (!userId) return null;
