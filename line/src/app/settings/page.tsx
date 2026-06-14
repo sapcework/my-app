@@ -23,6 +23,13 @@ export default function SettingsPage() {
   const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ページ表示時にブラウザの実際の許可状態を反映
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'granted') setNotifStatus('granted');
+    else if (Notification.permission === 'denied') setNotifStatus('denied');
+  }, []);
+
   const handleEnableNotification = async () => {
     setNotifStatus('requesting');
     const permission = await requestNotificationPermission();
