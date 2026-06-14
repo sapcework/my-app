@@ -7,7 +7,6 @@ interface Props {
   room: Room;
   isMember: boolean;
   onJoin?: (roomId: string) => void;
-  lastMessage?: string;
   unreadCount?: number;
 }
 
@@ -16,38 +15,40 @@ function formatTime(iso: string) {
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   if (isToday) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-  return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+  const isThisYear = d.getFullYear() === now.getFullYear();
+  if (isThisYear) return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 
-export function RoomListItem({ room, isMember, onJoin, lastMessage, unreadCount }: Props) {
+export function RoomListItem({ room, isMember, onJoin, unreadCount = 0 }: Props) {
+  const preview = isMember
+    ? (room.last_message_preview ?? '')
+    : '参加していません';
+
   const inner = (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors">
-      {/* アイコン */}
-      <div className="w-12 h-12 rounded-full bg-[#4CAF50] flex-shrink-0 flex items-center justify-center text-white font-bold text-lg">
+    <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors">
+      {/* アバター */}
+      <div className="w-[52px] h-[52px] rounded-full bg-[#6db36e] flex-shrink-0 flex items-center justify-center text-white font-bold text-xl shadow-sm">
         {room.name[0]?.toUpperCase() ?? '#'}
       </div>
 
       {/* 本文 */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-gray-900 truncate">{room.name}</span>
-          <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-            {formatTime(room.last_message_at)}
-          </span>
+      <div className="flex-1 min-w-0 border-b border-gray-100 pb-3 pt-0.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-semibold text-[15px] text-gray-900 truncate">{room.name}</span>
+          <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTime(room.last_message_at)}</span>
         </div>
-        <div className="flex items-center justify-between mt-0.5">
-          <span className="text-sm text-gray-500 truncate">
-            {isMember ? (lastMessage ?? '...') : '参加していません'}
-          </span>
-          {isMember && (unreadCount ?? 0) > 0 && (
-            <span className="ml-2 flex-shrink-0 bg-[#4CAF50] text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
-              {unreadCount! > 99 ? '99+' : unreadCount}
+        <div className="flex items-center justify-between mt-[3px]">
+          <span className="text-[13px] text-gray-400 truncate leading-snug">{preview}</span>
+          {isMember && unreadCount > 0 && (
+            <span className="ml-2 flex-shrink-0 bg-[#e53935] text-white text-[11px] font-bold rounded-full min-w-[19px] h-[19px] flex items-center justify-center px-1.5">
+              {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
           {!isMember && (
             <button
               onClick={(e) => { e.preventDefault(); onJoin?.(room.id); }}
-              className="ml-2 flex-shrink-0 bg-[#4CAF50] text-white text-xs px-3 py-1 rounded-full"
+              className="ml-2 flex-shrink-0 text-[#4CAF50] text-xs border border-[#4CAF50] px-3 py-1 rounded-full"
             >
               参加
             </button>

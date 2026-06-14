@@ -2,8 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useRooms } from '@/hooks/useRooms';
@@ -15,20 +14,19 @@ import { User } from '@/lib/types';
 
 export default function RoomsPage() {
   const router = useRouter();
-  const { profile, signOut, loading: authLoading } = useAuth();
-  const { rooms, memberRoomIds, loading: roomsLoading, createRoom, joinRoom } = useRooms(profile?.id ?? null);
+  const { profile, loading: authLoading } = useAuth();
+  const { rooms, memberRoomIds, unreadCounts, loading: roomsLoading, createRoom, joinRoom } = useRooms(profile?.id ?? null);
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [inviteUsers, setInviteUsers] = useState<User[]>([]);
   const [creating, setCreating] = useState(false);
 
-  if (authLoading) {
-    return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
-  }
+  useEffect(() => {
+    if (!authLoading && !profile) router.push('/login');
+  }, [authLoading, profile, router]);
 
-  if (!profile) {
-    router.push('/login');
-    return null;
+  if (authLoading || !profile) {
+    return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
   }
 
   const handleCreate = async () => {
@@ -45,26 +43,41 @@ export default function RoomsPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-screen bg-white max-w-lg mx-auto">
       {/* ヘッダー */}
-      <header className="bg-[#4CAF50] text-white flex items-center justify-between px-4 py-3 pt-safe">
-        <h1 className="text-lg font-bold">トーク</h1>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowCreate(true)} className="text-white text-2xl leading-none">＋</button>
-          <Link href="/settings">
+      <header className="bg-[#4CAF50] text-white flex items-center justify-between px-4 py-3 pt-safe flex-shrink-0">
+        <h1 className="text-[17px] font-bold">トーク</h1>
+        <div className="flex items-center gap-4">
+          {/* 検索アイコン */}
+          <button className="text-white opacity-90">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+            </svg>
+          </button>
+          {/* 新規作成 */}
+          <button onClick={() => setShowCreate(true)} className="text-white opacity-90">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+          </button>
+          {/* アバター */}
+          <button onClick={() => router.push('/settings')}>
             <Avatar user={profile} size="sm" className="ring-2 ring-white/70" />
-          </Link>
+          </button>
         </div>
       </header>
 
       {/* ルーム一覧 */}
-      <main className="flex-1 overflow-y-auto divide-y divide-gray-100 pb-16">
+      <main className="flex-1 overflow-y-auto pb-16 bg-white">
         {roomsLoading ? (
-          <div className="flex items-center justify-center h-40 text-gray-400">読み込み中...</div>
+          <div className="flex items-center justify-center h-40 text-gray-400 text-sm">読み込み中...</div>
         ) : rooms.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
-            <span className="text-4xl">💬</span>
-            <p className="text-sm">トークがありません。＋から作成してください</p>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="opacity-30">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+            </svg>
+            <p className="text-sm">トークがありません</p>
+            <p className="text-xs">＋ボタンから作成してください</p>
           </div>
         ) : (
           rooms.map((room) => (
@@ -73,6 +86,7 @@ export default function RoomsPage() {
               room={room}
               isMember={memberRoomIds.has(room.id)}
               onJoin={joinRoom}
+              unreadCount={unreadCounts[room.id] ?? 0}
             />
           ))
         )}
@@ -83,8 +97,9 @@ export default function RoomsPage() {
       {/* ルーム作成モーダル */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowCreate(false)}>
-          <div className="bg-white w-full rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold mb-4">新しいトークを作成</h2>
+          <div className="bg-white w-full max-w-lg mx-auto rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
+            <h2 className="text-[17px] font-bold mb-4">新しいトークを作成</h2>
             <input
               type="text"
               placeholder="トーク名"
@@ -99,19 +114,19 @@ export default function RoomsPage() {
               selectedUsers={inviteUsers}
               onAdd={(u) => setInviteUsers((prev) => [...prev, u])}
               onRemove={(id) => setInviteUsers((prev) => prev.filter((u) => u.id !== id))}
-              excludeIds={profile ? [profile.id] : []}
+              excludeIds={[profile.id]}
             />
-            <div className="flex gap-3 mt-4">
+            <div className="flex gap-3 mt-5">
               <button
-                onClick={() => setShowCreate(false)}
-                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium"
+                onClick={() => { setShowCreate(false); setRoomName(''); setInviteUsers([]); }}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm"
               >
                 キャンセル
               </button>
               <button
                 onClick={handleCreate}
                 disabled={!roomName.trim() || creating}
-                className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold disabled:opacity-50"
+                className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold text-sm disabled:opacity-50"
               >
                 {creating ? '作成中...' : '作成'}
               </button>

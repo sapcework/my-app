@@ -17,6 +17,7 @@ export interface Room {
   created_by: string | null;
   last_message_at: string;
   created_at: string;
+  last_message_preview?: string;
 }
 
 export interface RoomMember {

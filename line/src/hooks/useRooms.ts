@@ -7,19 +7,27 @@ import { Room } from '@/lib/types';
 export function useRooms(userId: string | null) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [memberRoomIds, setMemberRoomIds] = useState<Set<string>>(new Set());
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
   const fetchRooms = useCallback(async () => {
     if (!userId) return;
 
-    const [{ data: allRooms }, { data: memberships }] = await Promise.all([
+    const [{ data: allRooms }, { data: memberships }, { data: unreadData }] = await Promise.all([
       supabase.from('rooms').select('*').order('last_message_at', { ascending: false }),
       supabase.from('room_members').select('room_id').eq('user_id', userId),
+      supabase.rpc('get_unread_counts', { p_user_id: userId }),
     ]);
 
     setRooms((allRooms ?? []) as Room[]);
     setMemberRoomIds(new Set((memberships ?? []).map((m) => (m as { room_id: string }).room_id)));
+
+    const counts: Record<string, number> = {};
+    for (const row of (unreadData ?? []) as { room_id: string; unread_count: number }[]) {
+      counts[row.room_id] = Number(row.unread_count);
+    }
+    setUnreadCounts(counts);
     setLoading(false);
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -74,5 +82,5 @@ export function useRooms(userId: string | null) {
     return true;
   };
 
-  return { rooms, memberRoomIds, loading, createRoom, joinRoom, leaveRoom, addMember, updateRoomName, refetch: fetchRooms };
+  return { rooms, memberRoomIds, unreadCounts, loading, createRoom, joinRoom, leaveRoom, addMember, updateRoomName, refetch: fetchRooms };
 }
