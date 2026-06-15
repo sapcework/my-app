@@ -11,21 +11,18 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
   const supabase = createClient();
 
   const fetchMembers = useCallback(async () => {
-    const { data } = await supabase
-      .from('room_members')
-      .select('role, joined_at, users(id, display_name, avatar_url, email, last_seen, created_at)')
-      .eq('room_id', roomId)
-      .order('joined_at', { ascending: true });
-
-    if (!data) return;
-    const list = (data as unknown as { role: MemberRole; joined_at: string; users: User }[])
-      .map(({ role, joined_at, users }) => ({ ...users, role, joined_at }));
+    // APIルート経由で取得（adminクライアントがRLSをバイパスして全メンバーを返す）
+    const res = await fetch(`/api/rooms/${roomId}/members`);
+    if (!res.ok) { setLoading(false); return; }
+    const d = await res.json() as {
+      members: { role: MemberRole; joined_at: string; users: User }[];
+      myRole: MemberRole;
+    };
+    const list = d.members.map(({ role, joined_at, users }) => ({ ...users, role, joined_at }));
     setMembers(list);
-    if (myUserId) {
-      setMyRole(list.find((m) => m.id === myUserId)?.role ?? null);
-    }
+    setMyRole(d.myRole ?? null);
     setLoading(false);
-  }, [roomId, myUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
@@ -48,6 +45,20 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
     if (!error) setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, role } : m));
     return !error;
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 自分の role のみ Realtime で監視（メンバーパネル未表示時も myRole を把握）
+  useEffect(() => {
+    if (!myUserId) return;
+    const channel = supabase
+      .channel(`room-my-role-${roomId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'room_members',
+          filter: `room_id=eq.${roomId}` },
+        () => { void fetchMembers(); }
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [roomId, myUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { members, myRole, loading, kickMember, changeRole, refetch: fetchMembers };
 }
