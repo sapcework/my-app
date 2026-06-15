@@ -20,10 +20,27 @@ export interface Room {
   last_message_preview?: string;
 }
 
+export type MemberRole = 'owner' | 'admin' | 'member';
+
 export interface RoomMember {
   room_id: string;
   user_id: string;
   joined_at: string;
+  role: MemberRole;
+}
+
+export interface RoomMemberWithUser extends User {
+  role: MemberRole;
+  joined_at: string;
+}
+
+export interface RoomInvite {
+  id: string;
+  room_id: string;
+  token: string;
+  created_by: string;
+  expires_at: string;
+  created_at: string;
 }
 
 export interface Message {

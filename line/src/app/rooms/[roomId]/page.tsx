@@ -9,12 +9,13 @@ import { useMessages } from '@/hooks/useMessages';
 import { useReadStatus } from '@/hooks/useReadStatus';
 import { useOnlineUsers } from '@/hooks/useOnline';
 import { useRooms } from '@/hooks/useRooms';
+import { useRoomMembers } from '@/hooks/useRoomMembers';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
+import { MembersPanel } from '@/components/room/MembersPanel';
 import { createClient } from '@/lib/supabase/client';
 import { useTabNotification } from '@/hooks/useTabNotification';
-import { UserSearchInput } from '@/components/ui/UserSearchInput';
-import { Room, User } from '@/lib/types';
+import { Room } from '@/lib/types';
 
 interface Props {
   params: Promise<{ roomId: string }>;
@@ -25,7 +26,8 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage } = useMessages(roomId, profile?.id ?? null);
-  const { leaveRoom, updateRoomName, addMember } = useRooms(profile?.id ?? null);
+  const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
+  const { members, myRole, kickMember, changeRole } = useRoomMembers(roomId, profile?.id ?? null);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -34,9 +36,9 @@ export default function ChatPage({ params }: Props) {
   const [editingName, setEditingName] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [savingName, setSavingName] = useState(false);
-  const [showAddMember, setShowAddMember] = useState(false);
-  const [addMemberUsers, setAddMemberUsers] = useState<User[]>([]);
-  const [addingMembers, setAddingMembers] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { notify, setBaseTitle } = useTabNotification();
@@ -92,13 +94,16 @@ export default function ChatPage({ params }: Props) {
     router.push('/rooms');
   };
 
-  const handleAddMembers = async () => {
-    if (!addMemberUsers.length) return;
-    setAddingMembers(true);
-    await Promise.all(addMemberUsers.map((u) => addMember(roomId, u.id)));
-    setAddingMembers(false);
-    setAddMemberUsers([]);
-    setShowAddMember(false);
+  const handleFetchInvite = async (forceNew = false) => {
+    setInviteLoading(true);
+    const method = forceNew ? 'DELETE' : 'GET';
+    const res = await fetch(`/api/rooms/${roomId}/invite`, { method });
+    if (res.ok) {
+      const d = await res.json() as { invite: { token: string } };
+      const base = window.location.origin;
+      setInviteUrl(`${base}/join/${d.invite.token}`);
+    }
+    setInviteLoading(false);
   };
 
   const handleRenameOpen = () => {
@@ -215,18 +220,23 @@ export default function ChatPage({ params }: Props) {
               <p className="font-bold text-lg truncate">{room?.name ?? '...'}</p>
             </div>
             <div className="flex-1 p-4">
-              <button
-                onClick={() => { setShowMenu(false); setShowAddMember(true); }}
-                className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
-              >
-                メンバーを追加
-              </button>
-              <button
-                onClick={handleRenameOpen}
-                className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
-              >
-                グループ名を変更
-              </button>
+              {/* owner/admin のみ */}
+              {(myRole === 'owner' || myRole === 'admin') && (
+                <>
+                  <button
+                    onClick={() => { setShowMenu(false); setShowMembers(true); if (!inviteUrl) handleFetchInvite(); }}
+                    className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
+                  >
+                    メンバー管理・招待
+                  </button>
+                  <button
+                    onClick={handleRenameOpen}
+                    className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
+                  >
+                    グループ名を変更
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => { setShowMenu(false); setShowLeaveConfirm(true); }}
                 className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
@@ -238,34 +248,19 @@ export default function ChatPage({ params }: Props) {
         </div>
       )}
 
-      {/* メンバー追加ダイアログ */}
-      {showAddMember && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-            <h2 className="text-lg font-bold mb-4">メンバーを追加</h2>
-            <UserSearchInput
-              selectedUsers={addMemberUsers}
-              onAdd={(u) => setAddMemberUsers((prev) => [...prev, u])}
-              onRemove={(id) => setAddMemberUsers((prev) => prev.filter((u) => u.id !== id))}
-              excludeIds={profile ? [profile.id] : []}
-            />
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => { setShowAddMember(false); setAddMemberUsers([]); }}
-                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleAddMembers}
-                disabled={addingMembers || !addMemberUsers.length}
-                className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold disabled:opacity-50"
-              >
-                {addingMembers ? '追加中...' : '追加'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* メンバー管理パネル */}
+      {showMembers && (
+        <MembersPanel
+          roomId={roomId}
+          myRole={myRole}
+          members={members}
+          onKick={kickMember}
+          onChangeRole={changeRole}
+          onClose={() => setShowMembers(false)}
+          onInvite={() => handleFetchInvite(!!inviteUrl)}
+          inviteUrl={inviteUrl}
+          inviteLoading={inviteLoading}
+        />
       )}
 
       {/* グループ名変更ダイアログ */}

@@ -87,6 +87,7 @@ export function useRooms(userId: string | null) {
     const members = [...new Set([userId, ...memberIds])].map((uid) => ({
       room_id: room.id,
       user_id: uid,
+      role: uid === userId ? 'owner' : 'member', // 作成者はオーナー
     }));
     await supabase.from('room_members').insert(members);
     await fetchRooms();
