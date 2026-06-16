@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { MemberRole, RoomMemberWithUser } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
+import { UserSearchInput } from '@/components/ui/UserSearchInput';
 
 interface Props {
   roomId: string;
@@ -10,6 +11,7 @@ interface Props {
   members: RoomMemberWithUser[];
   onKick: (userId: string) => Promise<boolean>;
   onChangeRole: (userId: string, role: MemberRole) => Promise<boolean>;
+  onAddMember: (userId: string) => Promise<boolean>;
   onClose: () => void;
   onInvite: () => void;
   inviteUrl: string | null;
@@ -29,10 +31,17 @@ const ROLE_COLOR: Record<MemberRole, string> = {
 };
 
 export function MembersPanel({
-  myRole, members, onKick, onChangeRole, onClose, onInvite, inviteUrl, inviteLoading,
+  myRole, members, onKick, onChangeRole, onAddMember, onClose, onInvite, inviteUrl, inviteLoading,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
+  const [addError, setAddError] = useState(false);
+
+  const handleAddMember = async (userId: string) => {
+    setAddError(false);
+    const ok = await onAddMember(userId);
+    if (!ok) setAddError(true);
+  };
 
   useEffect(() => { if (inviteUrl) setCopied(false); }, [inviteUrl]);
 
@@ -111,6 +120,22 @@ export function MembersPanel({
                 >
                   {inviteLoading ? '生成中...' : '招待リンクを生成'}
                 </button>
+              )}
+            </div>
+          )}
+
+          {/* メールで招待（owner/admin のみ・直接追加） */}
+          {canManage && (
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="text-xs text-gray-400 mb-2 font-medium">メールで招待</p>
+              <UserSearchInput
+                selectedUsers={[]}
+                onAdd={(u) => { void handleAddMember(u.id); }}
+                onRemove={() => {}}
+                excludeIds={members.map((m) => m.id)}
+              />
+              {addError && (
+                <p className="text-xs text-red-400 mt-2">追加に失敗しました。権限をご確認ください。</p>
               )}
             </div>
           )}

@@ -27,7 +27,7 @@ export default function ChatPage({ params }: Props) {
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage } = useMessages(roomId, profile?.id ?? null);
   const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
-  const { members, myRole, loading: membersLoading, kickMember, changeRole, refetch: refetchMembers } = useRoomMembers(roomId, profile?.id ?? null);
+  const { members, myRole, loading: membersLoading, kickMember, changeRole, addMember, refetch: refetchMembers } = useRoomMembers(roomId, profile?.id ?? null);
   const [rejoining, setRejoining] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
@@ -273,6 +273,7 @@ export default function ChatPage({ params }: Props) {
           members={members}
           onKick={kickMember}
           onChangeRole={changeRole}
+          onAddMember={addMember}
           onClose={() => setShowMembers(false)}
           onInvite={() => handleFetchInvite(!!inviteUrl)}
           inviteUrl={inviteUrl}

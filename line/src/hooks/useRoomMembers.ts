@@ -47,6 +47,17 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
     return !error;
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // owner/admin がユーザーを追加（権限チェック付きAPI経由）
+  const addMember = useCallback(async (userId: string): Promise<boolean> => {
+    const res = await fetch(`/api/rooms/${roomId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    if (res.ok) { await fetchMembers(); return true; } // 追加後に一覧を再取得
+    return false;
+  }, [roomId, fetchMembers]);
+
   // 自分の role のみ Realtime で監視（メンバーパネル未表示時も myRole を把握）
   useEffect(() => {
     if (!myUserId) return;
@@ -61,5 +72,5 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
     return () => { void supabase.removeChannel(channel); };
   }, [roomId, myUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { members, myRole, loading, kickMember, changeRole, refetch: fetchMembers };
+  return { members, myRole, loading, kickMember, changeRole, addMember, refetch: fetchMembers };
 }
