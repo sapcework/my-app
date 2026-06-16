@@ -74,6 +74,22 @@ export function useRooms(userId: string | null) {
     return () => { void supabase.removeChannel(channel); };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 自分のメンバーシップ変化を購読 → 招待・退出時にトーク一覧へ即反映
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`rooms-membership-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'room_members', filter: `user_id=eq.${userId}` },
+        () => { void fetchRooms(); } // 追加/削除されたら一覧を取り直す
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [userId, fetchRooms]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const createRoom = async (name: string, memberIds: string[]) => {
     if (!userId) return null;
 
