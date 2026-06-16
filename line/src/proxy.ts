@@ -4,6 +4,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 const PROTECTED_PATHS = ['/rooms', '/settings', '/admin', '/join'];
 
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
+  const isLoginPath = pathname.startsWith('/login');
+
+  // 認証判定が不要なパス（/api やトップ等）は getUser せず即通過。
+  // API ルートは各自で getUser するため二重の認証通信を避ける。
+  if (!isProtected && !isLoginPath) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -23,7 +33,7 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // getUser()でサーバーサイド認証チェック
+  // getUser()でサーバーサイド認証チェック（保護パス・ログインパスのみ）
   let user = null;
   try {
     const { data } = await supabase.auth.getUser();
@@ -32,9 +42,6 @@ export async function proxy(request: NextRequest) {
     // ネットワークエラー時は未ログイン扱い
   }
 
-  const { pathname } = request.nextUrl;
-  const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
-
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -42,7 +49,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith('/login') && user) {
+  if (isLoginPath && user) {
     const redirectTo = request.nextUrl.searchParams.get('redirect');
     const url = request.nextUrl.clone();
     url.pathname = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/rooms';

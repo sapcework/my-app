@@ -17,18 +17,15 @@ export function useRooms(userId: string | null) {
   const fetchRooms = useCallback(async () => {
     if (!userId) return;
 
-    // API 経由で取得（admin クライアントで RLS バイパス → 退出後も作成したルームが見える）
-    const [listRes, { data: unreadData }] = await Promise.all([
-      fetch('/api/rooms/list').then((r) =>
-        r.ok ? (r.json() as Promise<{ rooms: Room[]; memberRoomIds: string[] }>) : null
-      ),
+    // 直接クエリ（RLS: rooms_select_member で所属ルーム、rooms_select_creator で作成ルームを取得）
+    const [{ data: allRooms }, { data: memberships }, { data: unreadData }] = await Promise.all([
+      supabase.from('rooms').select('*').order('last_message_at', { ascending: false }),
+      supabase.from('room_members').select('room_id').eq('user_id', userId),
       supabase.rpc('get_unread_counts', { p_user_id: userId }),
     ]);
 
-    if (listRes) {
-      setRooms(listRes.rooms);
-      setMemberRoomIds(new Set(listRes.memberRoomIds));
-    }
+    setRooms((allRooms ?? []) as Room[]);
+    setMemberRoomIds(new Set((memberships ?? []).map((m) => (m as { room_id: string }).room_id)));
 
     const counts: Record<string, number> = {};
     for (const row of (unreadData ?? []) as { room_id: string; unread_count: number }[]) {

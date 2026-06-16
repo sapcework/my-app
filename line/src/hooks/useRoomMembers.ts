@@ -11,18 +11,19 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
   const supabase = createClient();
 
   const fetchMembers = useCallback(async () => {
-    // APIルート経由で取得（adminクライアントがRLSをバイパスして全メンバーを返す）
-    const res = await fetch(`/api/rooms/${roomId}/members`);
-    if (!res.ok) { setLoading(false); return; }
-    const d = await res.json() as {
-      members: { role: MemberRole; joined_at: string; users: User }[];
-      myRole: MemberRole;
-    };
-    const list = d.members.map(({ role, joined_at, users }) => ({ ...users, role, joined_at }));
+    // 直接クエリ（RLS: is_room_member 経由で同室メンバーを互いに参照可。非メンバーは空が返る）
+    const { data } = await supabase
+      .from('room_members')
+      .select('role, joined_at, user_id, users(id, display_name, avatar_url, email, last_seen, created_at)')
+      .eq('room_id', roomId)
+      .order('joined_at', { ascending: true });
+
+    const rows = (data ?? []) as unknown as { role: MemberRole; joined_at: string; user_id: string; users: User }[];
+    const list = rows.map(({ role, joined_at, users }) => ({ ...users, role, joined_at }));
     setMembers(list);
-    setMyRole(d.myRole ?? null);
+    setMyRole(rows.find((r) => r.user_id === myUserId)?.role ?? null); // 自分の役割を抽出
     setLoading(false);
-  }, [roomId]);
+  }, [roomId, myUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
