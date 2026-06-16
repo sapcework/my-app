@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { GlobalNotificationProvider } from '@/components/ui/GlobalNotificationProvider';
 
 export const metadata: Metadata = {
@@ -29,8 +30,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="h-full antialiased">
-        <GlobalNotificationProvider />
-        {children}
+        <AuthProvider>
+          <GlobalNotificationProvider />
+          {children}
+        </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `
