@@ -46,11 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const init = async () => {
-      // getSession() は localStorage から読むため通信なし・即時（getUser のサーバー検証は proxy/API 側で実施）
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        setState({ supabaseUser: session.user, profile, loading: false });
+      // getUser() はネットワーク経由で cookie を検証（httpOnly cookie でも確実に読める）。
+      // AuthProvider は全画面共有で初回1回だけ実行されるため、遷移ごとの通信は発生しない。
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const profile = await fetchProfile(user.id);
+        setState({ supabaseUser: user, profile, loading: false });
       } else {
         setState({ supabaseUser: null, profile: null, loading: false });
       }

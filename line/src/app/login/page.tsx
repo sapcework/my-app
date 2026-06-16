@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, FormEvent, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 type Mode = 'signin' | 'signup';
@@ -18,7 +18,6 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') ?? '/rooms'; // ログイン後リダイレクト先
   const { signUp } = useAuth();
@@ -36,11 +35,14 @@ function LoginForm() {
     setError('');
     setLoading(true);
 
-    // サインアップはそのまま
+    const dest = redirectTo.startsWith('/') ? redirectTo : '/rooms';
+
+    // サインアップ
     if (mode === 'signup') {
       const err = await signUp(email, password, displayName);
       setLoading(false);
-      if (err) { setError(err.message); } else { router.push(redirectTo.startsWith('/') ? redirectTo : '/rooms'); }
+      // ハード遷移で AuthProvider を再マウントし、cookie からセッションを確実に読ませる
+      if (err) { setError(err.message); } else { window.location.assign(dest); }
       return;
     }
 
@@ -60,7 +62,9 @@ function LoginForm() {
 
     if (data.ok) {
       localStorage.setItem('lastLoginEmail', email); // 成功時にメールを保存
-      router.push(redirectTo.startsWith('/') ? redirectTo : '/rooms');
+      // APIルート（サーバー側）でcookieが設定されるため、ハード遷移で
+      // AuthProvider を再マウントしてセッションを読み直させる（client遷移だと認識されず読込中で固まる）
+      window.location.assign(redirectTo.startsWith('/') ? redirectTo : '/rooms');
       return;
     }
 
