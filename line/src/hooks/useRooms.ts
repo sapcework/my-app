@@ -17,14 +17,18 @@ export function useRooms(userId: string | null) {
   const fetchRooms = useCallback(async () => {
     if (!userId) return;
 
-    const [{ data: allRooms }, { data: memberships }, { data: unreadData }] = await Promise.all([
-      supabase.from('rooms').select('*').order('last_message_at', { ascending: false }),
-      supabase.from('room_members').select('room_id').eq('user_id', userId),
+    // API 経由で取得（admin クライアントで RLS バイパス → 退出後も作成したルームが見える）
+    const [listRes, { data: unreadData }] = await Promise.all([
+      fetch('/api/rooms/list').then((r) =>
+        r.ok ? (r.json() as Promise<{ rooms: Room[]; memberRoomIds: string[] }>) : null
+      ),
       supabase.rpc('get_unread_counts', { p_user_id: userId }),
     ]);
 
-    setRooms((allRooms ?? []) as Room[]);
-    setMemberRoomIds(new Set((memberships ?? []).map((m) => (m as { room_id: string }).room_id)));
+    if (listRes) {
+      setRooms(listRes.rooms);
+      setMemberRoomIds(new Set(listRes.memberRoomIds));
+    }
 
     const counts: Record<string, number> = {};
     for (const row of (unreadData ?? []) as { room_id: string; unread_count: number }[]) {
@@ -76,28 +80,25 @@ export function useRooms(userId: string | null) {
   const createRoom = async (name: string, memberIds: string[]) => {
     if (!userId) return null;
 
-    const { data: room, error } = await supabase
-      .from('rooms')
-      .insert({ name, created_by: userId })
-      .select()
-      .single();
+    // API 経由で作成（admin クライアントで room_members も確実に追加）
+    const res = await fetch('/api/rooms/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, memberIds }),
+    });
+    if (!res.ok) { console.error('createRoom failed:', await res.text()); return null; }
 
-    if (error || !room) { console.error('rooms insert error:', error); return null; }
-
-    const members = [...new Set([userId, ...memberIds])].map((uid) => ({
-      room_id: room.id,
-      user_id: uid,
-      role: uid === userId ? 'owner' : 'member', // 作成者はオーナー
-    }));
-    await supabase.from('room_members').insert(members);
+    const { room } = await res.json() as { room: Room };
     await fetchRooms();
-    return room as Room;
+    return room;
   };
 
-  const joinRoom = async (roomId: string) => {
-    if (!userId) return;
-    await supabase.from('room_members').insert({ room_id: roomId, user_id: userId });
+  const joinRoom = async (roomId: string): Promise<boolean> => {
+    if (!userId) return false;
+    const res = await fetch(`/api/rooms/${roomId}/rejoin`, { method: 'POST' }); // 作成者再参加API（owner ロールを復元）
+    if (!res.ok) return false;
     await fetchRooms();
+    return true;
   };
 
   const leaveRoom = async (roomId: string) => {

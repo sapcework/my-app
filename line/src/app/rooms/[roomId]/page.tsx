@@ -27,7 +27,8 @@ export default function ChatPage({ params }: Props) {
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage } = useMessages(roomId, profile?.id ?? null);
   const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
-  const { members, myRole, kickMember, changeRole } = useRoomMembers(roomId, profile?.id ?? null);
+  const { members, myRole, loading: membersLoading, kickMember, changeRole, refetch: refetchMembers } = useRoomMembers(roomId, profile?.id ?? null);
+  const [rejoining, setRejoining] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [otherLastReadMessageId, setOtherLastReadMessageId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -125,7 +126,23 @@ export default function ChatPage({ params }: Props) {
     if (!authLoading && !profile) router.push('/login');
   }, [authLoading, profile, router]);
 
-  if (authLoading || !profile) {
+  // メンバーでない場合に作成者として自動再参加
+  useEffect(() => {
+    if (!profile || membersLoading || myRole !== null || rejoining) return;
+    setRejoining(true);
+    fetch(`/api/rooms/${roomId}/rejoin`, { method: 'POST' })
+      .then(async (res) => {
+        if (res.ok) {
+          await refetchMembers(); // 再参加後にメンバー情報を再取得
+        } else {
+          router.push('/rooms'); // 作成者でない → 一覧に戻る
+        }
+        setRejoining(false);
+      })
+      .catch(() => { router.push('/rooms'); setRejoining(false); });
+  }, [profile, membersLoading, myRole, rejoining, roomId, refetchMembers, router]);
+
+  if (authLoading || !profile || rejoining || (membersLoading && myRole === null)) {
     return <div className="flex-1 flex items-center justify-center min-h-screen"><span className="text-gray-400">読み込み中...</span></div>;
   }
 

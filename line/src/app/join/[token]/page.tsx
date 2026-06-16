@@ -11,7 +11,6 @@ export default function JoinPage({ params }: Props) {
   const { token } = use(params);
   const router = useRouter();
   const [roomName, setRoomName] = useState('');
-  const [roomId, setRoomId] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'joining' | 'error' | 'expired'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
@@ -19,35 +18,50 @@ export default function JoinPage({ params }: Props) {
   useEffect(() => {
     fetch(`/api/rooms/join?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
+        const d = await res.json() as { roomId?: string; roomName?: string; expiresAt?: string; error?: string };
         if (!res.ok) {
-          const d = await res.json() as { error: string };
           setStatus(d.error === 'invalid_or_expired' ? 'expired' : 'error');
+          setErrorMsg(d.error ?? '');
           return;
         }
-        const d = await res.json() as { roomId: string; roomName: string; expiresAt: string };
-        setRoomId(d.roomId);
-        setRoomName(d.roomName);
-        setExpiresAt(d.expiresAt);
+        setRoomName(d.roomName ?? '');
+        setExpiresAt(d.expiresAt ?? '');
         setStatus('ready');
       })
-      .catch(() => setStatus('error'));
+      .catch(() => { setStatus('error'); setErrorMsg('通信エラーが発生しました。'); });
   }, [token]);
 
   const handleJoin = async () => {
     setStatus('joining');
-    const res = await fetch('/api/rooms/join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
-    if (res.ok) {
-      const d = await res.json() as { roomId: string };
-      router.push(`/rooms/${d.roomId}`);
-    } else if (res.status === 401) {
-      router.push(`/login?redirect=/join/${token}`);
-    } else {
-      const d = await res.json() as { error: string };
-      setErrorMsg(d.error === 'invalid_or_expired' ? '招待リンクが無効または期限切れです。' : '参加に失敗しました。');
+    try {
+      const res = await fetch('/api/rooms/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      if (res.status === 401) {
+        router.push(`/login?redirect=/join/${token}`);
+        return;
+      }
+
+      let d: { roomId?: string; error?: string } = {};
+      try { d = await res.json() as typeof d; } catch { /* empty body */ }
+
+      if (res.ok && d.roomId) {
+        router.push(`/rooms/${d.roomId}`);
+        return;
+      }
+
+      const msg = d.error === 'invalid_or_expired'
+        ? '招待リンクが無効または期限切れです。'
+        : d.error === 'join_failed'
+        ? 'サーバーエラーが発生しました。しばらく後に再試行してください。'
+        : '参加に失敗しました。';
+      setErrorMsg(msg);
+      setStatus('error');
+    } catch {
+      setErrorMsg('通信エラーが発生しました。');
       setStatus('error');
     }
   };
@@ -58,7 +72,6 @@ export default function JoinPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        {/* ロゴ */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-[#4CAF50] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
             <span className="text-white text-4xl font-black">L</span>
@@ -82,13 +95,15 @@ export default function JoinPage({ params }: Props) {
                   <p className="text-xs text-gray-400">グループトーク</p>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 text-center mb-4">
-                有効期限: {formatExpiry(expiresAt)}
-              </p>
+              {expiresAt && (
+                <p className="text-xs text-gray-400 text-center mb-4">
+                  有効期限: {formatExpiry(expiresAt)}
+                </p>
+              )}
               <button
                 onClick={handleJoin}
                 disabled={status === 'joining'}
-                className="w-full py-3 bg-[#4CAF50] text-white font-bold rounded-xl disabled:opacity-50"
+                className="w-full py-3 bg-[#4CAF50] text-white font-bold rounded-xl disabled:opacity-50 active:scale-95 transition-transform"
               >
                 {status === 'joining' ? '参加中...' : `「${roomName}」に参加する`}
               </button>
@@ -103,8 +118,14 @@ export default function JoinPage({ params }: Props) {
           )}
 
           {status === 'error' && (
-            <div className="text-center py-2">
+            <div className="text-center py-4 space-y-3">
               <p className="text-red-500 text-sm">{errorMsg || 'エラーが発生しました。'}</p>
+              <button
+                onClick={() => { setStatus('ready'); setErrorMsg(''); }}
+                className="text-xs text-[#4CAF50]"
+              >
+                再試行
+              </button>
             </div>
           )}
         </div>

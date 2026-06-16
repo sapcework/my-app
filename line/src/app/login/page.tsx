@@ -2,15 +2,26 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 type Mode = 'signin' | 'signup';
 
+// useSearchParams を使うため Suspense でラップする（App Router の prerender 要件）
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
-  const { signIn, signUp } = useAuth();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') ?? '/rooms'; // ログイン後リダイレクト先
+  const { signUp } = useAuth();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState(() =>
     typeof window !== 'undefined' ? (localStorage.getItem('lastLoginEmail') ?? '') : ''
@@ -29,7 +40,7 @@ export default function LoginPage() {
     if (mode === 'signup') {
       const err = await signUp(email, password, displayName);
       setLoading(false);
-      if (err) { setError(err.message); } else { router.push('/rooms'); }
+      if (err) { setError(err.message); } else { router.push(redirectTo.startsWith('/') ? redirectTo : '/rooms'); }
       return;
     }
 
@@ -49,7 +60,7 @@ export default function LoginPage() {
 
     if (data.ok) {
       localStorage.setItem('lastLoginEmail', email); // 成功時にメールを保存
-      router.push('/rooms');
+      router.push(redirectTo.startsWith('/') ? redirectTo : '/rooms');
       return;
     }
 

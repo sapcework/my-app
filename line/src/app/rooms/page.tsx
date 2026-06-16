@@ -15,7 +15,7 @@ import { User } from '@/lib/types';
 export default function RoomsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
-  const { rooms, memberRoomIds, unreadCounts, loading: roomsLoading, createRoom, joinRoom } = useRooms(profile?.id ?? null);
+  const { rooms, memberRoomIds, unreadCounts, loading: roomsLoading, createRoom } = useRooms(profile?.id ?? null);
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [inviteUsers, setInviteUsers] = useState<User[]>([]);
@@ -85,7 +85,7 @@ export default function RoomsPage() {
               key={room.id}
               room={room}
               isMember={memberRoomIds.has(room.id)}
-              onJoin={joinRoom}
+              onJoin={(id) => router.push(`/rooms/${id}`)}
               unreadCount={unreadCounts[room.id] ?? 0}
             />
           ))

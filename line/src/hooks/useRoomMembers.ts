@@ -22,7 +22,7 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
     setMembers(list);
     setMyRole(d.myRole ?? null);
     setLoading(false);
-  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId]);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PROTECTED_PATHS = ['/rooms', '/settings', '/admin'];
+const PROTECTED_PATHS = ['/rooms', '/settings', '/admin', '/join'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -38,12 +38,15 @@ export async function proxy(request: NextRequest) {
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    url.search = `?redirect=${encodeURIComponent(pathname)}`; // ログイン後に元URLへ戻す
     return NextResponse.redirect(url);
   }
 
   if (pathname.startsWith('/login') && user) {
+    const redirectTo = request.nextUrl.searchParams.get('redirect');
     const url = request.nextUrl.clone();
-    url.pathname = '/rooms';
+    url.pathname = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/rooms';
+    url.search = '';
     return NextResponse.redirect(url);
   }
 
