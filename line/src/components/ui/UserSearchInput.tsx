@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User } from '@/lib/types';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { Avatar } from './Avatar';
-
-type SearchResult = User | 'not_found' | null;
 
 interface Props {
   selectedUsers: User[];
@@ -16,19 +14,27 @@ interface Props {
 
 export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds }: Props) {
   const [email, setEmail] = useState('');
-  const [result, setResult] = useState<SearchResult>(null);
-  const { searchByEmail, searching } = useUserSearch();
+  const [results, setResults] = useState<User[]>([]);
+  const [searched, setSearched] = useState(false); // 一度でも検索したか（該当なし表示の制御）
+  const { searchUsersByEmail, searching } = useUserSearch();
 
-  const handleSearch = async () => {
-    if (!email.trim()) return;
-    const user = await searchByEmail(email);
-    setResult(user ?? 'not_found');
-  };
+  // 入力に応じてデバウンス検索（部分一致）
+  useEffect(() => {
+    const q = email.trim();
+    if (!q) { setResults([]); setSearched(false); return; }
+    const timer = setTimeout(async () => {
+      const users = await searchUsersByEmail(q);
+      setResults(users);
+      setSearched(true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [email]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = (user: User) => {
     onAdd(user);
     setEmail('');
-    setResult(null);
+    setResults([]);
+    setSearched(false);
   };
 
   return (
@@ -45,48 +51,48 @@ export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds }: 
         </div>
       )}
 
-      {/* 検索入力 */}
-      <div className="flex gap-2">
+      {/* 検索入力（部分一致・入力中に候補表示） */}
+      <div className="relative">
         <input
-          type="email"
-          placeholder="メールアドレスで検索"
+          type="text"
+          inputMode="email"
+          placeholder="メールアドレスの一部で検索"
           value={email}
-          onChange={(e) => { setEmail(e.target.value); setResult(null); }}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#4CAF50]"
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#4CAF50]"
         />
-        <button
-          onClick={handleSearch}
-          disabled={searching || !email.trim()}
-          className="px-4 py-2 bg-[#4CAF50] text-white rounded-xl text-sm font-medium disabled:opacity-50"
-        >
-          {searching ? '...' : '検索'}
-        </button>
+        {searching && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">検索中...</span>
+        )}
       </div>
 
-      {/* 検索結果 */}
-      {result === 'not_found' && (
-        <p className="text-xs text-red-400 mt-2">ユーザーが見つかりません</p>
+      {/* 検索結果リスト */}
+      {searched && results.length === 0 && !searching && (
+        <p className="text-xs text-red-400 mt-2">該当するユーザーが見つかりません</p>
       )}
-      {result && result !== 'not_found' && (
-        <div className="mt-2 flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-          <Avatar user={result} size="sm" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{result.display_name}</p>
-            <p className="text-xs text-gray-400 truncate">{result.email}</p>
-          </div>
-          {excludeIds.includes(result.id) ? (
-            <span className="text-xs text-gray-400 flex-shrink-0">メンバー</span>
-          ) : selectedUsers.some((u) => u.id === result.id) ? (
-            <span className="text-xs text-[#4CAF50] flex-shrink-0">追加済み</span>
-          ) : (
-            <button
-              onClick={() => handleAdd(result as User)}
-              className="text-xs bg-[#4CAF50] text-white px-3 py-1 rounded-full flex-shrink-0"
-            >
-              追加
-            </button>
-          )}
+      {results.length > 0 && (
+        <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-100">
+          {results.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 p-3 bg-gray-50">
+              <Avatar user={u} size="sm" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{u.display_name}</p>
+                <p className="text-xs text-gray-400 truncate">{u.email}</p>
+              </div>
+              {excludeIds.includes(u.id) ? (
+                <span className="text-xs text-gray-400 flex-shrink-0">メンバー</span>
+              ) : selectedUsers.some((s) => s.id === u.id) ? (
+                <span className="text-xs text-[#4CAF50] flex-shrink-0">追加済み</span>
+              ) : (
+                <button
+                  onClick={() => handleAdd(u)}
+                  className="text-xs bg-[#4CAF50] text-white px-3 py-1 rounded-full flex-shrink-0"
+                >
+                  追加
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

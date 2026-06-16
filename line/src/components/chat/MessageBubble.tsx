@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MessageWithStatus, User } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
+import { formatMessageTime } from '@/lib/datetime';
 
 interface Props {
   message: MessageWithStatus;
@@ -28,11 +29,6 @@ const STATUS_ICON: Record<string, string> = {
   sent: '✓',
   read: '既読',
 };
-
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-}
 
 export function MessageBubble({ message, isOwn, isRead, sender, onDelete, searchQuery }: Props) {
   const isStamp = message.type === 'stamp';
@@ -103,7 +99,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, search
                 {isRead ? STATUS_ICON.read : STATUS_ICON[message.status]}
               </span>
             )}
-            <span>{formatTime(message.created_at)}</span>
+            <span>{formatMessageTime(message.created_at)}</span>
           </div>
         </div>
       </div>

@@ -2,22 +2,13 @@
 
 import Link from 'next/link';
 import { Room } from '@/lib/types';
+import { formatListTime } from '@/lib/datetime';
 
 interface Props {
   room: Room;
   isMember: boolean;
   onJoin?: (roomId: string) => void;
   unreadCount?: number;
-}
-
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  if (isToday) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-  const isThisYear = d.getFullYear() === now.getFullYear();
-  if (isThisYear) return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
-  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 
 export function RoomListItem({ room, isMember, onJoin, unreadCount = 0 }: Props) {
@@ -36,7 +27,7 @@ export function RoomListItem({ room, isMember, onJoin, unreadCount = 0 }: Props)
       <div className="flex-1 min-w-0 border-b border-gray-100 pb-3 pt-0.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-semibold text-[15px] text-gray-900 truncate">{room.name}</span>
-          <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTime(room.last_message_at)}</span>
+          <span className="text-[11px] text-gray-400 flex-shrink-0">{formatListTime(room.last_message_at)}</span>
         </div>
         <div className="flex items-center justify-between mt-[3px]">
           <span className="text-[13px] text-gray-400 truncate leading-snug">{preview}</span>

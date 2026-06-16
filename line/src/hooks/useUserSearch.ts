@@ -8,17 +8,21 @@ export function useUserSearch() {
   const supabase = createClient();
   const [searching, setSearching] = useState(false);
 
-  const searchByEmail = async (email: string): Promise<User | null> => {
-    if (!email.trim()) return null;
+  // メールアドレスの部分一致で候補を返す（大文字小文字無視）
+  const searchUsersByEmail = async (query: string): Promise<User[]> => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
     setSearching(true);
+    const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`); // LIKE ワイルドカードをエスケープ
     const { data } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle();
+      .ilike('email', `%${escaped}%`)
+      .order('email', { ascending: true })
+      .limit(10);
     setSearching(false);
-    return data as User | null;
+    return (data ?? []) as User[];
   };
 
-  return { searchByEmail, searching };
+  return { searchUsersByEmail, searching };
 }
