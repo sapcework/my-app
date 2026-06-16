@@ -78,16 +78,26 @@ export function useRooms(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
 
-    const channel = supabase
+    // (1) 自分の room_members 行の変化（招待=INSERT は本人に届く）
+    const pgChannel = supabase
       .channel(`rooms-membership-${userId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'room_members', filter: `user_id=eq.${userId}` },
-        () => { void fetchRooms(); } // 追加/削除されたら一覧を取り直す
+        () => { void fetchRooms(); }
       )
       .subscribe();
 
-    return () => { void supabase.removeChannel(channel); };
+    // (2) キック通知のブロードキャスト（DELETE は RLS で本人に届かないため別経路）
+    const bcChannel = supabase
+      .channel(`membership:${userId}`)
+      .on('broadcast', { event: 'changed' }, () => { void fetchRooms(); })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(pgChannel);
+      void supabase.removeChannel(bcChannel);
+    };
   }, [userId, fetchRooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createRoom = async (name: string, memberIds: string[]) => {

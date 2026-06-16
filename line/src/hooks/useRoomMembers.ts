@@ -33,8 +33,18 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
       .delete()
       .eq('room_id', roomId)
       .eq('user_id', userId);
-    if (!error) setMembers((prev) => prev.filter((m) => m.id !== userId));
-    return !error;
+    if (error) return false;
+    setMembers((prev) => prev.filter((m) => m.id !== userId));
+
+    // 退出させた本人へブロードキャスト通知（DELETEのpostgres_changesはRLSで本人に届かないため）
+    const ch = supabase.channel(`membership:${userId}`);
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        ch.send({ type: 'broadcast', event: 'changed', payload: { roomId } })
+          .finally(() => { void supabase.removeChannel(ch); });
+      }
+    });
+    return true;
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeRole = useCallback(async (userId: string, role: MemberRole): Promise<boolean> => {
