@@ -28,12 +28,13 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
   const kickMember = useCallback(async (userId: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('room_members')
-      .delete()
-      .eq('room_id', roomId)
-      .eq('user_id', userId);
-    if (error) return false;
+    // 権限チェック付きAPI経由（DELETEのRLS自己参照ポリシーを回避し追加と同経路に統一）
+    const res = await fetch(`/api/rooms/${roomId}/members`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) return false;
     setMembers((prev) => prev.filter((m) => m.id !== userId));
 
     // 退出させた本人へブロードキャスト通知（DELETEのpostgres_changesはRLSで本人に届かないため）
@@ -48,14 +49,15 @@ export function useRoomMembers(roomId: string, myUserId: string | null) {
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeRole = useCallback(async (userId: string, role: MemberRole): Promise<boolean> => {
-    const { error } = await supabase
-      .from('room_members')
-      .update({ role })
-      .eq('room_id', roomId)
-      .eq('user_id', userId);
-    if (!error) setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, role } : m));
-    return !error;
-  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // 権限チェック付きAPI経由（UPDATEのRLS自己参照ポリシーを回避）
+    const res = await fetch(`/api/rooms/${roomId}/members`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, role }),
+    });
+    if (res.ok) setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, role } : m));
+    return res.ok;
+  }, [roomId]);
 
   // owner/admin がユーザーを追加（権限チェック付きAPI経由）
   const addMember = useCallback(async (userId: string): Promise<boolean> => {
