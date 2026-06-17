@@ -25,17 +25,12 @@ function highlightText(text: string, query: string) {
   );
 }
 
-const STATUS_ICON: Record<string, string> = {
-  sending: '🕐',
-  sent: '✓',
-  read: '既読',
-};
-
 export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, searchQuery }: Props) {
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
   const [showMenu, setShowMenu] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false); // 長押し直後のclick(画像オープン等)を抑制
@@ -97,9 +92,11 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
               {isImage ? (
                 <img
                   src={message.content}
-                  alt="画像"
+                  alt="送信された画像"
+                  loading="lazy"
+                  decoding="async"
                   className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } if (message.content.startsWith('https://')) window.open(message.content, '_blank', 'noopener,noreferrer'); }}
+                  onClick={(e) => { e.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } setLightbox(true); }}
                 />
               ) : searchQuery ? highlightText(message.content, searchQuery) : message.content}
             </div>
@@ -133,9 +130,14 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                 >
                   ⟳ 再送
                 </button>
+              ) : message.status === 'sending' ? (
+                <span
+                  aria-label="送信中"
+                  className="inline-block w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"
+                />
               ) : (
-                <span className={isRead ? 'text-[#4CAF50]' : ''}>
-                  {isRead ? STATUS_ICON.read : STATUS_ICON[message.status]}
+                <span className={isRead ? 'text-[#4CAF50]' : 'text-gray-500'}>
+                  {isRead ? '既読' : '✓'}
                 </span>
               )
             )}
@@ -143,6 +145,25 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
           </div>
         </div>
       </div>
+
+      {/* 画像ライトボックス（全画面表示・タップで閉じる） */}
+      {lightbox && isImage && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
+          onClick={() => setLightbox(false)}
+          role="dialog"
+          aria-label="画像プレビュー"
+        >
+          <img src={message.content} alt="画像プレビュー" className="max-w-[95vw] max-h-[90vh] object-contain" />
+          <button
+            onClick={() => setLightbox(false)}
+            aria-label="閉じる"
+            className="absolute top-4 right-4 text-white text-3xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

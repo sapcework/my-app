@@ -10,6 +10,13 @@
   box-sizing: border-box;
 }
 
+/* キーボード操作時のみフォーカスリングを表示（A11y） */
+:focus-visible {
+  outline: 2px solid var(--line-green);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 html, body {
   height: 100%;
   overscroll-behavior: none;
