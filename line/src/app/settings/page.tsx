@@ -178,18 +178,6 @@ export default function SettingsPage() {
             <span className="text-sm text-gray-600">ビルド</span>
             <span className="text-sm text-gray-400">{APP_INFO.commit}{formatBuildDate() && ` · ${formatBuildDate()}`}</span>
           </div>
-          <a href={APP_INFO.links.terms} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-sm text-gray-600">利用規約</span>
-            <span className="text-gray-300">›</span>
-          </a>
-          <a href={APP_INFO.links.privacy} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-sm text-gray-600">プライバシーポリシー</span>
-            <span className="text-gray-300">›</span>
-          </a>
-          <a href={APP_INFO.links.licenses} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-sm text-gray-600">オープンソースライセンス</span>
-            <span className="text-gray-300">›</span>
-          </a>
           <a href={`mailto:${APP_INFO.contactEmail}`} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
             <span className="text-sm text-gray-600">お問い合わせ</span>
             <span className="text-gray-300">›</span>
