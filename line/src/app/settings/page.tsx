@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +88,20 @@ export default function SettingsPage() {
     setSaved(true);
     setSaving(false);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm('アカウントを削除すると、あなたの送信メッセージやアカウント情報がすべて削除され、元に戻せません。本当に削除しますか？')) return;
+    if (!confirm('最終確認：本当にアカウントを削除しますか？')) return;
+    setDeleting(true);
+    const res = await fetch('/api/account/delete', { method: 'POST' });
+    if (res.ok) {
+      await signOut();
+      window.location.assign('/login'); // セッション破棄後にログインへ
+    } else {
+      setDeleting(false);
+      alert('削除に失敗しました。時間をおいて再度お試しください。');
+    }
   };
 
   return (
@@ -191,6 +206,17 @@ export default function SettingsPage() {
             className="w-full py-3 text-red-500 font-medium text-sm text-center"
           >
             ログアウト
+          </button>
+        </div>
+
+        {/* アカウント削除（危険ゾーン） */}
+        <div className="px-4 py-4 mt-2">
+          <button
+            onClick={handleDeleteAccount}
+            disabled={deleting}
+            className="w-full py-3 text-xs text-gray-400 text-center underline disabled:opacity-50"
+          >
+            {deleting ? '削除中...' : 'アカウントを削除（退会）'}
           </button>
         </div>
 
