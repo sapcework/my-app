@@ -80,7 +80,16 @@ export async function POST(req: NextRequest) {
 
   if (!members?.length) return NextResponse.json({ ok: true });
 
-  const memberIds = (members as { user_id: string }[]).map((m) => m.user_id);
+  // このルームをミュートしているユーザーを除外
+  const { data: mutes } = await supabase
+    .from('room_mutes').select('user_id').eq('room_id', msg.room_id);
+  const mutedIds = new Set((mutes as { user_id: string }[] | null ?? []).map((m) => m.user_id));
+
+  const memberIds = (members as { user_id: string }[])
+    .map((m) => m.user_id)
+    .filter((id) => !mutedIds.has(id));
+
+  if (!memberIds.length) return NextResponse.json({ ok: true });
   const { data: subs } = await supabase
     .from('push_subscriptions').select('endpoint, subscription').in('user_id', memberIds);
 

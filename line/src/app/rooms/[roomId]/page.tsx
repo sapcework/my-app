@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessages } from '@/hooks/useMessages';
 import { useReactions } from '@/hooks/useReactions';
+import { useRoomMute } from '@/hooks/useRoomMute';
 import { useReadStatus } from '@/hooks/useReadStatus';
 import { useOnlineUsers } from '@/hooks/useOnline';
 import { useRooms } from '@/hooks/useRooms';
@@ -28,6 +29,7 @@ export default function ChatPage({ params }: Props) {
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage, retryMessage } = useMessages(roomId, profile?.id ?? null);
   const { reactions, toggleReaction } = useReactions(roomId, profile?.id ?? null);
+  const { muted, toggleMute } = useRoomMute(roomId, profile?.id ?? null);
   const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
   const { members, myRole, loading: membersLoading, kickMember, changeRole, addMember, refetch: refetchMembers } = useRoomMembers(roomId, profile?.id ?? null);
   const [rejoining, setRejoining] = useState(false);
@@ -274,6 +276,13 @@ export default function ChatPage({ params }: Props) {
                   </button>
                 </>
               )}
+              <button
+                onClick={toggleMute}
+                className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100 flex items-center justify-between"
+              >
+                <span>通知をミュート</span>
+                <span className={`text-xs ${muted ? 'text-[#4CAF50]' : 'text-gray-400'}`}>{muted ? 'ON' : 'OFF'}</span>
+              </button>
               <button
                 onClick={() => { setShowMenu(false); setShowLeaveConfirm(true); }}
                 className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
