@@ -9,6 +9,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { Avatar } from '@/components/ui/Avatar';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { requestNotificationPermission, subscribeToPush } from '@/lib/notifications';
+import { APP_INFO, appVersionLabel, appCopyright, formatBuildDate } from '@/lib/appInfo';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -166,6 +167,35 @@ export default function SettingsPage() {
           </button>
         </div>
 
+        {/* アプリ情報 */}
+        <div className="bg-white mb-3">
+          <p className="text-xs text-gray-400 px-4 pt-4 pb-1">アプリ情報</p>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-600">バージョン</span>
+            <span className="text-sm text-gray-400">{appVersionLabel}</span>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-600">ビルド</span>
+            <span className="text-sm text-gray-400">{APP_INFO.commit}{formatBuildDate() && ` · ${formatBuildDate()}`}</span>
+          </div>
+          <a href={APP_INFO.links.terms} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-600">利用規約</span>
+            <span className="text-gray-300">›</span>
+          </a>
+          <a href={APP_INFO.links.privacy} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-600">プライバシーポリシー</span>
+            <span className="text-gray-300">›</span>
+          </a>
+          <a href={APP_INFO.links.licenses} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-600">オープンソースライセンス</span>
+            <span className="text-gray-300">›</span>
+          </a>
+          <a href={`mailto:${APP_INFO.contactEmail}`} className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-600">お問い合わせ</span>
+            <span className="text-gray-300">›</span>
+          </a>
+        </div>
+
         {/* ログアウト */}
         <div className="bg-white px-4 py-4">
           <button
@@ -174,6 +204,12 @@ export default function SettingsPage() {
           >
             ログアウト
           </button>
+        </div>
+
+        {/* フッター（アプリ名・バージョン・著作権） */}
+        <div className="text-center py-6">
+          <p className="text-xs text-gray-400">{APP_INFO.name} {appVersionLabel}</p>
+          <p className="text-[10px] text-gray-300 mt-1">{appCopyright}</p>
         </div>
       </main>
 
