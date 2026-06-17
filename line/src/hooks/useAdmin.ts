@@ -35,9 +35,14 @@ export function useAdmin() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const suspendUser = useCallback(async (userId: string, suspended: boolean): Promise<boolean> => {
-    const { error } = await supabase.from('users').update({ is_suspended: suspended }).eq('id', userId);
-    return !error;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // is_suspended は service role のみ変更可のため admin API 経由（RLS+トリガーで直接更新は不可）
+    const res = await fetch('/api/admin/suspend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, suspended }),
+    });
+    return res.ok;
+  }, []);
 
   const getRooms = useCallback(async (): Promise<Room[]> => {
     const { data } = await supabase
