@@ -4,9 +4,8 @@ export const dynamic = 'force-dynamic';
 
 import { useState, FormEvent, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-
-type Mode = 'signin' | 'signup';
+import { identifierToEmail } from '@/lib/username';
+import { APP_INFO } from '@/lib/appInfo';
 
 // useSearchParams を使うため Suspense でラップする（App Router の prerender 要件）
 export default function LoginPage() {
@@ -20,42 +19,20 @@ export default function LoginPage() {
 function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') ?? '/rooms'; // ログイン後リダイレクト先
-  const { signUp } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
-  const [email, setEmail] = useState(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem('lastLoginEmail') ?? '') : ''
+  const [identifier, setIdentifier] = useState(() =>
+    typeof window !== 'undefined' ? (localStorage.getItem('lastLoginId') ?? '') : ''
   );
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    setInfo('');
     setLoading(true);
 
-    const dest = redirectTo.startsWith('/') ? redirectTo : '/rooms';
-
-    // サインアップ
-    if (mode === 'signup') {
-      const { error: err, needsConfirmation } = await signUp(email, password, displayName);
-      setLoading(false);
-      if (err) {
-        setError(err.message);
-      } else if (needsConfirmation) {
-        // メール確認ON: セッション未発行。確認メール内のリンクで完了させる
-        setInfo('確認メールを送信しました。メール内のリンクを開いて登録を完了してください。');
-      } else {
-        // 確認OFF: ハード遷移で AuthProvider を再マウントし cookie からセッションを読ませる
-        window.location.assign(dest);
-      }
-      return;
-    }
-
-    // サインインはAPIルート経由（レート制限付き）
+    // ユーザー名→擬似メール（@を含む入力は既存メールとして扱う）に変換して送信
+    const email = identifierToEmail(identifier);
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,7 +47,7 @@ function LoginForm() {
     setLoading(false);
 
     if (data.ok) {
-      localStorage.setItem('lastLoginEmail', email); // 成功時にメールを保存
+      localStorage.setItem('lastLoginId', identifier.trim()); // 成功時に入力を保存
       // APIルート（サーバー側）でcookieが設定されるため、ハード遷移で
       // AuthProvider を再マウントしてセッションを読み直させる（client遷移だと認識されず読込中で固まる）
       window.location.assign(redirectTo.startsWith('/') ? redirectTo : '/rooms');
@@ -81,11 +58,11 @@ function LoginForm() {
       setError(`ログインが連続5回失敗しました。あと${data.remainingMinutes}分後に再試行できます。`);
     } else if (data.error === 'invalid_credentials') {
       if ((data.remaining ?? 0) === 0) {
-        setError('メールアドレスまたはパスワードが正しくありません。アカウントがロックされました。');
+        setError('ユーザー名またはパスワードが正しくありません。アカウントがロックされました。');
       } else if ((data.remaining ?? 0) === 1) {
-        setError('メールアドレスまたはパスワードが正しくありません。あと1回失敗するとロックされます。');
+        setError('ユーザー名またはパスワードが正しくありません。あと1回失敗するとロックされます。');
       } else {
-        setError('メールアドレスまたはパスワードが正しくありません。');
+        setError('ユーザー名またはパスワードが正しくありません。');
       }
     } else {
       setError('エラーが発生しました。もう一度お試しください。');
@@ -94,49 +71,38 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
-      {/* LINEロゴ風 */}
+      {/* ロゴ */}
       <div className="mb-8 text-center">
         <div className="w-20 h-20 bg-[#4CAF50] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-          <span className="text-white text-4xl font-black">L</span>
+          <span className="text-white text-4xl font-black">{APP_INFO.name.charAt(0).toUpperCase()}</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">LINE Chat</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{APP_INFO.name}</h1>
         <p className="text-gray-500 text-sm mt-1">つながろう、いつでも</p>
       </div>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3">
-        {mode === 'signup' && (
-          <input
-            type="text"
-            placeholder="表示名"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
-          />
-        )}
         <input
-          type="email"
-          placeholder="メールアドレス"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          inputMode="text"
+          autoCapitalize="none"
+          autoCorrect="off"
+          placeholder="ユーザー名"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
           className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
         />
         <input
           type="password"
-          placeholder="パスワード（6文字以上）"
+          placeholder="パスワード"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          minLength={6}
           className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
         />
 
         {error && (
           <p className="text-red-500 text-xs px-1">{error}</p>
-        )}
-        {info && (
-          <p className="text-green-600 text-xs px-1">{info}</p>
         )}
 
         <button
@@ -144,16 +110,13 @@ function LoginForm() {
           disabled={loading}
           className="w-full bg-[#4CAF50] text-white font-bold py-3 rounded-xl disabled:opacity-50 transition-opacity active:scale-95 transition-transform"
         >
-          {loading ? '処理中...' : mode === 'signin' ? 'ログイン' : 'アカウント作成'}
+          {loading ? '処理中...' : 'ログイン'}
         </button>
       </form>
 
-      <button
-        onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); }}
-        className="mt-6 text-sm text-[#4CAF50] font-medium"
-      >
-        {mode === 'signin' ? 'アカウントをお持ちでない方はこちら' : 'すでにアカウントをお持ちの方'}
-      </button>
+      <p className="mt-6 text-xs text-gray-400 text-center max-w-sm">
+        アカウントは管理者が発行します。ログインできない場合は管理者にお問い合わせください。
+      </p>
     </div>
   );
 }

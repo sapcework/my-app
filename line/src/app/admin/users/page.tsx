@@ -19,6 +19,16 @@ export default function AdminUsersPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [opError, setOpError] = useState('');
 
+  // 新規ユーザー作成フォーム
+  const [newUsername, setNewUsername] = useState('');
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createMsg, setCreateMsg] = useState('');
+  const [createErr, setCreateErr] = useState('');
+
+  const refreshUsers = () => getUsers().then(setUsers);
+
   useEffect(() => {
     Promise.all([
       getUsers(),
@@ -29,6 +39,32 @@ export default function AdminUsersPage() {
       setLoading(false);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateErr('');
+    setCreateMsg('');
+    setCreating(true);
+    const res = await fetch('/api/admin/users/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: newUsername, password: newPassword, displayName: newDisplayName }),
+    });
+    const data = await res.json() as { ok?: boolean; error?: string; username?: string };
+    setCreating(false);
+    if (data.ok) {
+      setCreateMsg(`「${data.username}」を作成しました（ログインはこのユーザー名で）`);
+      setNewUsername(''); setNewDisplayName(''); setNewPassword('');
+      await refreshUsers();
+    } else {
+      setCreateErr(
+        data.error === 'username_taken' ? 'そのユーザー名は既に使われています'
+        : data.error === 'invalid_username' ? 'ユーザー名は英小文字・数字・_ の3〜20文字'
+        : data.error === 'invalid_password' ? 'パスワードは6文字以上'
+        : '作成に失敗しました'
+      );
+    }
+  };
 
   const handleToggleSuspend = async (user: User) => {
     setUpdating(user.id);
@@ -66,6 +102,46 @@ export default function AdminUsersPage() {
         </div>
       ) : (
         <div className="p-4 space-y-3">
+          {/* 新規ユーザー作成（メール不要・ユーザー名で発行） */}
+          <form onSubmit={handleCreate} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+            <p className="font-medium text-sm mb-1">新規ユーザーを作成</p>
+            <input
+              type="text"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              placeholder="ユーザー名（英小文字・数字・_ / 3〜20字）"
+              autoCapitalize="none"
+              autoCorrect="off"
+              required
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4CAF50]"
+            />
+            <input
+              type="text"
+              value={newDisplayName}
+              onChange={(e) => setNewDisplayName(e.target.value)}
+              placeholder="表示名（任意・未入力ならユーザー名）"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4CAF50]"
+            />
+            <input
+              type="text"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="初期パスワード（6文字以上）"
+              minLength={6}
+              required
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4CAF50]"
+            />
+            {createErr && <p className="text-xs text-red-500">{createErr}</p>}
+            {createMsg && <p className="text-xs text-green-600">{createMsg}</p>}
+            <button
+              type="submit"
+              disabled={creating}
+              className="w-full py-2 rounded-lg text-sm font-medium bg-[#4CAF50] text-white disabled:opacity-50"
+            >
+              {creating ? '作成中...' : 'アカウントを発行'}
+            </button>
+          </form>
+
           {opError && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{opError}</p>}
           <p className="text-xs text-gray-400">{users.length}件</p>
           {users.map((user) => {
