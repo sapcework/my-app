@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { MessageWithStatus } from '@/lib/types';
+import { ReactionMap } from '@/hooks/useReactions';
 
 interface Props {
   messages: MessageWithStatus[];
@@ -10,6 +11,8 @@ interface Props {
   otherLastReadMessageId: string | null;
   onDelete?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
+  reactions?: ReactionMap;
+  onReact?: (messageId: string, emoji: string) => void;
   searchQuery?: string;
 }
 
@@ -27,7 +30,7 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, searchQuery }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, reactions, onReact, searchQuery }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);          // ユーザーが最下部付近にいるか
@@ -109,6 +112,9 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
               sender={msg.sender}
               onDelete={onDelete}
               onRetry={onRetry}
+              reactions={reactions?.[msg.id]}
+              myUserId={currentUserId}
+              onReact={onReact}
               searchQuery={query}
             />
           </div>

@@ -1,9 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { MessageWithStatus, User } from '@/lib/types';
+import { MessageWithStatus, MessageReaction, User } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatMessageTime } from '@/lib/datetime';
+
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']; // クイックリアクション
 
 interface Props {
   message: MessageWithStatus;
@@ -12,6 +14,9 @@ interface Props {
   sender?: User;
   onDelete?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
+  reactions?: MessageReaction[];
+  myUserId?: string;
+  onReact?: (messageId: string, emoji: string) => void;
   searchQuery?: string;
 }
 
@@ -25,19 +30,28 @@ function highlightText(text: string, query: string) {
   );
 }
 
-export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, searchQuery }: Props) {
+export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, reactions = [], myUserId, onReact, searchQuery }: Props) {
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
   const [showMenu, setShowMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
+  const canInteract = !isFailed && (canDelete || !!onReact); // メニュー（リアクション/削除）を出せるか
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false); // 長押し直後のclick(画像オープン等)を抑制
 
+  // 絵文字ごとに集計（count と自分が押したか）
+  const grouped = reactions.reduce<Record<string, { count: number; mine: boolean }>>((acc, r) => {
+    const g = (acc[r.emoji] ??= { count: 0, mine: false });
+    g.count += 1;
+    if (r.user_id === myUserId) g.mine = true;
+    return acc;
+  }, {});
+
   // 長押し（タッチ）でメニュー表示
   const startPress = () => {
-    if (!canDelete) return;
+    if (!canInteract) return;
     suppressClick.current = false;
     pressTimer.current = setTimeout(() => {
       suppressClick.current = true;
@@ -49,13 +63,17 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   };
   const handleContextMenu = (e: React.MouseEvent) => {
-    if (!canDelete) return;
+    if (!canInteract) return;
     e.preventDefault(); // PCの右クリックでメニュー
     setShowMenu(true);
   };
   const handleDelete = () => {
     setShowMenu(false);
     if (confirm('このメッセージを削除しますか？')) onDelete?.(message.id);
+  };
+  const handleReact = (emoji: string) => {
+    setShowMenu(false);
+    onReact?.(message.id, emoji);
   };
 
   return (
@@ -100,18 +118,35 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                 />
               ) : searchQuery ? highlightText(message.content, searchQuery) : message.content}
             </div>
-            {/* 削除メニュー（長押し / 右クリックで表示） */}
+            {/* メニュー（長押し / 右クリックで表示）：リアクション＋削除 */}
             {showMenu && (
-              <div className="absolute bottom-full mb-1 right-0 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-10">
-                <button
-                  onClick={handleDelete}
-                  className="px-4 py-2 text-sm text-red-500 font-medium whitespace-nowrap hover:bg-gray-50"
-                >
-                  削除
-                </button>
+              <div className={`absolute bottom-full mb-1 ${isOwn ? 'right-0' : 'left-0'} bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-10`}>
+                {/* リアクション絵文字の行 */}
+                {onReact && (
+                  <div className="flex gap-1 px-2 py-2 border-b border-gray-100">
+                    {QUICK_REACTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => handleReact(emoji)}
+                        aria-label={`リアクション ${emoji}`}
+                        className="text-xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-90 transition-transform"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={handleDelete}
+                    className="w-full px-4 py-2 text-sm text-red-500 font-medium whitespace-nowrap hover:bg-gray-50 text-left"
+                  >
+                    削除
+                  </button>
+                )}
                 <button
                   onClick={() => setShowMenu(false)}
-                  className="px-4 py-2 text-sm text-gray-400 whitespace-nowrap hover:bg-gray-50 border-t border-gray-100"
+                  className="w-full px-4 py-2 text-sm text-gray-400 whitespace-nowrap hover:bg-gray-50 border-t border-gray-100 text-left"
                 >
                   キャンセル
                 </button>
@@ -144,6 +179,24 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
             {!isFailed && <span>{formatMessageTime(message.created_at)}</span>}
           </div>
         </div>
+
+        {/* リアクションチップ（タップで自分の付与/解除をトグル） */}
+        {Object.keys(grouped).length > 0 && (
+          <div className={`flex flex-wrap gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+            {Object.entries(grouped).map(([emoji, g]) => (
+              <button
+                key={emoji}
+                onClick={() => onReact?.(message.id, emoji)}
+                aria-label={`${emoji} ${g.count}件${g.mine ? '（自分が付与）' : ''}`}
+                className={`flex items-center gap-1 px-2 h-6 rounded-full text-xs border ${
+                  g.mine ? 'bg-[#4CAF50]/10 border-[#4CAF50] text-[#4CAF50]' : 'bg-white border-gray-200 text-gray-600'
+                }`}
+              >
+                <span>{emoji}</span><span className="font-medium">{g.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 画像ライトボックス（全画面表示・タップで閉じる） */}

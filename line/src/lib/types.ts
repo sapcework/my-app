@@ -71,3 +71,10 @@ export type MessageStatus = 'sending' | 'sent' | 'read' | 'failed';
 export interface MessageWithStatus extends Message {
   status: MessageStatus;
 }
+
+// メッセージへのリアクション（絵文字）
+export interface MessageReaction {
+  message_id: string;
+  user_id: string;
+  emoji: string;
+}

@@ -6,6 +6,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessages } from '@/hooks/useMessages';
+import { useReactions } from '@/hooks/useReactions';
 import { useReadStatus } from '@/hooks/useReadStatus';
 import { useOnlineUsers } from '@/hooks/useOnline';
 import { useRooms } from '@/hooks/useRooms';
@@ -26,6 +27,7 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage, retryMessage } = useMessages(roomId, profile?.id ?? null);
+  const { reactions, toggleReaction } = useReactions(roomId, profile?.id ?? null);
   const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
   const { members, myRole, loading: membersLoading, kickMember, changeRole, addMember, refetch: refetchMembers } = useRoomMembers(roomId, profile?.id ?? null);
   const [rejoining, setRejoining] = useState(false);
@@ -220,6 +222,8 @@ export default function ChatPage({ params }: Props) {
           otherLastReadMessageId={otherLastReadMessageId}
           onDelete={deleteMessage}
           onRetry={retryMessage}
+          reactions={reactions}
+          onReact={toggleReaction}
           searchQuery={showSearch ? searchQuery : undefined}
         />
       )}
