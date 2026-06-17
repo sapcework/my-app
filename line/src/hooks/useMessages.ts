@@ -89,8 +89,8 @@ export function useMessages(roomId: string, userId: string | null) {
     const path = `${userId}/${roomId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('chat-images').upload(path, file);
     if (error) { console.error('image upload error:', error); return; }
-    const { data } = supabase.storage.from('chat-images').getPublicUrl(path);
-    await sendMessage(data.publicUrl, 'image');
+    // 非公開バケットのため、公開URLではなくパスを保存（表示時に署名URLを生成）
+    await sendMessage(path, 'image');
   };
 
   // 楽観メッセージをDBへ確定。失敗時は削除せず 'failed' にして再送できるようにする

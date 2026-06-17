@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { MessageWithStatus, MessageReaction, User } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatMessageTime } from '@/lib/datetime';
+import { useSignedUrl } from '@/hooks/useSignedUrl';
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']; // クイックリアクション
 
@@ -36,6 +37,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
+  const imageUrl = useSignedUrl(message.content, isImage); // 画像は署名URLで表示
   const [showMenu, setShowMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
@@ -121,14 +123,18 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                 </div>
               )}
               {isImage ? (
-                <img
-                  src={message.content}
-                  alt="送信された画像"
-                  loading="lazy"
-                  decoding="async"
-                  className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } setLightbox(true); }}
-                />
+                imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt="送信された画像"
+                    loading="lazy"
+                    decoding="async"
+                    className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer shadow-sm"
+                    onClick={(e) => { e.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } setLightbox(true); }}
+                  />
+                ) : (
+                  <div className="w-[160px] h-[120px] rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                )
               ) : searchQuery ? highlightText(message.content, searchQuery) : message.content}
             </div>
             {/* メニュー（長押し / 右クリックで表示）：リアクション＋削除 */}
@@ -228,7 +234,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
           role="dialog"
           aria-label="画像プレビュー"
         >
-          <img src={message.content} alt="画像プレビュー" className="max-w-[95vw] max-h-[90vh] object-contain" />
+          <img src={imageUrl} alt="画像プレビュー" className="max-w-[95vw] max-h-[90vh] object-contain" />
           <button
             onClick={() => setLightbox(false)}
             aria-label="閉じる"
