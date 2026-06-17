@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { MessageWithStatus } from '@/lib/types';
 
@@ -9,6 +9,7 @@ interface Props {
   currentUserId: string;
   otherLastReadMessageId: string | null;
   onDelete?: (messageId: string) => void;
+  onRetry?: (messageId: string) => void;
   searchQuery?: string;
 }
 
@@ -26,18 +27,47 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, searchQuery }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, searchQuery }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const atBottomRef = useRef(true);          // ユーザーが最下部付近にいるか
+  const prevLastIdRef = useRef<string | null>(null);
+  const [showNewPill, setShowNewPill] = useState(false);
 
   const lastReadIdx = otherLastReadMessageId
     ? messages.findIndex((m) => m.id === otherLastReadMessageId)
     : -1;
 
-  // 検索時は最下部へのスクロールを抑制
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    bottomRef.current?.scrollIntoView({ behavior });
+    setShowNewPill(false);
+  };
+
+  // スクロール位置を監視（最下部から120px以内なら「最下部」とみなす）
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    atBottomRef.current = nearBottom;
+    if (nearBottom) setShowNewPill(false);
+  };
+
+  // 新着時：最下部付近 or 自分の送信なら自動スクロール、それ以外は新着ピルを表示
   useEffect(() => {
     if (searchQuery) return;
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, searchQuery]);
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    const firstLoad = prevLastIdRef.current === null;
+    const isNew = last.id !== prevLastIdRef.current;
+    prevLastIdRef.current = last.id;
+    if (!isNew) return; // 既読更新等のid変化なしは無視
+    const isOwn = last.sender_id === currentUserId;
+    if (firstLoad || isOwn || atBottomRef.current) {
+      scrollToBottom(firstLoad ? 'auto' : 'smooth');
+    } else {
+      setShowNewPill(true); // 履歴閲覧中に他人の新着 → やみくもにスクロールしない
+    }
+  }, [messages, searchQuery, currentUserId]);
 
   const query = searchQuery?.trim().toLowerCase() ?? '';
   const filtered = query
@@ -45,7 +75,8 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
     : messages;
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5 bg-[#b2d8ea]">
+    <div className="relative flex-1 min-h-0">
+    <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto px-3 py-3 space-y-0.5 bg-[#b2d8ea]">
       {/* 検索中のバナー */}
       {query && (
         <div className="flex justify-center mb-2">
@@ -77,12 +108,24 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
               isRead={isRead}
               sender={msg.sender}
               onDelete={onDelete}
+              onRetry={onRetry}
               searchQuery={query}
             />
           </div>
         );
       })}
       <div ref={bottomRef} />
+    </div>
+
+      {/* 新着メッセージピル（履歴閲覧中に他人の新着が来た時のみ） */}
+      {showNewPill && (
+        <button
+          onClick={() => scrollToBottom()}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#4CAF50] text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg active:scale-95 transition-transform z-10"
+        >
+          新着メッセージ ↓
+        </button>
+      )}
     </div>
   );
 }

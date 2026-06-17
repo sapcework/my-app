@@ -93,11 +93,31 @@ export function useMessages(roomId: string, userId: string | null) {
     await sendMessage(data.publicUrl, 'image');
   };
 
+  // 楽観メッセージをDBへ確定。失敗時は削除せず 'failed' にして再送できるようにする
+  const insertMessage = async (optimisticId: string, content: string, type: 'text' | 'stamp' | 'image') => {
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({ room_id: roomId, sender_id: userId, content, type })
+      .select()
+      .single();
+
+    if (error) {
+      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? { ...m, status: 'failed' as const } : m)));
+      return;
+    }
+
+    // 楽観的更新を確定メッセージに差し替え（idも実IDへ）
+    setMessages((prev) =>
+      prev.map((m) => (m.id === optimisticId ? { ...data as Message, status: 'sent' as const } : m))
+    );
+  };
+
   const sendMessage = async (content: string, type: 'text' | 'stamp' | 'image' = 'text') => {
     if (!userId || !content.trim()) return;
 
+    const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: MessageWithStatus = {
-      id: `optimistic-${Date.now()}`,
+      id: optimisticId,
       room_id: roomId,
       sender_id: userId,
       content,
@@ -107,23 +127,20 @@ export function useMessages(roomId: string, userId: string | null) {
     };
 
     setMessages((prev) => [...prev, optimistic]);
-
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({ room_id: roomId, sender_id: userId, content, type })
-      .select()
-      .single();
-
-    if (error) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id)); // 失敗時削除
-      return;
-    }
-
-    // 楽観的更新を確定メッセージに差し替え
-    setMessages((prev) =>
-      prev.map((m) => (m.id === optimistic.id ? { ...data as Message, status: 'sent' as const } : m))
-    );
+    await insertMessage(optimisticId, content, type);
   };
 
-  return { messages, loading, sendMessage, sendImage, deleteMessage };
+  // 送信失敗メッセージの再送
+  const retryMessage = async (messageId: string) => {
+    let target: MessageWithStatus | undefined;
+    setMessages((prev) => {
+      target = prev.find((m) => m.id === messageId && m.status === 'failed');
+      if (!target) return prev;
+      return prev.map((m) => (m.id === messageId ? { ...m, status: 'sending' as const } : m));
+    });
+    if (!target) return;
+    await insertMessage(messageId, target.content, target.type as 'text' | 'stamp' | 'image');
+  };
+
+  return { messages, loading, sendMessage, sendImage, deleteMessage, retryMessage };
 }

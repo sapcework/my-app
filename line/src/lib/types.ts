@@ -66,7 +66,7 @@ export interface RoomWithLastMessage extends Room {
 }
 
 // メッセージの送信状態（UI表示用）
-export type MessageStatus = 'sending' | 'sent' | 'read';
+export type MessageStatus = 'sending' | 'sent' | 'read' | 'failed';
 
 export interface MessageWithStatus extends Message {
   status: MessageStatus;
