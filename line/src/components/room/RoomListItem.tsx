@@ -18,7 +18,7 @@ export function RoomListItem({ room, isMember, onJoin, unreadCount = 0 }: Props)
     : '参加していません';
 
   const inner = (
-    <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors">
+    <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 dark:active:bg-white/5 transition-colors">
       {/* アバター（ルーム名から色分け） */}
       <div
         style={{ backgroundColor: colorFromString(room.name) }}
@@ -28,9 +28,9 @@ export function RoomListItem({ room, isMember, onJoin, unreadCount = 0 }: Props)
       </div>
 
       {/* 本文 */}
-      <div className="flex-1 min-w-0 border-b border-gray-100 pb-3 pt-0.5">
+      <div className="flex-1 min-w-0 border-b border-gray-100 dark:border-gray-800 pb-3 pt-0.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="font-semibold text-[15px] text-gray-900 truncate">{room.name}</span>
+          <span className="font-semibold text-[15px] text-gray-900 dark:text-gray-100 truncate">{room.name}</span>
           <span className="text-[11px] text-gray-500 flex-shrink-0">{formatListTime(room.last_message_at)}</span>
         </div>
         <div className="flex items-center justify-between mt-[3px]">

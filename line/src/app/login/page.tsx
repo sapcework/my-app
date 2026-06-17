@@ -70,13 +70,13 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-white dark:bg-[#121212] flex flex-col items-center justify-center px-6">
       {/* ロゴ */}
       <div className="mb-8 text-center">
         <div className="w-20 h-20 bg-[#4CAF50] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
           <span className="text-white text-4xl font-black">{APP_INFO.name.charAt(0).toUpperCase()}</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">{APP_INFO.name}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{APP_INFO.name}</h1>
         <p className="text-gray-500 text-sm mt-1">つながろう、いつでも</p>
       </div>
 
@@ -90,7 +90,7 @@ function LoginForm() {
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
           required
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
+          className="w-full border border-gray-200 dark:border-gray-700 dark:bg-[#2a2a2a] dark:text-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
         />
         <input
           type="password"
@@ -98,7 +98,7 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
+          className="w-full border border-gray-200 dark:border-gray-700 dark:bg-[#2a2a2a] dark:text-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] transition-colors"
         />
 
         {error && (

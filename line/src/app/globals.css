@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* クラス方式のダークモード（html.dark で有効化） */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --line-green: #4CAF50;
   --line-bg: #b2d8ea;
@@ -25,8 +28,15 @@ html, body {
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   background: #efefef;
+  color: #111827;
   max-width: 430px;
   margin: 0 auto;
+}
+
+/* ダークモードの基本キャンバス */
+.dark body {
+  background: #121212;
+  color: #e5e7eb;
 }
 
 ::-webkit-scrollbar {

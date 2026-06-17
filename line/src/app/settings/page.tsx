@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { requestNotificationPermission, subscribeToPush } from '@/lib/notifications';
 import { APP_INFO, appVersionLabel, appCopyright, formatBuildDate } from '@/lib/appInfo';
+import { Theme, getStoredTheme, applyTheme } from '@/lib/theme';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -21,6 +22,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [theme, setTheme] = useState<Theme>('system');
+  useEffect(() => { setTheme(getStoredTheme()); }, []);
+  const handleTheme = (t: Theme) => { setTheme(t); applyTheme(t); };
   const [avatarError, setAvatarError] = useState('');
   const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,7 +109,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#121212]">
       <header className="bg-[#4CAF50] text-white flex items-center gap-3 px-4 py-3 pt-safe shadow-sm flex-shrink-0">
         <button onClick={() => router.back()} className="text-white text-xl">‹</button>
         <h1 className="text-lg font-bold flex-1">設定</h1>
@@ -113,7 +117,7 @@ export default function SettingsPage() {
 
       <main className="flex-1 overflow-y-auto pb-20">
         {/* アバター */}
-        <div className="flex flex-col items-center py-8 bg-white mb-3">
+        <div className="flex flex-col items-center py-8 bg-white dark:bg-[#1e1e1e] mb-3">
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
@@ -138,7 +142,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 表示名 */}
-        <div className="bg-white px-4 py-4 mb-3">
+        <div className="bg-white dark:bg-[#1e1e1e] px-4 py-4 mb-3">
           <p className="text-xs text-gray-400 mb-1">表示名</p>
           <input
             type="text"
@@ -157,7 +161,7 @@ export default function SettingsPage() {
 
         {/* 管理者リンク */}
         {profile.is_admin && (
-          <div className="bg-white px-4 py-4 mb-3">
+          <div className="bg-white dark:bg-[#1e1e1e] px-4 py-4 mb-3">
             <button
               onClick={() => router.push('/admin')}
               className="w-full py-3 text-[#4CAF50] font-medium text-sm text-center border border-[#4CAF50]/30 rounded-xl"
@@ -168,7 +172,7 @@ export default function SettingsPage() {
         )}
 
         {/* 通知設定 */}
-        <div className="bg-white px-4 py-4 mb-3">
+        <div className="bg-white dark:bg-[#1e1e1e] px-4 py-4 mb-3">
           <p className="text-xs text-gray-400 mb-2">プッシュ通知</p>
           <button
             onClick={handleEnableNotification}
@@ -182,8 +186,28 @@ export default function SettingsPage() {
           </button>
         </div>
 
+        {/* テーマ */}
+        <div className="bg-white dark:bg-[#1e1e1e] px-4 py-4 mb-3">
+          <p className="text-xs text-gray-400 mb-2">テーマ</p>
+          <div className="flex gap-2">
+            {([['light','ライト'],['dark','ダーク'],['system','端末に合わせる']] as [Theme, string][]).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => handleTheme(val)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                  theme === val
+                    ? 'bg-[#4CAF50] text-white border-[#4CAF50]'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* アプリ情報 */}
-        <div className="bg-white mb-3">
+        <div className="bg-white dark:bg-[#1e1e1e] mb-3">
           <p className="text-xs text-gray-400 px-4 pt-4 pb-1">アプリ情報</p>
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
             <span className="text-sm text-gray-600">バージョン</span>
@@ -200,7 +224,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ログアウト */}
-        <div className="bg-white px-4 py-4">
+        <div className="bg-white dark:bg-[#1e1e1e] px-4 py-4">
           <button
             onClick={signOut}
             className="w-full py-3 text-red-500 font-medium text-sm text-center"

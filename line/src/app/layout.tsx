@@ -2,15 +2,16 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { GlobalNotificationProvider } from '@/components/ui/GlobalNotificationProvider';
+import { APP_INFO } from '@/lib/appInfo';
 
 export const metadata: Metadata = {
-  title: 'LINE Chat',
-  description: 'LINE風リアルタイムチャット',
+  title: APP_INFO.name,
+  description: 'リアルタイムチャット',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'LINE Chat',
+    title: APP_INFO.name,
   },
 };
 
@@ -28,6 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="apple-touch-icon" href="/apple-icon.png" />
         <meta name="mobile-web-app-capable" content="yes" />
+        {/* チラつき防止：描画前にテーマを適用 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="h-full antialiased">
         <AuthProvider>

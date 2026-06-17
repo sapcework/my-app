@@ -88,7 +88,7 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
 
   return (
     <div className="relative flex-1 min-h-0">
-    <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto px-3 py-3 space-y-0.5 bg-[#b2d8ea]">
+    <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto px-3 py-3 space-y-0.5 bg-[#b2d8ea] dark:bg-[#0e1c24]">
       {/* 検索中のバナー */}
       {query && (
         <div className="flex justify-center mb-2">

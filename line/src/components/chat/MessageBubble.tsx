@@ -109,7 +109,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                 !isStamp && !isImage && isOwn
                   ? 'bg-[#4CAF50] text-white rounded-[18px_4px_18px_18px]'
                   : !isStamp && !isImage
-                  ? 'bg-white text-gray-900 rounded-[4px_18px_18px_18px] shadow-sm'
+                  ? 'bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-[4px_18px_18px_18px] shadow-sm'
                   : '',
               ].join(' ')}
             >
@@ -133,7 +133,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
             </div>
             {/* メニュー（長押し / 右クリックで表示）：リアクション＋削除 */}
             {showMenu && (
-              <div className={`absolute bottom-full mb-1 ${isOwn ? 'right-0' : 'left-0'} bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-10`}>
+              <div className={`absolute bottom-full mb-1 ${isOwn ? 'right-0' : 'left-0'} bg-white dark:bg-[#2a2a2a] rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-10`}>
                 {/* リアクション絵文字の行 */}
                 {onReact && (
                   <div className="flex gap-1 px-2 py-2 border-b border-gray-100">
@@ -210,7 +210,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                 onClick={() => onReact?.(message.id, emoji)}
                 aria-label={`${emoji} ${g.count}件${g.mine ? '（自分が付与）' : ''}`}
                 className={`flex items-center gap-1 px-2 h-6 rounded-full text-xs border ${
-                  g.mine ? 'bg-[#4CAF50]/10 border-[#4CAF50] text-[#4CAF50]' : 'bg-white border-gray-200 text-gray-600'
+                  g.mine ? 'bg-[#4CAF50]/10 border-[#4CAF50] text-[#4CAF50]' : 'bg-white dark:bg-[#2a2a2a] border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'
                 }`}
               >
                 <span>{emoji}</span><span className="font-medium">{g.count}</span>

@@ -58,10 +58,10 @@ export function MessageInput({ onSend, onSendImage, replyingTo, onCancelReply, d
   };
 
   return (
-    <div className="bg-[#f0f0f0] border-t border-gray-200">
+    <div className="bg-[#f0f0f0] dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-gray-800">
       {/* 返信プレビュー */}
       {replyingTo && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200">
+        <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#262626] border-b border-gray-200 dark:border-gray-800">
           <div className="w-0.5 self-stretch bg-[#4CAF50] rounded-full" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-[#4CAF50]">{replyingTo.senderName} に返信</p>
@@ -73,7 +73,7 @@ export function MessageInput({ onSend, onSendImage, replyingTo, onCancelReply, d
 
       {/* スタンプパレット */}
       {showStamps && (
-        <div className="flex flex-wrap gap-2 p-3 bg-white border-b border-gray-200">
+        <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-[#262626] border-b border-gray-200 dark:border-gray-800">
           {STAMPS.map((s) => (
             <button
               key={s}
@@ -128,7 +128,7 @@ export function MessageInput({ onSend, onSendImage, replyingTo, onCancelReply, d
           onKeyDown={handleKeyDown}
           placeholder="メッセージを入力"
           rows={1}
-          className="flex-1 resize-none bg-white rounded-2xl px-4 py-2 text-[15px] outline-none max-h-24 overflow-y-auto leading-relaxed"
+          className="flex-1 resize-none bg-white dark:bg-[#2a2a2a] dark:text-gray-100 rounded-2xl px-4 py-2 text-[15px] outline-none max-h-24 overflow-y-auto leading-relaxed"
         />
 
         {/* スタンプボタン */}

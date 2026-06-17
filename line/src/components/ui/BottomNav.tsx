@@ -55,7 +55,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 flex z-50">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white dark:bg-[#1e1e1e] border-t border-gray-200 dark:border-gray-700 flex z-50">
       {NAV_ITEMS.map(({ href, label, icon }) => {
         const active = pathname.startsWith(href);
         return (

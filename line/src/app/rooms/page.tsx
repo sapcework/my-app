@@ -43,7 +43,7 @@ export default function RoomsPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white max-w-lg mx-auto">
+    <div className="flex flex-col h-screen bg-white dark:bg-[#121212] max-w-lg mx-auto">
       {/* ヘッダー */}
       <header className="bg-[#4CAF50] text-white flex items-center justify-between px-4 py-3 pt-safe flex-shrink-0">
         <h1 className="text-[17px] font-bold">トーク</h1>
@@ -68,7 +68,7 @@ export default function RoomsPage() {
       </header>
 
       {/* ルーム一覧 */}
-      <main className="flex-1 overflow-y-auto pb-16 bg-white">
+      <main className="flex-1 overflow-y-auto pb-16 bg-white dark:bg-[#121212]">
         {roomsLoading ? (
           <div className="flex items-center justify-center h-40 text-gray-400 text-sm">読み込み中...</div>
         ) : rooms.length === 0 ? (
@@ -97,9 +97,9 @@ export default function RoomsPage() {
       {/* ルーム作成モーダル */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowCreate(false)}>
-          <div className="bg-white w-full max-w-lg mx-auto rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
-            <h2 className="text-[17px] font-bold mb-4">新しいトークを作成</h2>
+          <div className="bg-white dark:bg-[#1e1e1e] w-full max-w-lg mx-auto rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-5" />
+            <h2 className="text-[17px] font-bold mb-4 dark:text-gray-100">新しいトークを作成</h2>
             <input
               type="text"
               placeholder="トーク名"
@@ -107,7 +107,7 @@ export default function RoomsPage() {
               onChange={(e) => setRoomName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               autoFocus
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] mb-4"
+              className="w-full border border-gray-200 dark:border-gray-700 dark:bg-[#2a2a2a] dark:text-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] mb-4"
             />
             <p className="text-xs text-gray-400 mb-2">メンバーを招待（任意）</p>
             <UserSearchInput

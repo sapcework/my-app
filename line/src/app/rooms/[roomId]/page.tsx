@@ -164,7 +164,7 @@ export default function ChatPage({ params }: Props) {
   const isOtherOnline = otherOnlineEntry?.[1] ?? false;
 
   return (
-    <div className="flex flex-col h-screen bg-[#b2d8ea] max-w-lg mx-auto">
+    <div className="flex flex-col h-screen bg-[#b2d8ea] dark:bg-[#0e1c24] max-w-lg mx-auto">
       {/* ヘッダー */}
       <header className="bg-[#4CAF50] text-white flex items-center gap-2 px-3 py-2 pt-safe shadow-sm flex-shrink-0">
         <button onClick={() => router.back()} aria-label="戻る" className="text-white p-1">
@@ -254,7 +254,7 @@ export default function ChatPage({ params }: Props) {
       {showMenu && (
         <div className="fixed inset-0 z-50 flex" onClick={() => setShowMenu(false)}>
           <div className="flex-1" />
-          <div className="w-64 bg-white h-full shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="w-64 bg-white dark:bg-[#1e1e1e] h-full shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="bg-[#4CAF50] text-white px-4 py-4">
               <p className="font-bold text-lg truncate">{room?.name ?? '...'}</p>
             </div>
@@ -264,13 +264,13 @@ export default function ChatPage({ params }: Props) {
                 <>
                   <button
                     onClick={() => { setShowMenu(false); setShowMembers(true); if (!inviteUrl) handleFetchInvite(); }}
-                    className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
+                    className="w-full text-left text-gray-700 dark:text-gray-200 font-medium py-3 border-b border-gray-100 dark:border-gray-800"
                   >
                     メンバー管理・招待
                   </button>
                   <button
                     onClick={handleRenameOpen}
-                    className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100"
+                    className="w-full text-left text-gray-700 dark:text-gray-200 font-medium py-3 border-b border-gray-100 dark:border-gray-800"
                   >
                     グループ名を変更
                   </button>
@@ -278,7 +278,7 @@ export default function ChatPage({ params }: Props) {
               )}
               <button
                 onClick={toggleMute}
-                className="w-full text-left text-gray-700 font-medium py-3 border-b border-gray-100 flex items-center justify-between"
+                className="w-full text-left text-gray-700 dark:text-gray-200 font-medium py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between"
               >
                 <span>通知をミュート</span>
                 <span className={`text-xs ${muted ? 'text-[#4CAF50]' : 'text-gray-400'}`}>{muted ? 'ON' : 'OFF'}</span>
@@ -313,7 +313,7 @@ export default function ChatPage({ params }: Props) {
       {/* グループ名変更ダイアログ */}
       {editingName && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-white dark:bg-[#1e1e1e] rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-lg font-bold mb-4">グループ名を変更</h2>
             <input
               type="text"
@@ -345,7 +345,7 @@ export default function ChatPage({ params }: Props) {
       {/* 退出確認ダイアログ */}
       {showLeaveConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-white dark:bg-[#1e1e1e] rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-lg font-bold mb-2">トークを退出</h2>
             <p className="text-gray-500 text-sm mb-6">このトークから退出しますか？</p>
             <div className="flex gap-3">
