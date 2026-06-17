@@ -50,6 +50,7 @@ export interface Message {
   content: string;
   type: MessageType;
   created_at: string;
+  reply_to?: string | null; // 返信先メッセージID
   sender?: User; // joinで取得する場合
 }
 

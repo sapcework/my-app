@@ -7,10 +7,12 @@ const STAMPS = ['😂', '😍', '👍', '❤️', '🎉', '😭', '🔥', '✨',
 interface Props {
   onSend: (content: string, type: 'text' | 'stamp') => void;
   onSendImage?: (file: File) => Promise<void>;
+  replyingTo?: { senderName: string; snippet: string } | null;
+  onCancelReply?: () => void;
   disabled?: boolean;
 }
 
-export function MessageInput({ onSend, onSendImage, disabled }: Props) {
+export function MessageInput({ onSend, onSendImage, replyingTo, onCancelReply, disabled }: Props) {
   const [text, setText] = useState('');
   const [showStamps, setShowStamps] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -57,6 +59,18 @@ export function MessageInput({ onSend, onSendImage, disabled }: Props) {
 
   return (
     <div className="bg-[#f0f0f0] border-t border-gray-200">
+      {/* 返信プレビュー */}
+      {replyingTo && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200">
+          <div className="w-0.5 self-stretch bg-[#4CAF50] rounded-full" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-[#4CAF50]">{replyingTo.senderName} に返信</p>
+            <p className="text-xs text-gray-500 truncate">{replyingTo.snippet}</p>
+          </div>
+          <button onClick={onCancelReply} aria-label="返信をキャンセル" className="text-gray-400 text-lg px-1">×</button>
+        </div>
+      )}
+
       {/* スタンプパレット */}
       {showStamps && (
         <div className="flex flex-wrap gap-2 p-3 bg-white border-b border-gray-200">

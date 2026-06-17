@@ -16,7 +16,7 @@ import { MessageInput } from '@/components/chat/MessageInput';
 import { MembersPanel } from '@/components/room/MembersPanel';
 import { createClient } from '@/lib/supabase/client';
 import { useTabNotification } from '@/hooks/useTabNotification';
-import { Room } from '@/lib/types';
+import { Room, MessageWithStatus } from '@/lib/types';
 
 interface Props {
   params: Promise<{ roomId: string }>;
@@ -44,6 +44,15 @@ export default function ChatPage({ params }: Props) {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [replyingTo, setReplyingTo] = useState<MessageWithStatus | null>(null);
+
+  // 返信付き送信（送信後に返信状態を解除）
+  const handleSendText = (content: string, type: 'text' | 'stamp') => {
+    sendMessage(content, type, replyingTo?.id ?? null);
+    setReplyingTo(null);
+  };
+  const replySnippet = (m: MessageWithStatus) =>
+    m.type === 'image' ? '画像' : m.type === 'stamp' ? 'スタンプ' : (m.content.length > 30 ? m.content.slice(0, 30) + '…' : m.content);
   const { notify, setBaseTitle } = useTabNotification();
   const initializedRef = useRef(false);
   const prevMsgCountRef = useRef(0);
@@ -222,6 +231,7 @@ export default function ChatPage({ params }: Props) {
           otherLastReadMessageId={otherLastReadMessageId}
           onDelete={deleteMessage}
           onRetry={retryMessage}
+          onReply={setReplyingTo}
           reactions={reactions}
           onReact={toggleReaction}
           searchQuery={showSearch ? searchQuery : undefined}
@@ -230,7 +240,12 @@ export default function ChatPage({ params }: Props) {
 
       {/* 入力バー */}
       <div className="flex-shrink-0">
-        <MessageInput onSend={sendMessage} onSendImage={sendImage} />
+        <MessageInput
+          onSend={handleSendText}
+          onSendImage={sendImage}
+          replyingTo={replyingTo ? { senderName: replyingTo.sender?.display_name ?? '', snippet: replySnippet(replyingTo) } : null}
+          onCancelReply={() => setReplyingTo(null)}
+        />
       </div>
 
       {/* サイドメニュー */}

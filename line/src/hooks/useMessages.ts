@@ -94,10 +94,10 @@ export function useMessages(roomId: string, userId: string | null) {
   };
 
   // 楽観メッセージをDBへ確定。失敗時は削除せず 'failed' にして再送できるようにする
-  const insertMessage = async (optimisticId: string, content: string, type: 'text' | 'stamp' | 'image') => {
+  const insertMessage = async (optimisticId: string, content: string, type: 'text' | 'stamp' | 'image', replyTo: string | null) => {
     const { data, error } = await supabase
       .from('messages')
-      .insert({ room_id: roomId, sender_id: userId, content, type })
+      .insert({ room_id: roomId, sender_id: userId, content, type, reply_to: replyTo })
       .select()
       .single();
 
@@ -112,7 +112,7 @@ export function useMessages(roomId: string, userId: string | null) {
     );
   };
 
-  const sendMessage = async (content: string, type: 'text' | 'stamp' | 'image' = 'text') => {
+  const sendMessage = async (content: string, type: 'text' | 'stamp' | 'image' = 'text', replyTo: string | null = null) => {
     if (!userId || !content.trim()) return;
 
     const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -122,12 +122,13 @@ export function useMessages(roomId: string, userId: string | null) {
       sender_id: userId,
       content,
       type,
+      reply_to: replyTo,
       created_at: new Date().toISOString(),
       status: 'sending',
     };
 
     setMessages((prev) => [...prev, optimistic]);
-    await insertMessage(optimisticId, content, type);
+    await insertMessage(optimisticId, content, type, replyTo);
   };
 
   // 送信失敗メッセージの再送
@@ -139,7 +140,7 @@ export function useMessages(roomId: string, userId: string | null) {
       return prev.map((m) => (m.id === messageId ? { ...m, status: 'sending' as const } : m));
     });
     if (!target) return;
-    await insertMessage(messageId, target.content, target.type as 'text' | 'stamp' | 'image');
+    await insertMessage(messageId, target.content, target.type as 'text' | 'stamp' | 'image', target.reply_to ?? null);
   };
 
   return { messages, loading, sendMessage, sendImage, deleteMessage, retryMessage };

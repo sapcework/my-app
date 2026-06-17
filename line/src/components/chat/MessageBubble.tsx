@@ -14,6 +14,8 @@ interface Props {
   sender?: User;
   onDelete?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
+  onReply?: (message: MessageWithStatus) => void;
+  replyPreview?: { senderName: string; snippet: string } | null;
   reactions?: MessageReaction[];
   myUserId?: string;
   onReact?: (messageId: string, emoji: string) => void;
@@ -30,14 +32,14 @@ function highlightText(text: string, query: string) {
   );
 }
 
-export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, reactions = [], myUserId, onReact, searchQuery }: Props) {
+export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, onReply, replyPreview, reactions = [], myUserId, onReact, searchQuery }: Props) {
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
   const [showMenu, setShowMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
-  const canInteract = !isFailed && (canDelete || !!onReact); // メニュー（リアクション/削除）を出せるか
+  const canInteract = !isFailed && (canDelete || !!onReact || !!onReply); // メニュー（返信/リアクション/削除）を出せるか
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false); // 長押し直後のclick(画像オープン等)を抑制
 
@@ -75,6 +77,10 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
     setShowMenu(false);
     onReact?.(message.id, emoji);
   };
+  const handleReply = () => {
+    setShowMenu(false);
+    onReply?.(message);
+  };
 
   return (
     <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -107,6 +113,13 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                   : '',
               ].join(' ')}
             >
+              {/* 引用プレビュー（返信先） */}
+              {replyPreview && (
+                <div className={`mb-1 pl-2 border-l-2 text-xs rounded-sm ${isOwn ? 'border-white/60 text-white/80' : 'border-gray-300 text-gray-500'}`}>
+                  <span className="font-medium">{replyPreview.senderName}</span>
+                  <span className="ml-1 opacity-90">{replyPreview.snippet}</span>
+                </div>
+              )}
               {isImage ? (
                 <img
                   src={message.content}
@@ -136,10 +149,18 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                     ))}
                   </div>
                 )}
+                {onReply && (
+                  <button
+                    onClick={handleReply}
+                    className="w-full px-4 py-2 text-sm text-gray-700 font-medium whitespace-nowrap hover:bg-gray-50 text-left"
+                  >
+                    返信
+                  </button>
+                )}
                 {canDelete && (
                   <button
                     onClick={handleDelete}
-                    className="w-full px-4 py-2 text-sm text-red-500 font-medium whitespace-nowrap hover:bg-gray-50 text-left"
+                    className="w-full px-4 py-2 text-sm text-red-500 font-medium whitespace-nowrap hover:bg-gray-50 text-left border-t border-gray-100"
                   >
                     削除
                   </button>

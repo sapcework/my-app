@@ -11,9 +11,17 @@ interface Props {
   otherLastReadMessageId: string | null;
   onDelete?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
+  onReply?: (message: MessageWithStatus) => void;
   reactions?: ReactionMap;
   onReact?: (messageId: string, emoji: string) => void;
   searchQuery?: string;
+}
+
+// 返信先メッセージの引用スニペット
+function snippetOf(m: MessageWithStatus): string {
+  if (m.type === 'image') return '画像';
+  if (m.type === 'stamp') return 'スタンプ';
+  return m.content.length > 30 ? m.content.slice(0, 30) + '…' : m.content;
 }
 
 function isSameDay(a: string, b: string) {
@@ -30,7 +38,8 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, reactions, onReact, searchQuery }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, onReply, reactions, onReact, searchQuery }: Props) {
+  const byId = new Map(messages.map((m) => [m.id, m])); // 返信先解決用
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);          // ユーザーが最下部付近にいるか
@@ -96,6 +105,12 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
         const origIdx = messages.indexOf(msg);
         const isRead = isOwn && lastReadIdx >= 0 && origIdx <= lastReadIdx;
 
+        // 返信先の引用プレビューをローカルのメッセージ群から解決
+        const replied = msg.reply_to ? byId.get(msg.reply_to) : undefined;
+        const replyPreview = replied
+          ? { senderName: replied.sender?.display_name ?? '不明', snippet: snippetOf(replied) }
+          : msg.reply_to ? { senderName: '', snippet: '（元のメッセージ）' } : null;
+
         return (
           <div key={msg.id}>
             {showDateLabel && (
@@ -112,6 +127,8 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
               sender={msg.sender}
               onDelete={onDelete}
               onRetry={onRetry}
+              onReply={onReply}
+              replyPreview={replyPreview}
               reactions={reactions?.[msg.id]}
               myUserId={currentUserId}
               onReact={onReact}
