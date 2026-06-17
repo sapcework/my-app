@@ -1,9 +1,17 @@
 import webpush from 'web-push';
+import { createHash, timingSafeEqual } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { PushSubscriptionData } from '@/lib/notifications';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// 定数時間比較（SHA-256でハッシュ化して長さを揃えタイミング攻撃を防ぐ）
+function safeBearerEqual(provided: string | null, expected: string): boolean {
+  const a = createHash('sha256').update(provided ?? '').digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 // VAPID未設定時は起動時に警告（サイレントフェイル防止）
 const vapidEmail = process.env.VAPID_EMAIL;
@@ -31,7 +39,7 @@ export async function POST(req: NextRequest) {
   const secret = process.env.SUPABASE_WEBHOOK_SECRET;
   if (!secret) return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
   const auth = req.headers.get('authorization');
-  if (auth !== `Bearer ${secret}`) {
+  if (!safeBearerEqual(auth, `Bearer ${secret}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

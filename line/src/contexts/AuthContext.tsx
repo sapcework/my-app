@@ -10,7 +10,7 @@ interface AuthContextValue {
   profile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<AuthError | null>;
-  signUp: (email: string, password: string, displayName: string) => Promise<AuthError | null>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ error: AuthError | null; needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -79,12 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName } },
+      options: {
+        data: { display_name: displayName },
+        emailRedirectTo: `${window.location.origin}/auth/callback`, // 確認リンクの戻り先
+      },
     });
-    return error;
+    // メール確認ON時は session が null（リンク確認待ち）、OFF時は即セッション発行
+    return { error, needsConfirmation: !error && !data.session };
   };
 
   const signOut = async () => {

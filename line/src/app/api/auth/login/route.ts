@@ -3,8 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-const MAX_ATTEMPTS = 5;  // 最大失敗回数
-const LOCK_MINUTES = 15; // ロック時間（分）
+const MAX_ATTEMPTS = 5;      // (email+ip) ごとの最大失敗回数
+const IP_MAX_ATTEMPTS = 30;  // 同一IPからの総失敗回数の上限（スタッフィング緩和）
+const LOCK_MINUTES = 15;     // ロック時間（分）
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as { email: unknown; password: unknown };
@@ -15,14 +16,30 @@ export async function POST(req: NextRequest) {
 
   const email = body.email.toLowerCase().trim();
   const password = body.password;
+  // 送信元IP（Vercel等のプロキシ経由は x-forwarded-for の先頭）
+  const ip = (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim())
+    || req.headers.get('x-real-ip')
+    || 'unknown';
   const admin = createAdminClient();
   const lockWindow = new Date(Date.now() - LOCK_MINUTES * 60 * 1000).toISOString();
 
-  // 直近15分の失敗件数を確認
+  // 同一IPからの総失敗回数（全アカウント横断）— クレデンシャルスタッフィング対策
+  const { count: ipCount } = await admin
+    .from('login_attempts')
+    .select('*', { count: 'exact', head: true })
+    .eq('ip', ip)
+    .gte('attempted_at', lockWindow);
+
+  if ((ipCount ?? 0) >= IP_MAX_ATTEMPTS) {
+    return NextResponse.json({ error: 'locked', remainingMinutes: LOCK_MINUTES }, { status: 429 });
+  }
+
+  // このアカウントへの「同一IPからの」失敗件数（別IPの攻撃で正規ユーザーをロックしない）
   const { count } = await admin
     .from('login_attempts')
     .select('*', { count: 'exact', head: true })
     .eq('email', email)
+    .eq('ip', ip)
     .gte('attempted_at', lockWindow);
 
   const failCount = count ?? 0;
@@ -33,6 +50,7 @@ export async function POST(req: NextRequest) {
       .from('login_attempts')
       .select('attempted_at')
       .eq('email', email)
+      .eq('ip', ip)
       .gte('attempted_at', lockWindow)
       .order('attempted_at', { ascending: true })
       .limit(1)
@@ -66,8 +84,8 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    // 失敗を記録
-    await admin.from('login_attempts').insert({ email });
+    // 失敗を記録（IPも残す）
+    await admin.from('login_attempts').insert({ email, ip });
 
     // 24時間以上古いレコードを非同期で削除
     void admin

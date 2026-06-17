@@ -28,21 +28,30 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setInfo('');
     setLoading(true);
 
     const dest = redirectTo.startsWith('/') ? redirectTo : '/rooms';
 
     // サインアップ
     if (mode === 'signup') {
-      const err = await signUp(email, password, displayName);
+      const { error: err, needsConfirmation } = await signUp(email, password, displayName);
       setLoading(false);
-      // ハード遷移で AuthProvider を再マウントし、cookie からセッションを確実に読ませる
-      if (err) { setError(err.message); } else { window.location.assign(dest); }
+      if (err) {
+        setError(err.message);
+      } else if (needsConfirmation) {
+        // メール確認ON: セッション未発行。確認メール内のリンクで完了させる
+        setInfo('確認メールを送信しました。メール内のリンクを開いて登録を完了してください。');
+      } else {
+        // 確認OFF: ハード遷移で AuthProvider を再マウントし cookie からセッションを読ませる
+        window.location.assign(dest);
+      }
       return;
     }
 
@@ -125,6 +134,9 @@ function LoginForm() {
 
         {error && (
           <p className="text-red-500 text-xs px-1">{error}</p>
+        )}
+        {info && (
+          <p className="text-green-600 text-xs px-1">{info}</p>
         )}
 
         <button
