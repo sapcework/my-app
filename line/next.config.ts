@@ -40,7 +40,12 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https://*.supabase.co",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
               "font-src 'self'",
-              "frame-ancestors 'none'",
+              "worker-src 'self'",        // Service Worker は同一オリジンのみ
+              "object-src 'none'",        // <object>/<embed> 等の危険な埋め込みを禁止
+              "base-uri 'self'",          // <base> によるURL書き換えを防止
+              "form-action 'self'",       // フォーム送信先を自サイトに限定
+              "frame-ancestors 'none'",   // クリックジャッキング対策（iframe埋め込み禁止）
+              "upgrade-insecure-requests", // http参照を自動でhttpsに格上げ
             ].join('; '),
           },
         ],
