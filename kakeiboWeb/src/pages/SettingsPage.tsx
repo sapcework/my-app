@@ -1,6 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Download, Upload, Tag, Wallet, Repeat2, FileText, Table, Sun, Moon, Monitor } from 'lucide-react'
+import { ChevronRight, Download, Upload, Tag, Wallet, Repeat2, FileText, Table, Sun, Moon, Monitor, Lock, Unlock, X } from 'lucide-react'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
@@ -10,6 +10,8 @@ import { formatTimestamp } from '../utils/date'
 import { confirmDialog } from '../store/dialogStore'
 import { showToast } from '../store/toastStore'
 import { useThemeStore } from '../store/themeStore'
+import { usePasscodeStore } from '../store/passcodeStore'
+import { PinPad } from '../components/PinPad'
 import type { Expense, Category, Budget, RecurringExpense } from '../types'
 
 type BackupData = {
@@ -26,6 +28,29 @@ export const SettingsPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { theme, setTheme } = useThemeStore()
+  const { enabled: passcodeEnabled, setPasscode, removePasscode, verify } = usePasscodeStore()
+  const [pinSheet, setPinSheet] = useState<'setup1' | 'setup2' | 'disable' | null>(null)
+  const [firstPin, setFirstPin] = useState('')
+  const [pinError, setPinError] = useState(false)
+
+  const closePinSheet = () => { setPinSheet(null); setFirstPin(''); setPinError(false) }
+
+  const handleSetup1 = (pin: string) => { setFirstPin(pin); setPinSheet('setup2') }
+
+  const handleSetup2 = async (pin: string) => {
+    if (pin !== firstPin) { setPinError(true); return }
+    await setPasscode(pin)
+    closePinSheet()
+    showToast({ message: 'パスコードを設定しました' })
+  }
+
+  const handleDisable = async (pin: string) => {
+    const ok = await verify(pin)
+    if (!ok) { setPinError(true); return }
+    removePasscode()
+    closePinSheet()
+    showToast({ message: 'パスコードを解除しました' })
+  }
   const { expenses, restoreExpenses } = useExpenseStore()
   const { categories, restoreCategories } = useCategoryStore()
   const { budgets, restoreBudgets } = useBudgetStore()
@@ -249,6 +274,75 @@ export const SettingsPage = () => {
           </button>
         ))}
       </div>
+
+      {/* セキュリティ */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider px-5 pt-4 pb-2">
+          セキュリティ
+        </p>
+        <button
+          onClick={() => setPinSheet(passcodeEnabled ? 'disable' : 'setup1')}
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+        >
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            passcodeEnabled ? 'bg-indigo-50 dark:bg-indigo-950/50' : 'bg-slate-100 dark:bg-slate-800'
+          }`}>
+            {passcodeEnabled
+              ? <Lock size={17} className="text-indigo-600 dark:text-indigo-400" />
+              : <Unlock size={17} className="text-slate-500 dark:text-slate-400" />}
+          </div>
+          <div className="flex-1 text-left">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">パスコードロック</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              {passcodeEnabled ? '有効 — タップして解除' : '無効 — タップして設定'}
+            </p>
+          </div>
+          <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${
+            passcodeEnabled
+              ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+          }`}>
+            {passcodeEnabled ? 'ON' : 'OFF'}
+          </span>
+        </button>
+      </div>
+
+      {/* パスコード設定モーダル */}
+      {pinSheet && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closePinSheet} />
+          <div className="relative bg-white dark:bg-slate-900 rounded-3xl px-8 pt-8 pb-10 w-full max-w-sm shadow-xl">
+            <button
+              onClick={closePinSheet}
+              aria-label="閉じる"
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X size={16} />
+            </button>
+            {pinSheet === 'setup1' && (
+              <PinPad title="新しいパスコードを入力" onComplete={handleSetup1} compact />
+            )}
+            {pinSheet === 'setup2' && (
+              <PinPad
+                title="もう一度入力して確認"
+                onComplete={handleSetup2}
+                error={pinError}
+                onErrorReset={() => setPinError(false)}
+                compact
+              />
+            )}
+            {pinSheet === 'disable' && (
+              <PinPad
+                title="現在のパスコードを入力"
+                onComplete={handleDisable}
+                error={pinError}
+                onErrorReset={() => setPinError(false)}
+                compact
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 外観 */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">

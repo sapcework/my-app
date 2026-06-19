@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { PasscodeLock } from './components/PasscodeLock'
 import { useTheme } from './hooks/useTheme'
+import { usePasscodeStore } from './store/passcodeStore'
 import { HomePage } from './pages/HomePage'
 import { ExpenseListPage } from './pages/ExpenseListPage'
 import { ExpenseFormPage } from './pages/ExpenseFormPage'
@@ -13,6 +16,11 @@ import { SettingsPage } from './pages/SettingsPage'
 
 export const App = () => {
   useTheme()
+  const { enabled } = usePasscodeStore()
+  const [locked, setLocked] = useState(enabled) // 起動時にパスコードが有効ならロック
+
+  if (locked) return <PasscodeLock onUnlock={() => setLocked(false)} />
+
   return (
   <BrowserRouter>
     <Routes>

@@ -82,9 +82,9 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
     }`
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-900 rounded-t-3xl p-4 pb-10 max-w-lg mx-auto w-full shadow-2xl">
+      <div className="relative bg-white dark:bg-slate-900 rounded-3xl p-4 pb-6 w-full max-w-sm shadow-2xl">
         {/* 表示エリア */}
         <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 mb-3 text-right">
           <p className="text-xs text-slate-400 dark:text-slate-500 min-h-4 font-mono">{expression || ' '}</p>
