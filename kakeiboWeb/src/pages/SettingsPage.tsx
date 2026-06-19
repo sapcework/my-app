@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Download, Upload, Tag, Wallet, Repeat2, FileText, Table } from 'lucide-react'
+import { ChevronRight, Download, Upload, Tag, Wallet, Repeat2, FileText, Table, Sun, Moon, Monitor } from 'lucide-react'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
@@ -9,6 +9,7 @@ import { downloadCsv } from '../utils/csv'
 import { formatTimestamp } from '../utils/date'
 import { confirmDialog } from '../store/dialogStore'
 import { showToast } from '../store/toastStore'
+import { useThemeStore } from '../store/themeStore'
 import type { Expense, Category, Budget, RecurringExpense } from '../types'
 
 type BackupData = {
@@ -24,6 +25,7 @@ export const SettingsPage = () => {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const { theme, setTheme } = useThemeStore()
   const { expenses, restoreExpenses } = useExpenseStore()
   const { categories, restoreCategories } = useCategoryStore()
   const { budgets, restoreBudgets } = useBudgetStore()
@@ -246,6 +248,33 @@ export const SettingsPage = () => {
             <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
           </button>
         ))}
+      </div>
+
+      {/* 外観 */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">外観</p>
+        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+          {([
+            { value: 'light', label: 'ライト', icon: Sun },
+            { value: 'system', label: 'システム', icon: Monitor },
+            { value: 'dark', label: 'ダーク', icon: Moon },
+          ] as const).map(({ value, label, icon: Icon }, i) => (
+            <button
+              key={value}
+              onClick={() => setTheme(value)}
+              className={`flex-1 flex flex-col items-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                i > 0 ? 'border-l border-slate-200 dark:border-slate-700' : ''
+              } ${
+                theme === value
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* バージョン情報 */}

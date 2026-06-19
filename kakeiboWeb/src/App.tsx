@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { useTheme } from './hooks/useTheme'
 import { HomePage } from './pages/HomePage'
 import { ExpenseListPage } from './pages/ExpenseListPage'
 import { ExpenseFormPage } from './pages/ExpenseFormPage'
@@ -10,7 +11,9 @@ import { RecurringPage } from './pages/RecurringPage'
 import { TablePage } from './pages/TablePage'
 import { SettingsPage } from './pages/SettingsPage'
 
-export const App = () => (
+export const App = () => {
+  useTheme()
+  return (
   <BrowserRouter>
     <Routes>
       <Route element={<Layout />}>
@@ -27,4 +30,5 @@ export const App = () => (
       </Route>
     </Routes>
   </BrowserRouter>
-)
+  )
+}
