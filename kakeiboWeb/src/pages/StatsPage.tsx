@@ -67,14 +67,14 @@ export const StatsPage = () => {
 
       {total === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-2">
-          <p className="text-sm text-slate-400 dark:text-slate-500">支出がありません</p>
+          <p className="text-sm text-slate-400 dark:text-slate-400">支出がありません</p>
         </div>
       ) : (
         <>
           {/* 合計 + CSV */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">今月の合計</p>
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">今月の合計</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight tabular-nums">
                 ¥{total.toLocaleString()}
               </p>
@@ -89,7 +89,7 @@ export const StatsPage = () => {
           </div>
 
           {/* パイチャート */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie
@@ -123,7 +123,7 @@ export const StatsPage = () => {
                 />
               </PieChart>
             </ResponsiveContainer>
-            <p className="text-xs text-slate-400 dark:text-slate-500 text-center">カテゴリをタップで詳細表示</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400 text-center">カテゴリをタップで詳細表示</p>
           </div>
 
           {/* カテゴリ別リスト */}
@@ -132,7 +132,7 @@ export const StatsPage = () => {
               <li
                 key={i}
                 {...activatable(() => setDetailCat(d.cat), `${d.cat.name} の明細を表示`)}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 transition-colors"
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -143,14 +143,14 @@ export const StatsPage = () => {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{d.cat.name}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500">{((d.value / total) * 100).toFixed(1)}%</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-400">{((d.value / total) * 100).toFixed(1)}%</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
                     ¥{d.value.toLocaleString()}
                   </p>
-                  <span className="text-slate-300 dark:text-slate-600 text-sm">›</span>
+                  <span className="text-slate-300 dark:text-slate-500 text-sm">›</span>
                 </div>
               </li>
             ))}
@@ -173,7 +173,7 @@ export const StatsPage = () => {
                 </div>
                 <div>
                   <p className="text-sm font-bold" style={{ color: detailCat.color }}>{detailCat.name}</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                  <p className="text-xs text-slate-400 dark:text-slate-400">
                     {detailExpenses.length}件 · ¥{detailExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString()}
                   </p>
                 </div>
@@ -197,7 +197,7 @@ export const StatsPage = () => {
                   >
                     <div>
                       <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{title}</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{formatDateWithDay(e.date)}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">{formatDateWithDay(e.date)}</p>
                     </div>
                     <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
                       ¥{e.amount.toLocaleString()}

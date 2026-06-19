@@ -30,7 +30,7 @@ export const CategoryPage = () => {
     setShowForm(false)
   }
 
-  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2"
+  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2"
 
   return (
     <div className="pt-5 space-y-4">
@@ -63,7 +63,7 @@ export const CategoryPage = () => {
       {showForm && (
         <form
           onSubmit={handleAdd}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 space-y-4"
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 space-y-4"
         >
           {/* 名前入力 */}
           <div>
@@ -141,16 +141,16 @@ export const CategoryPage = () => {
       {categories.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <Tag size={24} className="text-slate-400 dark:text-slate-500" strokeWidth={1.5} />
+            <Tag size={24} className="text-slate-400 dark:text-slate-400" strokeWidth={1.5} />
           </div>
-          <p className="text-sm text-slate-400 dark:text-slate-500">カテゴリがありません</p>
+          <p className="text-sm text-slate-400 dark:text-slate-400">カテゴリがありません</p>
         </div>
       ) : (
         <ul className="space-y-2">
           {categories.map((c) => (
             <li
               key={c.id}
-              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 flex items-center justify-between"
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-4 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -167,7 +167,7 @@ export const CategoryPage = () => {
                   if (ok) { deleteCategory(c.id); showToast({ message: `「${c.name}」を削除しました` }) }
                 }}
                 aria-label={`${c.name} を削除`}
-                className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
+                className="text-slate-300 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
               >
                 <Trash2 size={15} />
               </button>

@@ -64,7 +64,7 @@ export const ExpenseListPage = () => {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="キーワードで検索..."
-          className="w-full bg-white dark:bg-slate-900 rounded-xl pl-9 pr-9 py-2.5 text-sm border border-slate-200/60 dark:border-slate-800/60 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all placeholder:text-slate-400 dark:text-slate-200"
+          className="w-full bg-white dark:bg-slate-900 rounded-xl pl-9 pr-9 py-2.5 text-sm border border-slate-200/60 dark:border-slate-700/60 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all placeholder:text-slate-400 dark:text-slate-200"
         />
         {search && (
           <button
@@ -84,7 +84,7 @@ export const ExpenseListPage = () => {
           className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-colors ${
             !filterCatId
               ? 'bg-indigo-600 text-white'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-50'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50'
           }`}
         >
           すべて
@@ -96,7 +96,7 @@ export const ExpenseListPage = () => {
             className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-colors border ${
               filterCatId === c.id
                 ? 'text-white border-transparent'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-50'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50'
             }`}
             style={filterCatId === c.id ? { backgroundColor: c.color } : {}}
           >
@@ -107,8 +107,8 @@ export const ExpenseListPage = () => {
       </div>
 
       {/* 件数・合計 */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-800/60 px-4 py-3 flex justify-between items-center">
-        <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{filtered.length}件</span>
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-700/60 px-4 py-3 flex justify-between items-center">
+        <span className="text-xs text-slate-400 dark:text-slate-400 font-medium">{filtered.length}件</span>
         <span className="text-lg font-bold text-slate-900 dark:text-slate-50 tabular-nums tracking-tight">
           ¥{total.toLocaleString()}
         </span>
@@ -117,7 +117,7 @@ export const ExpenseListPage = () => {
       {/* リスト（日付グループ） */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-2">
-          <p className="text-sm text-slate-400 dark:text-slate-500">
+          <p className="text-sm text-slate-400 dark:text-slate-400">
             {allExpenses.length === 0 ? '支出がありません' : '該当する支出がありません'}
           </p>
         </div>
@@ -144,7 +144,7 @@ export const ExpenseListPage = () => {
                     return (
                       <li
                         key={e.id}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex items-center overflow-hidden"
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex items-center overflow-hidden"
                       >
                         <div
                           className="w-1 self-stretch flex-shrink-0"
@@ -174,7 +174,7 @@ export const ExpenseListPage = () => {
                           <button
                             onClick={() => { deleteExpense(e.id); showToast({ message: '削除しました', actionLabel: '元に戻す', onAction: () => insertExpense(e) }) }}
                             aria-label={`${title} を削除`}
-                            className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
+                            className="text-slate-300 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
                           >
                             <Trash2 size={13} />
                           </button>

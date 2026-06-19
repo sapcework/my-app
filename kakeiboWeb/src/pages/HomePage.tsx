@@ -34,16 +34,16 @@ export const HomePage = () => {
       </div>
 
       {/* メインKPIカード */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
         <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500" />
         <div className="p-5 space-y-4">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">今月の支出</p>
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">今月の支出</p>
               <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 tracking-tight tabular-nums">
                 ¥{total.toLocaleString()}
               </p>
-              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{expenses.length}件の取引</p>
+              <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">{expenses.length}件の取引</p>
             </div>
             {budget > 0 && (
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
@@ -61,7 +61,7 @@ export const HomePage = () => {
 
           {budget > 0 && (
             <div className="space-y-2">
-              <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500">
+              <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400">
                 <span>予算 ¥{budget.toLocaleString()}</span>
                 <span>{usageRate.toFixed(0)}%</span>
               </div>
@@ -79,7 +79,7 @@ export const HomePage = () => {
       </div>
 
       {/* 最近の支出 */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">最近の支出</h2>
           <button
@@ -93,7 +93,7 @@ export const HomePage = () => {
 
         {recent.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2">
-            <p className="text-sm text-slate-400 dark:text-slate-500">支出がありません</p>
+            <p className="text-sm text-slate-400 dark:text-slate-400">支出がありません</p>
             <button
               onClick={() => navigate('/expenses/new')}
               className="text-xs text-indigo-600 dark:text-indigo-400 font-medium"
@@ -123,7 +123,7 @@ export const HomePage = () => {
                       {cat?.name ?? '不明'}
                     </p>
                     <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{title}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{formatDateWithDay(e.date)}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">{formatDateWithDay(e.date)}</p>
                   </div>
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex-shrink-0 tabular-nums">
                     ¥{e.amount.toLocaleString()}

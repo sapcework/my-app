@@ -83,7 +83,7 @@ export const RecurringPage = () => {
     setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const inputClass = "w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2"
+  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2"
 
   return (
     <div className="pt-5 space-y-4">
@@ -221,8 +221,8 @@ export const RecurringPage = () => {
 
       {/* 月間合計 */}
       {recurring.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-800/60 px-4 py-3 flex justify-between items-center">
-          <span className="text-xs font-medium text-slate-400 dark:text-slate-500">月間合計</span>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-700/60 px-4 py-3 flex justify-between items-center">
+          <span className="text-xs font-medium text-slate-400 dark:text-slate-400">月間合計</span>
           <span className="text-lg font-bold text-slate-900 dark:text-slate-50 tabular-nums tracking-tight">
             ¥{total.toLocaleString()}
           </span>
@@ -233,9 +233,9 @@ export const RecurringPage = () => {
       {recurring.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <Repeat2 size={24} className="text-slate-400 dark:text-slate-500" strokeWidth={1.5} />
+            <Repeat2 size={24} className="text-slate-400 dark:text-slate-400" strokeWidth={1.5} />
           </div>
-          <p className="text-sm text-slate-400 dark:text-slate-500">定期支出がありません</p>
+          <p className="text-sm text-slate-400 dark:text-slate-400">定期支出がありません</p>
           <button
             onClick={openAdd}
             className="text-xs text-indigo-600 dark:text-indigo-400 font-medium"
@@ -250,7 +250,7 @@ export const RecurringPage = () => {
             return (
               <li
                 key={r.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 flex items-center justify-between"
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-4 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div
@@ -264,7 +264,7 @@ export const RecurringPage = () => {
                       {cat?.name ?? '不明'}
                     </p>
                     <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{r.name}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">毎月{r.dayOfMonth}日</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">毎月{r.dayOfMonth}日</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">

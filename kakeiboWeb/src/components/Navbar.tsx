@@ -11,7 +11,7 @@ const links: { to: string; label: string; Icon: LucideIcon }[] = [
 ]
 
 export const Navbar = () => (
-  <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200/80 dark:border-slate-800/80 z-10">
+  <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200/80 dark:border-slate-700/50 z-10">
     <div className="flex justify-around max-w-lg mx-auto">
       {links.map(({ to, label, Icon }) => (
         <NavLink
@@ -22,7 +22,7 @@ export const Navbar = () => (
             `flex flex-col items-center py-2.5 px-1 gap-0.5 flex-1 transition-colors ${
               isActive
                 ? 'text-indigo-600 dark:text-indigo-400'
-                : 'text-slate-400 dark:text-slate-500'
+                : 'text-slate-400 dark:text-slate-400'
             }`
           }
         >

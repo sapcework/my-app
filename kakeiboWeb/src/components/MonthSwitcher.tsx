@@ -96,7 +96,7 @@ export const MonthSwitcher = ({ month, onChange, disableFuture = true }: Props) 
                       isSelected
                         ? 'bg-indigo-600 text-white'
                         : isFuture
-                          ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                          ? 'text-slate-300 dark:text-slate-500 cursor-not-allowed'
                           : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >

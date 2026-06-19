@@ -182,65 +182,65 @@ export const SettingsPage = () => {
       <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">設定</h1>
 
       {/* データ管理 */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider px-5 pt-4 pb-2">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider px-5 pt-4 pb-2">
           データ管理
         </p>
 
         <button
           onClick={handleBackup}
-          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-700/50"
         >
           <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center flex-shrink-0">
             <Download size={17} className="text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">バックアップ</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">全データをJSONファイルに書き出す</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400">全データをJSONファイルに書き出す</p>
           </div>
-          <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+          <ChevronRight size={16} className="text-slate-300 dark:text-slate-500" />
         </button>
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-700/50"
         >
           <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center flex-shrink-0">
             <Upload size={17} className="text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">復元</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">バックアップファイルから復元する</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400">バックアップファイルから復元する</p>
           </div>
-          <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+          <ChevronRight size={16} className="text-slate-300 dark:text-slate-500" />
         </button>
 
         <button
           onClick={exportAllDetails}
-          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-700/50"
         >
           <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center flex-shrink-0">
             <FileText size={17} className="text-violet-600 dark:text-violet-400" />
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">全明細CSV出力</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">全年月の支出明細を1ファイルに出力</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400">全年月の支出明細を1ファイルに出力</p>
           </div>
-          <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+          <ChevronRight size={16} className="text-slate-300 dark:text-slate-500" />
         </button>
 
         <button
           onClick={exportMonthlyTable}
-          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-700/50"
         >
           <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center flex-shrink-0">
             <Table size={17} className="text-amber-600 dark:text-amber-400" />
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">月別支出表CSV出力</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">行=年月・列=カテゴリの集計表を出力</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400">行=年月・列=カテゴリの集計表を出力</p>
           </div>
-          <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+          <ChevronRight size={16} className="text-slate-300 dark:text-slate-500" />
         </button>
 
         <input
@@ -253,36 +253,36 @@ export const SettingsPage = () => {
       </div>
 
       {/* 管理メニュー */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider px-5 pt-4 pb-2">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider px-5 pt-4 pb-2">
           管理
         </p>
         {menuItems.map(({ label, icon: Icon, path, desc }) => (
           <button
             key={path}
             onClick={() => navigate(path)}
-            className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+            className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-700/50"
           >
             <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
               <Icon size={17} className="text-slate-600 dark:text-slate-300" />
             </div>
             <div className="flex-1 text-left">
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{label}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">{desc}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400">{desc}</p>
             </div>
-            <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+            <ChevronRight size={16} className="text-slate-300 dark:text-slate-500" />
           </button>
         ))}
       </div>
 
       {/* セキュリティ */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider px-5 pt-4 pb-2">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider px-5 pt-4 pb-2">
           セキュリティ
         </p>
         <button
           onClick={() => setPinSheet(passcodeEnabled ? 'disable' : 'setup1')}
-          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800/80"
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-700/50"
         >
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
             passcodeEnabled ? 'bg-indigo-50 dark:bg-indigo-950/50' : 'bg-slate-100 dark:bg-slate-800'
@@ -293,7 +293,7 @@ export const SettingsPage = () => {
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">パスコードロック</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
+            <p className="text-xs text-slate-400 dark:text-slate-400">
               {passcodeEnabled ? '有効 — タップして解除' : '無効 — タップして設定'}
             </p>
           </div>
@@ -345,8 +345,8 @@ export const SettingsPage = () => {
       )}
 
       {/* 外観 */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
-        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">外観</p>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-3">外観</p>
         <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
           {([
             { value: 'light', label: 'ライト', icon: Sun },
@@ -372,18 +372,18 @@ export const SettingsPage = () => {
       </div>
 
       {/* バージョン情報 */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider px-5 pt-4 pb-2">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider px-5 pt-4 pb-2">
           バージョン情報
         </p>
-        <div className="px-5 pt-3 pb-5 border-t border-slate-100 dark:border-slate-800/80">
+        <div className="px-5 pt-3 pb-5 border-t border-slate-100 dark:border-slate-700/50">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/30 flex-shrink-0">
               <span className="text-2xl">📒</span>
             </div>
             <div>
               <p className="text-base font-bold text-slate-900 dark:text-slate-50">家計簿</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">シンプルな支出管理アプリ</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">シンプルな支出管理アプリ</p>
             </div>
           </div>
           <div className="space-y-2.5">
@@ -399,7 +399,7 @@ export const SettingsPage = () => {
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-300 dark:text-slate-600 text-center mt-4">
+          <p className="text-xs text-slate-300 dark:text-slate-500 text-center mt-4">
             © 2025 Kakeibo App. All rights reserved.
           </p>
         </div>

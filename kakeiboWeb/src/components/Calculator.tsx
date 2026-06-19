@@ -87,7 +87,7 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
       <div className="relative bg-white dark:bg-slate-900 rounded-3xl p-4 pb-6 w-full max-w-sm shadow-2xl">
         {/* 表示エリア */}
         <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 mb-3 text-right">
-          <p className="text-xs text-slate-400 dark:text-slate-500 min-h-4 font-mono">{expression || ' '}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-400 min-h-4 font-mono">{expression || ' '}</p>
           <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1 tracking-tight tabular-nums">
             ¥{(parseFloat(display) || 0).toLocaleString()}
           </p>

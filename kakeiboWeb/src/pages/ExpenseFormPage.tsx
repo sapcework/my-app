@@ -63,7 +63,7 @@ export const ExpenseFormPage = () => {
   }
 
   const inputClass = "w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2"
+  const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2"
 
   return (
     <div className="pt-5 space-y-4">
@@ -95,7 +95,7 @@ export const ExpenseFormPage = () => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* 金額 */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
           <label className={labelClass}>金額</label>
           <div className={`w-full flex items-center gap-2 border rounded-xl px-4 py-3 transition-all focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-400/15 ${
             amount > 0
@@ -127,7 +127,7 @@ export const ExpenseFormPage = () => {
         </div>
 
         {/* カテゴリ */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
           <label className={labelClass}>カテゴリ</label>
           <div className="grid grid-cols-3 gap-2">
             {categories.map((c) => (
@@ -150,7 +150,7 @@ export const ExpenseFormPage = () => {
         </div>
 
         {/* 日付・項目名・メモ */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 space-y-4">
           {/* 日付 */}
           <div>
             <label className={labelClass}>日付</label>
@@ -162,7 +162,7 @@ export const ExpenseFormPage = () => {
               required
             />
             {date && (
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 pl-1">{formatDateWithDay(date)}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mt-1.5 pl-1">{formatDateWithDay(date)}</p>
             )}
           </div>
 

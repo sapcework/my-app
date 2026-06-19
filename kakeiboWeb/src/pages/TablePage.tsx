@@ -71,7 +71,7 @@ export const TablePage = () => {
       <div className="pt-5">
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight mb-4">月別支出表</h1>
         <div className="flex flex-col items-center justify-center py-20 gap-2">
-          <p className="text-sm text-slate-400 dark:text-slate-500">支出データがありません</p>
+          <p className="text-sm text-slate-400 dark:text-slate-400">支出データがありません</p>
         </div>
       </div>
     )
@@ -81,7 +81,7 @@ export const TablePage = () => {
     <div className="pt-5 space-y-4">
       <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">月別支出表</h1>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-900">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900">
         <table className="border-collapse text-xs" style={{ minWidth: `${88 + months.length * 72 + 72}px` }}>
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-800/60">
@@ -118,7 +118,7 @@ export const TablePage = () => {
                         className={`px-2 py-2.5 text-right border-b border-slate-100 dark:border-slate-800 tabular-nums ${
                           amt > 0
                             ? 'text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
-                            : 'text-slate-300 dark:text-slate-600'
+                            : 'text-slate-300 dark:text-slate-500'
                         }`}
                       >
                         {fmt(amt)}
@@ -126,7 +126,7 @@ export const TablePage = () => {
                     )
                   })}
                   <td className={`px-2 py-2.5 text-right border-b border-l border-slate-100 dark:border-slate-800 bg-indigo-50/40 dark:bg-indigo-950/20 tabular-nums ${
-                    avg > 0 ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-slate-300 dark:text-slate-600'
+                    avg > 0 ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-slate-300 dark:text-slate-500'
                   }`}>
                     {fmt(avg)}
                   </td>
@@ -152,7 +152,7 @@ export const TablePage = () => {
                         ? `cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30 ${
                             isOver ? 'text-rose-500 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'
                           }`
-                        : 'text-slate-300 dark:text-slate-600'
+                        : 'text-slate-300 dark:text-slate-500'
                     }`}
                   >
                     {fmt(total)}
@@ -190,7 +190,7 @@ export const TablePage = () => {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 text-center">直近{months.length}ヶ月 · 金額をタップで詳細</p>
+      <p className="text-xs text-slate-400 dark:text-slate-400 text-center">直近{months.length}ヶ月 · 金額をタップで詳細</p>
 
       {/* セル詳細モーダル */}
       {detail && (
@@ -200,7 +200,7 @@ export const TablePage = () => {
             <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <p className="text-sm font-bold" style={{ color: detail.color }}>{detail.label}</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">
                   {formatYearMonth(detail.month)} · {detailExpenses.length}件 ·
                   ¥{detailExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString()}
                 </p>
@@ -231,7 +231,7 @@ export const TablePage = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{title}</p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{formatDateWithDay(e.date)}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">{formatDateWithDay(e.date)}</p>
                       </div>
                     </div>
                     <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">

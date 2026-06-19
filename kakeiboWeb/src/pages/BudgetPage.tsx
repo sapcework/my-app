@@ -56,10 +56,10 @@ export const BudgetPage = () => {
       {/* 予算入力フォーム */}
       <form
         onSubmit={handleSave}
-        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 space-y-4"
+        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 space-y-4"
       >
         <div>
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-3">
             {formatYearMonth(selectedMonth)}の予算
           </p>
           <div className={`w-full flex items-center gap-2 border rounded-xl px-4 py-3 transition-all focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-400/15 ${
@@ -101,18 +101,18 @@ export const BudgetPage = () => {
 
       {/* 進捗カード */}
       {savedBudget > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 space-y-4">
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">今月の進捗</p>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 space-y-4">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider">今月の進捗</p>
 
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">支出</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mb-1">支出</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums tracking-tight">
                 ¥{total.toLocaleString()}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">予算</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mb-1">予算</p>
               <p className="text-lg font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
                 ¥{savedBudget.toLocaleString()}
               </p>
@@ -120,7 +120,7 @@ export const BudgetPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500">
+            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400">
               <span>{rate.toFixed(0)}% 使用</span>
               <span>残り ¥{Math.max(0, remaining).toLocaleString()}</span>
             </div>
