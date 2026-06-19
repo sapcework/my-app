@@ -38,3 +38,10 @@ export const formatTableMonth = (ym: string, currentYear: number): string => {
   const [y, m] = ym.split('-')
   return Number(y) === currentYear ? `${Number(m)}月` : `${Number(m)}月\n'${y.slice(2)}`
 }
+
+export const formatTimestamp = (iso?: string): string => { // ISO日時を YYYYMMDDHHmmss に変換（CSV用）
+  if (!iso) return ''
+  const d = new Date(iso)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+}

@@ -1,0 +1,18 @@
+// CSVのセル1個を安全な文字列に変換する
+const escapeCell = (value: string): string => {
+  let v = value ?? '' // null/undefined は空文字に
+  if (/^[=+\-@\t\r]/.test(v)) v = "'" + v // 先頭が数式記号なら ' を前置（CSVインジェクション対策）
+  return `"${v.replace(/"/g, '""')}"` // " を "" にエスケープして全体を引用符で囲む
+}
+
+// 2次元配列をCSV文字列に変換し、ファイルとしてダウンロードする
+export const downloadCsv = (rows: string[][], filename: string): void => {
+  const csv = rows.map((r) => r.map(escapeCell).join(',')).join('\r\n') // 行・列を連結（CRLF改行）
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }) // BOM付きでExcelの文字化けを防ぐ
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
