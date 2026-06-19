@@ -19,7 +19,7 @@ export function useMessages(roomId: string, userId: string | null) {
   const fetchMessages = useCallback(async () => {
     const { data } = await supabase
       .from('messages')
-      .select('*, sender:users(*)')
+      .select('*, sender:users!messages_sender_id_fkey(*)')
       .eq('room_id', roomId)
       .order('created_at', { ascending: true })
       .limit(100);

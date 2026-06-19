@@ -3,12 +3,12 @@
 //    商標保護のため「LINE」等の他社名は使用しないこと。
 
 export const APP_INFO = {
-  name: 'トークアプリ',                                    // アプリ表示名（要変更）
+  name: 'TALK',                                    // アプリ表示名（仮）
   version: process.env.NEXT_PUBLIC_APP_VERSION ?? '0.0.1', // package.json のバージョン
   commit: process.env.NEXT_PUBLIC_BUILD_COMMIT ?? 'dev',   // gitコミット短縮ハッシュ
   buildDate: process.env.NEXT_PUBLIC_BUILD_DATE ?? '',     // ビルド日時(ISO)
   copyrightYear: 2026,                                     // 著作権表記の年
-  contactEmail: 'support@mail.mail',               // お問い合わせ先（要確認）
+  contactEmail: 'support@mail.mail',               // お問い合わせ先（仮）
 } as const;
 
 // 表示用ヘルパー

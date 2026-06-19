@@ -73,7 +73,7 @@ export function useAdmin() {
   const getMessages = useCallback(async (roomId: string): Promise<Message[]> => {
     const { data } = await supabase
       .from('messages')
-      .select('*, sender:users(*)')
+      .select('*, sender:users!messages_sender_id_fkey(*)')
       .eq('room_id', roomId)
       .order('created_at', { ascending: false })
       .limit(200);
