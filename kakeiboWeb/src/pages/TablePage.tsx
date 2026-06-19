@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { X, Grid3X3 } from 'lucide-react'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
@@ -70,8 +70,14 @@ export const TablePage = () => {
     return (
       <div className="pt-5">
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight mb-4">月別支出表</h1>
-        <div className="flex flex-col items-center justify-center py-20 gap-2">
-          <p className="text-sm text-slate-400 dark:text-slate-400">支出データがありません</p>
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <Grid3X3 size={26} className="text-slate-400 dark:text-slate-400" strokeWidth={1.5} />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">支出データがありません</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">支出を記録すると月別の集計表が表示されます</p>
+          </div>
         </div>
       </div>
     )

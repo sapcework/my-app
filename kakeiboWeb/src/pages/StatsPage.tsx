@@ -1,15 +1,29 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, X } from 'lucide-react'
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Download, X, BarChart2 } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import type { TooltipProps } from 'recharts'
 import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
 import { formatDateWithDay, formatTimestamp } from '../utils/date'
+import { formatWan } from '../utils/format'
 import { downloadCsv } from '../utils/csv'
 import { activatable } from '../utils/interactive'
 import type { Category } from '../types'
+
+const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 rounded-xl px-3 py-2 shadow-lg">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{payload[0].name}</p>
+      <p className="text-sm font-bold text-slate-900 dark:text-slate-50 tabular-nums">
+        ¥{(payload[0].value as number).toLocaleString()}
+      </p>
+    </div>
+  )
+}
 
 export const StatsPage = () => {
   const navigate = useNavigate()
@@ -66,8 +80,14 @@ export const StatsPage = () => {
       </div>
 
       {total === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-2">
-          <p className="text-sm text-slate-400 dark:text-slate-400">支出がありません</p>
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <BarChart2 size={26} className="text-slate-400 dark:text-slate-400" strokeWidth={1.5} />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">この月の支出がありません</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">支出を記録すると統計が表示されます</p>
+          </div>
         </div>
       ) : (
         <>
@@ -76,7 +96,7 @@ export const StatsPage = () => {
             <div>
               <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">今月の合計</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight tabular-nums">
-                ¥{total.toLocaleString()}
+                {formatWan(total)}
               </p>
             </div>
             <button
@@ -90,7 +110,7 @@ export const StatsPage = () => {
 
           {/* パイチャート */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie
                   data={data}
@@ -99,28 +119,15 @@ export const StatsPage = () => {
                   cx="50%"
                   cy="50%"
                   outerRadius={88}
-                  innerRadius={40}
+                  innerRadius={44}
                   onClick={(d) => setDetailCat((d as unknown as { cat: Category }).cat)}
                   className="cursor-pointer"
                   paddingAngle={2}
+                  strokeWidth={0}
                 >
-                  {data.map((d, i) => <Cell key={i} fill={d.color} strokeWidth={0} />)}
+                  {data.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Pie>
-                <Tooltip
-                  formatter={(v) => typeof v === 'number' ? `¥${v.toLocaleString()}` : v}
-                  contentStyle={{
-                    border: 'none',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                  }}
-                />
-                <Legend
-                  iconSize={8}
-                  iconType="circle"
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-                />
+                <Tooltip content={<CustomTooltip />} />
               </PieChart>
             </ResponsiveContainer>
             <p className="text-xs text-slate-400 dark:text-slate-400 text-center">カテゴリをタップで詳細表示</p>
@@ -160,10 +167,10 @@ export const StatsPage = () => {
 
       {/* カテゴリ詳細モーダル */}
       {detailCat && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDetailCat(null)} />
-          <div className="relative bg-white dark:bg-slate-900 rounded-t-3xl max-h-[75vh] flex flex-col max-w-lg mx-auto w-full">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="relative bg-white dark:bg-slate-900 rounded-3xl max-h-[70vh] flex flex-col w-full max-w-sm shadow-xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-slate-100 dark:border-slate-700/50">
               <div className="flex items-center gap-3">
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"

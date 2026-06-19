@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, Plus, Trash2 } from 'lucide-react'
+import { Search, X, Plus, Trash2, Receipt, SearchX } from 'lucide-react'
 import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
@@ -116,11 +116,33 @@ export const ExpenseListPage = () => {
 
       {/* リスト（日付グループ） */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-2">
-          <p className="text-sm text-slate-400 dark:text-slate-400">
-            {allExpenses.length === 0 ? '支出がありません' : '該当する支出がありません'}
-          </p>
-        </div>
+        allExpenses.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <Receipt size={26} className="text-slate-400 dark:text-slate-400" strokeWidth={1.5} />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">支出がありません</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">この月の支出を記録しましょう</p>
+            </div>
+            <button
+              onClick={() => navigate('/expenses/new')}
+              className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1"
+            >
+              最初の支出を追加する
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <SearchX size={26} className="text-slate-400 dark:text-slate-400" strokeWidth={1.5} />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">該当する支出がありません</p>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">検索条件を変えてみてください</p>
+            </div>
+          </div>
+        )
       ) : (
         <div className="space-y-3">
           {groupedDays.map(({ date, items }) => {

@@ -6,6 +6,7 @@ import { useBudgetStore } from '../store/budgetStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
 import { formatDateWithDay } from '../utils/date'
+import { formatWan } from '../utils/format'
 import { activatable } from '../utils/interactive'
 
 export const HomePage = () => {
@@ -25,6 +26,15 @@ export const HomePage = () => {
   const getCat = (id: string) => categories.find((c) => c.id === id)
   const recent = [...expenses].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)
 
+  const catSegments = categories
+    .map((cat) => ({
+      id: cat.id,
+      color: cat.color,
+      amount: expenses.filter((e) => e.categoryId === cat.id).reduce((s, e) => s + e.amount, 0),
+    }))
+    .filter((s) => s.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+
   return (
     <div className="pt-5 space-y-4">
       {/* ヘッダー */}
@@ -41,7 +51,7 @@ export const HomePage = () => {
             <div>
               <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">今月の支出</p>
               <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 tracking-tight tabular-nums">
-                ¥{total.toLocaleString()}
+                {formatWan(total)}
               </p>
               <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">{expenses.length}件の取引</p>
             </div>
@@ -60,18 +70,23 @@ export const HomePage = () => {
           </div>
 
           {budget > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400">
                 <span>予算 ¥{budget.toLocaleString()}</span>
-                <span>{usageRate.toFixed(0)}%</span>
+                <span className={isOver ? 'text-rose-500 font-semibold' : ''}>{usageRate.toFixed(0)}%</span>
               </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    isOver ? 'bg-rose-500' : usageRate >= 80 ? 'bg-amber-400' : 'bg-indigo-500'
-                  }`}
-                  style={{ width: `${usageRate}%` }}
-                />
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex gap-px">
+                {catSegments.map((seg) => (
+                  <div
+                    key={seg.id}
+                    className="h-2 transition-all duration-500 first:rounded-l-full last:rounded-r-full"
+                    style={{
+                      width: `${Math.min((seg.amount / budget) * 100, 100)}%`,
+                      backgroundColor: isOver ? undefined : seg.color,
+                      background: isOver ? 'rgb(239 68 68)' : undefined,
+                    }}
+                  />
+                ))}
               </div>
             </div>
           )}
