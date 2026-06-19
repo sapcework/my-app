@@ -5,6 +5,7 @@ import { Calculator } from '../components/Calculator'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
+import { confirmDialog } from '../store/dialogStore'
 import { firstDayOfMonth, formatDateWithDay, toYearMonth } from '../utils/date'
 
 export const ExpenseFormPage = () => {
@@ -46,9 +47,15 @@ export const ExpenseFormPage = () => {
     navigate(-1)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!existing) return
-    if (confirm('この支出を削除しますか？')) {
+    const ok = await confirmDialog({
+      title: '支出を削除',
+      message: 'この支出を削除しますか？',
+      confirmLabel: '削除',
+      danger: true,
+    })
+    if (ok) {
       deleteExpense(existing.id)
       navigate(-1)
     }
@@ -64,6 +71,7 @@ export const ExpenseFormPage = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => navigate(-1)}
+            aria-label="戻る"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft size={18} />

@@ -5,6 +5,10 @@ import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
 import { useRecurringStore } from '../store/recurringStore'
+import { downloadCsv } from '../utils/csv'
+import { formatTimestamp } from '../utils/date'
+import { confirmDialog } from '../store/dialogStore'
+import { showToast } from '../store/toastStore'
 import type { Expense, Category, Budget, RecurringExpense } from '../types'
 
 type BackupData = {
@@ -16,24 +20,6 @@ type BackupData = {
   recurring: RecurringExpense[]
 }
 
-const downloadCsv = (rows: string[][], filename: string) => {
-  const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n')
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-const fmtTs = (iso?: string) => {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
-}
-
 export const SettingsPage = () => {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -43,7 +29,14 @@ export const SettingsPage = () => {
   const { budgets, restoreBudgets } = useBudgetStore()
   const { recurring, restoreRecurring } = useRecurringStore()
 
-  const handleBackup = () => {
+  const handleBackup = async () => {
+    const filename = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json` // 書き出すファイル名
+    const ok = await confirmDialog({
+      title: 'バックアップ',
+      message: `「${filename}」として全データを書き出します。よろしいですか？`,
+      confirmLabel: '書き出す',
+    })
+    if (!ok) return // 書き出し前の確認
     const data: BackupData = {
       version: '1',
       exportedAt: new Date().toISOString(),
@@ -56,30 +49,37 @@ export const SettingsPage = () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
+    showToast({ message: 'バックアップを書き出しました' })
   }
 
   const handleRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const data = JSON.parse(ev.target?.result as string) as BackupData
         if (!Array.isArray(data.expenses) || !Array.isArray(data.categories)) {
-          alert('無効なバックアップファイルです。')
+          showToast({ message: '無効なバックアップファイルです' })
           return
         }
-        if (!confirm('現在のすべてのデータが上書きされます。復元しますか？')) return
+        const ok = await confirmDialog({
+          title: 'バックアップから復元',
+          message: `${file.name} で復元してもよろしいですか？\n現在のデータはすべて上書きされます。`,
+          confirmLabel: '復元する',
+          danger: true, // 上書きは破壊的操作
+        })
+        if (!ok) return
         restoreExpenses(data.expenses)
         restoreCategories(data.categories)
         restoreBudgets(data.budgets ?? [])
         restoreRecurring(data.recurring ?? [])
-        alert('復元が完了しました。')
+        showToast({ message: '復元が完了しました' })
       } catch {
-        alert('バックアップファイルの読み込みに失敗しました。')
+        showToast({ message: 'バックアップファイルの読み込みに失敗しました' })
       }
     }
     reader.readAsText(file)
@@ -87,8 +87,15 @@ export const SettingsPage = () => {
   }
 
   // 全年月の明細CSV
-  const exportAllDetails = () => {
-    if (expenses.length === 0) { alert('支出データがありません。'); return }
+  const exportAllDetails = async () => {
+    if (expenses.length === 0) { showToast({ message: '支出データがありません' }); return }
+    const filename = `kakeibo_all_${new Date().toISOString().slice(0, 10)}.csv` // 出力するファイル名
+    const ok = await confirmDialog({
+      title: '全明細CSV出力',
+      message: `「${filename}」として全期間の支出明細を書き出します。よろしいですか？`,
+      confirmLabel: '書き出す',
+    })
+    if (!ok) return // 出力前の確認
     const rows: string[][] = [
       ['日付', 'カテゴリ', '項目名', 'メモ', '金額', '登録日時', '更新日時'],
       ...expenses
@@ -102,17 +109,25 @@ export const SettingsPage = () => {
             e.itemName ?? '',
             e.note ?? '',
             e.amount.toString(),
-            fmtTs(e.createdAt),
-            fmtTs(e.updatedAt),
+            formatTimestamp(e.createdAt),
+            formatTimestamp(e.updatedAt),
           ]
         }),
     ]
-    downloadCsv(rows, `kakeibo_all_${new Date().toISOString().slice(0, 10)}.csv`)
+    downloadCsv(rows, filename)
+    showToast({ message: 'CSVを書き出しました' })
   }
 
   // 月別支出表CSV（行=年月、列=カテゴリ）
-  const exportMonthlyTable = () => {
-    if (expenses.length === 0) { alert('支出データがありません。'); return }
+  const exportMonthlyTable = async () => {
+    if (expenses.length === 0) { showToast({ message: '支出データがありません' }); return }
+    const filename = `kakeibo_monthly_${new Date().toISOString().slice(0, 10)}.csv` // 出力するファイル名
+    const ok = await confirmDialog({
+      title: '月別支出表CSV出力',
+      message: `「${filename}」として月別支出表を書き出します。よろしいですか？`,
+      confirmLabel: '書き出す',
+    })
+    if (!ok) return // 出力前の確認
     const months = [...new Set(expenses.map((e) => e.date.slice(0, 7)))].sort()
     const usedCatIds = [...new Set(expenses.map((e) => e.categoryId))]
     const cols = categories.filter((c) => usedCatIds.includes(c.id))
@@ -125,7 +140,8 @@ export const SettingsPage = () => {
       const total = mes.reduce((s, e) => s + e.amount, 0).toString()
       return [month, ...catTotals, total]
     })
-    downloadCsv([header, ...dataRows], `kakeibo_monthly_${new Date().toISOString().slice(0, 10)}.csv`)
+    downloadCsv([header, ...dataRows], filename)
+    showToast({ message: 'CSVを書き出しました' })
   }
 
   const menuItems = [

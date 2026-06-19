@@ -4,6 +4,8 @@ import { ArrowLeft, Plus, X, Repeat2, Calculator as CalcIcon } from 'lucide-reac
 import { Calculator } from '../components/Calculator'
 import { useRecurringStore } from '../store/recurringStore'
 import { useCategoryStore } from '../store/categoryStore'
+import { confirmDialog } from '../store/dialogStore'
+import { showToast } from '../store/toastStore'
 import type { RecurringExpense } from '../types'
 
 type FormState = {
@@ -67,9 +69,11 @@ export const RecurringPage = () => {
     closeForm()
   }
 
-  const handleDelete = (id: string, name: string) => {
-    if (confirm(`「${name}」を削除しますか？`)) {
+  const handleDelete = async (id: string, name: string) => {
+    const ok = await confirmDialog({ title: '定期支出を削除', message: `「${name}」を削除しますか？`, confirmLabel: '削除', danger: true })
+    if (ok) {
       deleteRecurring(id)
+      showToast({ message: `「${name}」を削除しました` })
       if (editingId === id) closeForm()
     }
   }
@@ -88,6 +92,7 @@ export const RecurringPage = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => navigate('/settings')}
+            aria-label="戻る"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -114,6 +119,7 @@ export const RecurringPage = () => {
               </h2>
               <button
                 onClick={closeForm}
+                aria-label="閉じる"
                 className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X size={16} />

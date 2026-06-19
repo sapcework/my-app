@@ -6,6 +6,8 @@ import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
 import { formatDateWithDay } from '../utils/date'
+import { activatable } from '../utils/interactive'
+import { showToast } from '../store/toastStore'
 import type { Expense } from '../types'
 
 type DayGroup = { date: string; items: Expense[] }
@@ -13,7 +15,7 @@ type DayGroup = { date: string; items: Expense[] }
 export const ExpenseListPage = () => {
   const navigate = useNavigate()
   const { selectedMonth, setSelectedMonth } = useUIStore()
-  const { getMonthlyExpenses, deleteExpense } = useExpenseStore()
+  const { getMonthlyExpenses, deleteExpense, insertExpense } = useExpenseStore()
   const { categories } = useCategoryStore()
 
   const [search, setSearch] = useState('')
@@ -67,6 +69,7 @@ export const ExpenseListPage = () => {
         {search && (
           <button
             onClick={() => setSearch('')}
+            aria-label="検索をクリア"
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X size={15} />
@@ -149,7 +152,7 @@ export const ExpenseListPage = () => {
                         />
                         <div
                           className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer px-3 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 transition-colors"
-                          onClick={() => navigate(`/expenses/${e.id}/edit`)}
+                          {...activatable(() => navigate(`/expenses/${e.id}/edit`), `${title} を編集`)}
                         >
                           <div
                             className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
@@ -169,8 +172,9 @@ export const ExpenseListPage = () => {
                             ¥{e.amount.toLocaleString()}
                           </span>
                           <button
-                            onClick={() => { if (confirm('削除しますか？')) deleteExpense(e.id) }}
-                            className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                            onClick={() => { deleteExpense(e.id); showToast({ message: '削除しました', actionLabel: '元に戻す', onAction: () => insertExpense(e) }) }}
+                            aria-label={`${title} を削除`}
+                            className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -188,6 +192,7 @@ export const ExpenseListPage = () => {
       {/* FAB */}
       <button
         onClick={() => navigate('/expenses/new')}
+        aria-label="支出を追加"
         className="fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center transition-all"
       >
         <Plus size={24} strokeWidth={2.5} />

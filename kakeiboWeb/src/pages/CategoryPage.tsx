@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Tag } from 'lucide-react'
 import { useCategoryStore } from '../store/categoryStore'
+import { confirmDialog } from '../store/dialogStore'
+import { showToast } from '../store/toastStore'
 
 const COLORS = [
   '#FF9800', '#2196F3', '#4CAF50', '#9C27B0',
@@ -37,6 +39,7 @@ export const CategoryPage = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => navigate('/settings')}
+            aria-label="戻る"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -159,7 +162,11 @@ export const CategoryPage = () => {
                 <span className="text-sm font-bold" style={{ color: c.color }}>{c.name}</span>
               </div>
               <button
-                onClick={() => { if (confirm(`「${c.name}」を削除しますか？`)) deleteCategory(c.id) }}
+                onClick={async () => {
+                  const ok = await confirmDialog({ title: 'カテゴリを削除', message: `「${c.name}」を削除しますか？`, confirmLabel: '削除', danger: true })
+                  if (ok) { deleteCategory(c.id); showToast({ message: `「${c.name}」を削除しました` }) }
+                }}
+                aria-label={`${c.name} を削除`}
                 className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"
               >
                 <Trash2 size={15} />

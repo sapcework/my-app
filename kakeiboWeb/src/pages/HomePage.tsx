@@ -6,6 +6,7 @@ import { useBudgetStore } from '../store/budgetStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
 import { formatDateWithDay } from '../utils/date'
+import { activatable } from '../utils/interactive'
 
 export const HomePage = () => {
   const navigate = useNavigate()
@@ -108,7 +109,7 @@ export const HomePage = () => {
               return (
                 <li
                   key={e.id}
-                  onClick={() => navigate(`/expenses/${e.id}/edit`)}
+                  {...activatable(() => navigate(`/expenses/${e.id}/edit`), `${title} を編集`)}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer active:bg-slate-100 transition-colors"
                 >
                   <div
@@ -138,6 +139,7 @@ export const HomePage = () => {
       {/* FAB */}
       <button
         onClick={() => navigate('/expenses/new')}
+        aria-label="支出を追加"
         className="fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center transition-all"
       >
         <Plus size={24} strokeWidth={2.5} />

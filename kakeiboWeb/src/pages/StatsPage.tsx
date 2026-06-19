@@ -6,7 +6,9 @@ import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
-import { formatDateWithDay } from '../utils/date'
+import { formatDateWithDay, formatTimestamp } from '../utils/date'
+import { downloadCsv } from '../utils/csv'
+import { activatable } from '../utils/interactive'
 import type { Category } from '../types'
 
 export const StatsPage = () => {
@@ -29,17 +31,11 @@ export const StatsPage = () => {
     .filter((d) => d.value > 0)
     .sort((a, b) => b.value - a.value)
 
-  const fmtTs = (iso?: string) => {
-    if (!iso) return ''
-    const d = new Date(iso)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
-  }
-
   const exportCSV = () => {
     const rows = [
       ['日付', 'カテゴリ', '項目名', 'メモ', '金額', '登録日時', '更新日時'],
       ...monthExpenses
+        .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((e) => {
           const cat = categories.find((c) => c.id === e.categoryId)
@@ -49,19 +45,12 @@ export const StatsPage = () => {
             e.itemName ?? '',
             e.note ?? '',
             e.amount.toString(),
-            fmtTs(e.createdAt),
-            fmtTs(e.updatedAt),
+            formatTimestamp(e.createdAt),
+            formatTimestamp(e.updatedAt),
           ]
         }),
     ]
-    const csv = rows.map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `kakeibo_${selectedMonth}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadCsv(rows, `kakeibo_${selectedMonth}.csv`)
   }
 
   const detailExpenses = detailCat
@@ -142,7 +131,7 @@ export const StatsPage = () => {
             {data.map((d, i) => (
               <li
                 key={i}
-                onClick={() => setDetailCat(d.cat)}
+                {...activatable(() => setDetailCat(d.cat), `${d.cat.name} の明細を表示`)}
                 className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -191,6 +180,7 @@ export const StatsPage = () => {
               </div>
               <button
                 onClick={() => setDetailCat(null)}
+                aria-label="閉じる"
                 className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X size={16} />
@@ -202,7 +192,7 @@ export const StatsPage = () => {
                 return (
                   <li
                     key={e.id}
-                    onClick={() => { setDetailCat(null); navigate(`/expenses/${e.id}/edit`) }}
+                    {...activatable(() => { setDetailCat(null); navigate(`/expenses/${e.id}/edit`) }, `${title} を編集`)}
                     className="flex items-center justify-between py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl px-2 transition-colors"
                   >
                     <div>
