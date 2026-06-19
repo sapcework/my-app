@@ -24,6 +24,7 @@ export const ExpenseFormPage = () => {
   const defaultDate = existing?.date ?? (selectedMonth === toYearMonth(new Date()) ? todayStr : firstDayOfMonth(selectedMonth))
 
   const [amount, setAmount] = useState(existing?.amount ?? 0)
+  const [amountText, setAmountText] = useState(existing?.amount ? existing.amount.toString() : '')
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? categories[0]?.id ?? '')
   const [itemName, setItemName] = useState(existing?.itemName ?? '')
   const [note, setNote] = useState(existing?.note ?? '')
@@ -96,25 +97,33 @@ export const ExpenseFormPage = () => {
         {/* 金額 */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5">
           <label className={labelClass}>金額</label>
-          <button
-            type="button"
-            onClick={() => setShowCalc(true)}
-            className={`w-full flex items-center justify-between border rounded-xl px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.99] transition-all ${
-              amount > 0
-                ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20'
-                : 'border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 text-sm">¥</span>
-              <span className={`text-2xl font-bold tracking-tight tabular-nums ${
-                amount === 0 ? 'text-slate-300 dark:text-slate-600' : 'text-slate-900 dark:text-slate-50'
-              }`}>
-                {amount === 0 ? '0' : amount.toLocaleString()}
-              </span>
-            </div>
-            <CalcIcon size={16} className="text-slate-400" />
-          </button>
+          <div className={`w-full flex items-center gap-2 border rounded-xl px-4 py-3 transition-all focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-400/15 ${
+            amount > 0
+              ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20'
+              : 'border-slate-200 dark:border-slate-700'
+          }`}>
+            <span className="text-slate-400 text-sm flex-shrink-0">¥</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amountText}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^\d]/g, '')
+                setAmountText(raw)
+                setAmount(raw ? Number(raw) : 0)
+              }}
+              placeholder="0"
+              className="flex-1 text-2xl font-bold tracking-tight tabular-nums bg-transparent outline-none text-slate-900 dark:text-slate-50 placeholder:text-slate-300 dark:placeholder:text-slate-600 min-w-0"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCalc(true)}
+              aria-label="電卓を開く"
+              className="flex-shrink-0 text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors p-0.5"
+            >
+              <CalcIcon size={16} />
+            </button>
+          </div>
         </div>
 
         {/* カテゴリ */}
@@ -198,7 +207,7 @@ export const ExpenseFormPage = () => {
       {showCalc && (
         <Calculator
           initialValue={amount}
-          onConfirm={(v) => { setAmount(v); setShowCalc(false) }}
+          onConfirm={(v) => { setAmount(v); setAmountText(v > 0 ? v.toString() : ''); setShowCalc(false) }}
           onClose={() => setShowCalc(false)}
         />
       )}

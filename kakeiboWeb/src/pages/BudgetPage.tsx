@@ -16,6 +16,7 @@ export const BudgetPage = () => {
 
   const savedBudget = getBudget(selectedMonth) // ストアに保存済みの予算
   const [amount, setAmount] = useState(savedBudget > 0 ? savedBudget : 0)
+  const [amountText, setAmountText] = useState(savedBudget > 0 ? savedBudget.toString() : '')
   const [showCalc, setShowCalc] = useState(false)
 
   const total = getMonthlyExpenses(selectedMonth).reduce((s, e) => s + e.amount, 0)
@@ -33,6 +34,7 @@ export const BudgetPage = () => {
     setSelectedMonth(m)
     const b = getBudget(m)
     setAmount(b > 0 ? b : 0)
+    setAmountText(b > 0 ? b.toString() : '')
   }
 
   return (
@@ -60,25 +62,33 @@ export const BudgetPage = () => {
           <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
             {formatYearMonth(selectedMonth)}の予算
           </p>
-          <button
-            type="button"
-            onClick={() => setShowCalc(true)}
-            className={`w-full flex items-center justify-between border rounded-xl px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.99] transition-all ${
+          <div className={`w-full flex items-center gap-2 border rounded-xl px-4 py-3 transition-all focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-400/15 ${
               amount > 0
                 ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20'
                 : 'border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 text-sm">¥</span>
-              <span className={`text-2xl font-bold tracking-tight tabular-nums ${
-                amount === 0 ? 'text-slate-300 dark:text-slate-600' : 'text-slate-900 dark:text-slate-50'
-              }`}>
-                {amount === 0 ? '0' : amount.toLocaleString()}
-              </span>
-            </div>
-            <CalcIcon size={16} className="text-slate-400" />
-          </button>
+            }`}>
+            <span className="text-slate-400 text-sm flex-shrink-0">¥</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amountText}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^\d]/g, '')
+                setAmountText(raw)
+                setAmount(raw ? Number(raw) : 0)
+              }}
+              placeholder="0"
+              className="flex-1 text-2xl font-bold tracking-tight tabular-nums bg-transparent outline-none text-slate-900 dark:text-slate-50 placeholder:text-slate-300 dark:placeholder:text-slate-600 min-w-0"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCalc(true)}
+              aria-label="電卓を開く"
+              className="flex-shrink-0 text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors p-0.5"
+            >
+              <CalcIcon size={16} />
+            </button>
+          </div>
         </div>
         <button
           type="submit"
@@ -140,7 +150,7 @@ export const BudgetPage = () => {
       {showCalc && (
         <Calculator
           initialValue={amount}
-          onConfirm={(v) => { setAmount(v); setShowCalc(false) }}
+          onConfirm={(v) => { setAmount(v); setAmountText(v > 0 ? v.toString() : ''); setShowCalc(false) }}
           onClose={() => setShowCalc(false)}
         />
       )}
