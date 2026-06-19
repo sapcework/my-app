@@ -7,6 +7,7 @@ type ExpenseStore = {
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => void
   updateExpense: (id: string, data: Partial<Expense>) => void
   deleteExpense: (id: string) => void
+  insertExpense: (expense: Expense) => void
   getMonthlyExpenses: (month: string) => Expense[]
   restoreExpenses: (expenses: Expense[]) => void
 }
@@ -30,6 +31,8 @@ export const useExpenseStore = create<ExpenseStore>()(
         })),
       deleteExpense: (id) =>
         set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
+      insertExpense: (expense) =>
+        set((s) => ({ expenses: [...s.expenses, expense] })), // 既存の支出をそのまま復活（Undo用）
       getMonthlyExpenses: (month) =>
         get().expenses.filter((e) => e.date.startsWith(month)),
       restoreExpenses: (expenses) => set({ expenses }),

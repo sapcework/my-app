@@ -1,5 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Navbar } from './Navbar'
+import { ConfirmDialog } from './ConfirmDialog'
+import { ToastHost } from './ToastHost'
 
 export const Layout = () => (
   <div className="min-h-screen bg-slate-50 dark:bg-[#090912]">
@@ -7,5 +9,7 @@ export const Layout = () => (
       <Outlet />
     </main>
     <Navbar />
+    <ConfirmDialog />
+    <ToastHost />
   </div>
 )
