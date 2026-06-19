@@ -54,7 +54,9 @@ function LoginForm() {
       return;
     }
 
-    if (data.error === 'locked') {
+    if (data.error === 'suspended') {
+      setError('このアカウントは停止されています。管理者にお問い合わせください。');
+    } else if (data.error === 'locked') {
       setError(`ログインが連続5回失敗しました。あと${data.remainingMinutes}分後に再試行できます。`);
     } else if (data.error === 'invalid_credentials') {
       if ((data.remaining ?? 0) === 0) {

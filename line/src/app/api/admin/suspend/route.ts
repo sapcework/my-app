@@ -46,5 +46,11 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'update_failed' }, { status: 500 });
 
+  // Auth側もban/解除（既存セッションのトークン更新を止め、再ログインも遮断する）
+  const { error: banError } = await admin.auth.admin.updateUserById(body.userId, {
+    ban_duration: body.suspended ? '876000h' : 'none', // 停止=約100年、解除=ban解除
+  });
+  if (banError) return NextResponse.json({ error: 'ban_failed' }, { status: 500 });
+
   return NextResponse.json({ ok: true });
 }

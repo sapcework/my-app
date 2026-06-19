@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     // 失敗を記録（IPも残す）
@@ -98,6 +98,18 @@ export async function POST(req: NextRequest) {
       error: 'invalid_credentials',
       remaining: Math.max(0, remaining),
     }, { status: 401 });
+  }
+
+  // 停止アカウントはログイン拒否（cookieを設定せず＝セッションを渡さない）
+  const { data: profile } = await admin
+    .from('users')
+    .select('is_suspended')
+    .eq('id', authData.user.id)
+    .single();
+
+  if ((profile as { is_suspended: boolean } | null)?.is_suspended) {
+    await supabase.auth.signOut(); // サーバー側で発行されたトークンを失効
+    return NextResponse.json({ error: 'suspended' }, { status: 403 });
   }
 
   // 成功：cookieをレスポンスに付与して返却
