@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL as string
-  ?? 'https://grlvbrhsksxldmasyyg.supabase.co'
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-  ?? 'sb_publishable_FwFtezMKl2AZBMVTOQwgaQ_TWG11J7k'
+// publishable キーはクライアントに公開される前提のキー（RLSで保護）。
+// 環境変数が空文字でビルドされる事故を避けるため直接指定する。
+const url = 'https://grlvbrhsksxldmasyyg.supabase.co'
+const key = 'sb_publishable_FwFtezMKl2AZBMVTOQwgaQ_TWG11J7k'
 
 export const supabase = createClient(url, key)
