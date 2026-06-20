@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Download, X, BarChart2 } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import type { TooltipProps } from 'recharts'
 import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
@@ -13,7 +12,8 @@ import { downloadCsv } from '../utils/csv'
 import { activatable } from '../utils/interactive'
 import type { Category } from '../types'
 
-const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+type TooltipEntry = { name: string; value: number }
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 rounded-xl px-3 py-2 shadow-lg">
