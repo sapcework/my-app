@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Trash2, Calculator as CalcIcon } from 'lucide-react'
 import { Calculator } from '../components/Calculator'
+import { DatePicker } from '../components/DatePicker'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { confirmDialog } from '../store/dialogStore'
-import { formatDateWithDay } from '../utils/date'
 
 export const ExpenseFormPage = () => {
   const navigate = useNavigate()
@@ -27,21 +27,6 @@ export const ExpenseFormPage = () => {
   const [note, setNote] = useState(existing?.note ?? '')
   const [date, setDate] = useState(defaultDate)
   const [showCalc, setShowCalc] = useState(false)
-
-  const updateDate = (y: string, m: string, d: string) => {
-    const maxDay = new Date(Number(y), Number(m), 0).getDate() // その月の最終日
-    const safeDay = String(Math.min(Number(d), maxDay)).padStart(2, '0')
-    setDate(`${y}-${m}-${safeDay}`)
-    setDateDay(safeDay)
-  }
-  const [dateYear, setDateYear] = useState(defaultDate.substring(0, 4))
-  const [dateMonth, setDateMonth] = useState(defaultDate.substring(5, 7))
-  const [dateDay, setDateDay] = useState(defaultDate.substring(8, 10))
-
-  const years = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - 2 + i))
-  const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
-  const daysInMonth = new Date(Number(dateYear), Number(dateMonth), 0).getDate()
-  const days = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, '0'))
 
   const suggestions = [...new Set(
     expenses
@@ -166,32 +151,7 @@ export const ExpenseFormPage = () => {
           {/* 日付 */}
           <div>
             <label className={labelClass}>日付</label>
-            <div className="flex gap-2">
-              <select
-                value={dateYear}
-                onChange={(e) => { setDateYear(e.target.value); updateDate(e.target.value, dateMonth, dateDay) }}
-                className={inputClass + ' flex-1'}
-              >
-                {years.map((y) => <option key={y} value={y}>{y}年</option>)}
-              </select>
-              <select
-                value={dateMonth}
-                onChange={(e) => { setDateMonth(e.target.value); updateDate(dateYear, e.target.value, dateDay) }}
-                className={inputClass + ' flex-1'}
-              >
-                {months.map((m) => <option key={m} value={m}>{Number(m)}月</option>)}
-              </select>
-              <select
-                value={dateDay}
-                onChange={(e) => { setDateDay(e.target.value); updateDate(dateYear, dateMonth, e.target.value) }}
-                className={inputClass + ' flex-1'}
-              >
-                {days.map((d) => <option key={d} value={d}>{Number(d)}日</option>)}
-              </select>
-            </div>
-            {date && (
-              <p className="text-xs text-slate-400 dark:text-slate-400 mt-1.5 pl-1">{formatDateWithDay(date)}</p>
-            )}
+            <DatePicker value={date} onChange={setDate} />
           </div>
 
           {/* 項目名 */}
