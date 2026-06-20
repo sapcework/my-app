@@ -29,6 +29,15 @@ export const usePasscodeStore = create<PasscodeState>()(
         return (await hashPin(pin, salt)) === hash
       },
     }),
-    { name: 'kakeibo-passcode' }
+    {
+      name: 'kakeibo-passcode',
+      version: 1,
+      // v0（SHA-256単発でハッシュ化した旧形式）は新方式(PBKDF2)と互換性がないため、
+      // 旧ハッシュを破棄してパスコードを解除する。利用者は設定画面で再設定できる。
+      migrate: (state, version) => {
+        if (version < 1) return { enabled: false, hash: null, salt: null }
+        return state as PasscodeState
+      },
+    }
   )
 )
