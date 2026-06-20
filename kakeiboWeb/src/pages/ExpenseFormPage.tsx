@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Trash2, Calculator as CalcIcon } from 'lucide-react'
 import { Calculator } from '../components/Calculator'
@@ -27,12 +27,17 @@ export const ExpenseFormPage = () => {
   const [note, setNote] = useState(existing?.note ?? '')
   const [date, setDate] = useState(defaultDate)
   const [showCalc, setShowCalc] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const itemInputRef = useRef<HTMLInputElement>(null)
 
-  const suggestions = [...new Set(
+  const allSuggestions = [...new Set(
     expenses
       .filter((e) => e.itemName && e.itemName.trim())
       .map((e) => e.itemName!)
   )]
+  const filteredSuggestions = allSuggestions.filter((s) =>
+    s.toLowerCase().includes(itemName.toLowerCase())
+  )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -155,19 +160,33 @@ export const ExpenseFormPage = () => {
           </div>
 
           {/* 項目名 */}
-          <div>
+          <div className="relative">
             <label className={labelClass}>項目名（任意）</label>
             <input
+              ref={itemInputRef}
               type="text"
-              list="item-suggestions"
               value={itemName}
-              onChange={(e) => setItemName(e.target.value)}
+              onChange={(e) => { setItemName(e.target.value); setShowSuggestions(true) }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               className={inputClass}
               placeholder="例：スーパーABC"
+              autoComplete="off"
             />
-            <datalist id="item-suggestions">
-              {suggestions.map((s) => <option key={s} value={s} />)}
-            </datalist>
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <ul className="absolute z-10 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 rounded-xl shadow-lg overflow-hidden max-h-44 overflow-y-auto">
+                {filteredSuggestions.map((s) => (
+                  <li
+                    key={s}
+                    onMouseDown={() => { setItemName(s); setShowSuggestions(false) }}
+                    onTouchEnd={() => { setItemName(s); setShowSuggestions(false) }}
+                    className="px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 active:bg-indigo-100 cursor-pointer transition-colors"
+                  >
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* メモ */}
