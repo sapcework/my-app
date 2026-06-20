@@ -150,7 +150,22 @@ export const StatsPage = () => {
                 </div>
               </div>
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-400 text-center">カテゴリをタップで詳細表示</p>
+            {/* カテゴリ凡例 */}
+            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
+              {data.map((d, i) => (
+                <button
+                  key={i}
+                  onClick={() => setDetailCat(d.cat)}
+                  className="flex items-center gap-2 text-left min-w-0"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                  <span className="text-xs text-slate-600 dark:text-slate-300 truncate flex-1">{d.cat.name}</span>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 tabular-nums flex-shrink-0">
+                    {((d.value / total) * 100).toFixed(0)}%
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* カテゴリ別リスト */}
