@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Download, X, BarChart2 } from 'lucide-react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
@@ -12,25 +12,13 @@ import { downloadCsv } from '../utils/csv'
 import { activatable } from '../utils/interactive'
 import type { Category } from '../types'
 
-type TooltipEntry = { name: string; value: number }
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 rounded-xl px-3 py-2 shadow-lg">
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{payload[0].name}</p>
-      <p className="text-sm font-bold text-slate-900 dark:text-slate-50 tabular-nums">
-        ¥{(payload[0].value as number).toLocaleString()}
-      </p>
-    </div>
-  )
-}
-
 export const StatsPage = () => {
   const navigate = useNavigate()
   const { selectedMonth, setSelectedMonth } = useUIStore()
   const { getMonthlyExpenses } = useExpenseStore()
   const { categories } = useCategoryStore()
   const [detailCat, setDetailCat] = useState<Category | null>(null)
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const monthExpenses = getMonthlyExpenses(selectedMonth)
   const total = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
@@ -44,6 +32,8 @@ export const StatsPage = () => {
     }))
     .filter((d) => d.value > 0)
     .sort((a, b) => b.value - a.value)
+
+  const activeData = activeIndex !== null ? data[activeIndex] : null
 
   const exportCSV = () => {
     const rows = [
@@ -110,26 +100,56 @@ export const StatsPage = () => {
 
           {/* パイチャート */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={88}
-                  innerRadius={44}
-                  onClick={(d) => setDetailCat((d as unknown as { cat: Category }).cat)}
-                  className="cursor-pointer"
-                  paddingAngle={2}
-                  strokeWidth={0}
-                >
-                  {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="relative">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={data}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={88}
+                    innerRadius={52}
+                    paddingAngle={2}
+                    strokeWidth={0}
+                    className="cursor-pointer"
+                    onMouseEnter={(_, i) => setActiveIndex(i)}
+                    onMouseLeave={() => setActiveIndex(null)}
+                    onClick={(d) => { setActiveIndex(null); setDetailCat((d as unknown as { cat: Category }).cat) }}
+                  >
+                    {data.map((d, i) => (
+                      <Cell
+                        key={i}
+                        fill={d.color}
+                        opacity={activeIndex === null || activeIndex === i ? 1 : 0.45}
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              {/* ドーナツ中央ラベル */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  {activeData ? (
+                    <>
+                      <p className="text-base leading-tight">{activeData.cat.icon}</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">{activeData.cat.name}</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">
+                        ¥{activeData.value.toLocaleString()}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-slate-400 dark:text-slate-400">合計</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">
+                        {formatWan(total)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
             <p className="text-xs text-slate-400 dark:text-slate-400 text-center">カテゴリをタップで詳細表示</p>
           </div>
 
