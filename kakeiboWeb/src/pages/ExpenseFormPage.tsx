@@ -30,11 +30,18 @@ export const ExpenseFormPage = () => {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const itemInputRef = useRef<HTMLInputElement>(null)
 
-  const allSuggestions = [...new Set(
+  const allSuggestions = (() => {
+    const countMap = new Map<string, number>()
     expenses
-      .filter((e) => e.itemName && e.itemName.trim())
-      .map((e) => e.itemName!)
-  )]
+      .filter((e) => e.itemName?.trim() && e.categoryId === categoryId)
+      .forEach((e) => {
+        const key = e.itemName!
+        countMap.set(key, (countMap.get(key) ?? 0) + 1)
+      })
+    return [...countMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name]) => name)
+  })()
   const filteredSuggestions = allSuggestions.filter((s) =>
     s.toLowerCase().includes(itemName.toLowerCase())
   )
