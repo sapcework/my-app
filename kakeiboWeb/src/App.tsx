@@ -1,9 +1,11 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { PasscodeLock } from './components/PasscodeLock'
+import { LoginPage } from './pages/LoginPage'
 import { useTheme } from './hooks/useTheme'
 import { usePasscodeStore } from './store/passcodeStore'
+import { useAuthStore } from './store/authStore'
 
 const HomePage        = lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })))
 const ExpenseListPage = lazy(() => import('./pages/ExpenseListPage').then(m => ({ default: m.ExpenseListPage })))
@@ -21,11 +23,22 @@ const PageLoader = () => (
   </div>
 )
 
+const FullLoader = () => (
+  <div className="min-h-screen bg-slate-50 dark:bg-[#090912] flex items-center justify-center">
+    <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+  </div>
+)
+
 export const App = () => {
   useTheme()
   const { enabled } = usePasscodeStore()
-  const [locked, setLocked] = useState(enabled) // 起動時にパスコードが有効ならロック
+  const [locked, setLocked] = useState(enabled)
+  const { user, loading, init } = useAuthStore()
 
+  useEffect(() => { init() }, [init])
+
+  if (loading) return <FullLoader />
+  if (!user) return <LoginPage />
   if (locked) return <PasscodeLock onUnlock={() => setLocked(false)} />
 
   return (

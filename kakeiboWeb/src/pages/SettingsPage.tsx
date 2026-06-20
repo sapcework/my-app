@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Download, Upload, Tag, Wallet, Repeat2, FileText, Table, Sun, Moon, Monitor, Lock, Unlock, X } from 'lucide-react'
+import { ChevronRight, Download, Upload, Tag, Wallet, Repeat2, FileText, Table, Sun, Moon, Monitor, Lock, Unlock, X, LogOut } from 'lucide-react'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
@@ -12,7 +12,8 @@ import { showToast } from '../store/toastStore'
 import { useThemeStore } from '../store/themeStore'
 import { usePasscodeStore } from '../store/passcodeStore'
 import { PinPad } from '../components/PinPad'
-import type { Expense, Category, Budget, RecurringExpense } from '../types'
+import { useAuthStore } from '../store/authStore'
+import type { Expense, Category, Budget, RecurringExpense } from '../types/index'
 
 type BackupData = {
   version: string
@@ -371,6 +372,25 @@ export const SettingsPage = () => {
         </div>
       </div>
 
+      {/* アカウント */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider px-5 pt-4 pb-2">
+          アカウント
+        </p>
+        <button
+          onClick={async () => {
+            const ok = await confirmDialog({ title: 'ログアウト', message: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true })
+            if (ok) useAuthStore.getState().signOut()
+          }}
+          className="w-full flex items-center gap-4 px-5 py-4 border-t border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        >
+          <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center flex-shrink-0">
+            <LogOut size={16} className="text-rose-500" />
+          </div>
+          <span className="text-sm font-medium text-rose-500">ログアウト</span>
+        </button>
+      </div>
+
       {/* バージョン情報 */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
         <p className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider px-5 pt-4 pb-2">
@@ -391,7 +411,7 @@ export const SettingsPage = () => {
               { label: 'バージョン', value: '1.0.0' },
               { label: 'ビルド', value: '2025.05' },
               { label: 'プラットフォーム', value: 'Web (PWA対応)' },
-              { label: 'データ保存', value: 'ローカルストレージ' },
+              { label: 'データ保存', value: 'Supabase（クラウド）' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between py-0.5">
                 <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Category } from '../types'
+import { dbSyncCategories } from '../lib/db'
+import type { Category } from '../types/index'
 
 type CategoryStore = {
   categories: Category[]
@@ -31,18 +32,20 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 export const useCategoryStore = create<CategoryStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       categories: DEFAULT_CATEGORIES,
-      addCategory: (data) =>
-        set((s) => ({
-          categories: [...s.categories, { ...data, id: crypto.randomUUID() }],
-        })),
-      updateCategory: (id, data) =>
-        set((s) => ({
-          categories: s.categories.map((c) => (c.id === id ? { ...c, ...data } : c)),
-        })),
-      deleteCategory: (id) =>
-        set((s) => ({ categories: s.categories.filter((c) => c.id !== id) })),
+      addCategory: (data) => {
+        const next = [...get().categories, { ...data, id: crypto.randomUUID() }]
+        set({ categories: next }); dbSyncCategories(next)
+      },
+      updateCategory: (id, data) => {
+        const next = get().categories.map((c) => (c.id === id ? { ...c, ...data } : c))
+        set({ categories: next }); dbSyncCategories(next)
+      },
+      deleteCategory: (id) => {
+        const next = get().categories.filter((c) => c.id !== id)
+        set({ categories: next }); dbSyncCategories(next)
+      },
       restoreCategories: (categories) => set({ categories }),
     }),
     {

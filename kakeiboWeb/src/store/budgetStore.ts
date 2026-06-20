@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Budget } from '../types'
+import { dbSetBudget } from '../lib/db'
+import type { Budget } from '../types/index'
 
 type BudgetStore = {
   budgets: Budget[]
@@ -13,14 +14,16 @@ export const useBudgetStore = create<BudgetStore>()(
   persist(
     (set, get) => ({
       budgets: [],
-      setBudget: (month, amount) =>
+      setBudget: (month, amount) => {
         set((s) => {
           const exists = s.budgets.find((b) => b.month === month)
           if (exists) {
             return { budgets: s.budgets.map((b) => (b.month === month ? { ...b, amount } : b)) }
           }
           return { budgets: [...s.budgets, { month, amount }] }
-        }),
+        })
+        dbSetBudget(month, amount)
+      },
       getBudget: (month) => get().budgets.find((b) => b.month === month)?.amount ?? 0,
       restoreBudgets: (budgets) => set({ budgets }),
     }),

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Expense } from '../types'
+import { dbAddExpense, dbUpdateExpense, dbDeleteExpense } from '../lib/db'
+import type { Expense } from '../types/index'
 
 type ExpenseStore = {
   expenses: Expense[]
@@ -16,23 +17,28 @@ export const useExpenseStore = create<ExpenseStore>()(
   persist(
     (set, get) => ({
       expenses: [],
-      addExpense: (data) =>
-        set((s) => ({
-          expenses: [
-            ...s.expenses,
-            { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() },
-          ],
-        })),
-      updateExpense: (id, data) =>
+      addExpense: (data) => {
+        const newExpense: Expense = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
+        set((s) => ({ expenses: [...s.expenses, newExpense] }))
+        dbAddExpense(newExpense)
+      },
+      updateExpense: (id, data) => {
         set((s) => ({
           expenses: s.expenses.map((e) =>
             e.id === id ? { ...e, ...data, updatedAt: new Date().toISOString() } : e
           ),
-        })),
-      deleteExpense: (id) =>
-        set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
-      insertExpense: (expense) =>
-        set((s) => ({ expenses: [...s.expenses, expense] })), // 既存の支出をそのまま復活（Undo用）
+        }))
+        const updated = get().expenses.find((e) => e.id === id)
+        if (updated) dbUpdateExpense(updated)
+      },
+      deleteExpense: (id) => {
+        set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) }))
+        dbDeleteExpense(id)
+      },
+      insertExpense: (expense) => {
+        set((s) => ({ expenses: [...s.expenses, expense] }))
+        dbAddExpense(expense)
+      },
       getMonthlyExpenses: (month) =>
         get().expenses.filter((e) => e.date.startsWith(month)),
       restoreExpenses: (expenses) => set({ expenses }),

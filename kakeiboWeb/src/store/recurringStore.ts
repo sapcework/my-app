@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { RecurringExpense } from '../types'
+import { dbAddRecurring, dbUpdateRecurring, dbDeleteRecurring } from '../lib/db'
+import type { RecurringExpense } from '../types/index'
 
 type RecurringStore = {
   recurring: RecurringExpense[]
@@ -12,18 +13,24 @@ type RecurringStore = {
 
 export const useRecurringStore = create<RecurringStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       recurring: [],
-      addRecurring: (data) =>
-        set((s) => ({
-          recurring: [...s.recurring, { ...data, id: crypto.randomUUID() }],
-        })),
-      updateRecurring: (id, data) =>
+      addRecurring: (data) => {
+        const newItem: RecurringExpense = { ...data, id: crypto.randomUUID() }
+        set((s) => ({ recurring: [...s.recurring, newItem] }))
+        dbAddRecurring(newItem)
+      },
+      updateRecurring: (id, data) => {
         set((s) => ({
           recurring: s.recurring.map((r) => (r.id === id ? { ...r, ...data } : r)),
-        })),
-      deleteRecurring: (id) =>
-        set((s) => ({ recurring: s.recurring.filter((r) => r.id !== id) })),
+        }))
+        const updated = get().recurring.find((r) => r.id === id)
+        if (updated) dbUpdateRecurring(updated)
+      },
+      deleteRecurring: (id) => {
+        set((s) => ({ recurring: s.recurring.filter((r) => r.id !== id) }))
+        dbDeleteRecurring(id)
+      },
       restoreRecurring: (recurring) => set({ recurring }),
     }),
     { name: 'kakeibo-recurring' }
