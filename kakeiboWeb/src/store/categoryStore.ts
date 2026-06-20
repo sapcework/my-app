@@ -11,7 +11,7 @@ type CategoryStore = {
   restoreCategories: (categories: Category[]) => void
 }
 
-const DEFAULT_CATEGORIES: Category[] = [
+export const DEFAULT_CATEGORIES: Category[] = [
   { id: '1',  name: '食費',      color: '#FF9800', icon: '🍽️' },
   { id: '2',  name: '外食',      color: '#FF5722', icon: '🍜' },
   { id: '3',  name: '住居',      color: '#009688', icon: '🏠' },

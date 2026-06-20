@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # npm 依存（各プロジェクト）
+  - package-ecosystem: "npm"
+    directory: "/kakeiboWeb"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "kakeiboWeb"]
+
+  - package-ecosystem: "npm"
+    directory: "/line"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "line"]
+
+  - package-ecosystem: "npm"
+    directory: "/todo"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "todo"]
+
+  - package-ecosystem: "npm"
+    directory: "/fast-browser"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "fast-browser"]
+
+  # GitHub Actions のバージョン更新
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "github-actions"]
