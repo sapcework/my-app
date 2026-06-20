@@ -124,23 +124,23 @@ export const ExpenseFormPage = () => {
         </div>
 
         {/* カテゴリ */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 px-4 py-3">
           <label className={labelClass}>カテゴリ</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-1">
             {categories.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => setCategoryId(c.id)}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                className={`flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl border text-xs font-medium transition-all ${
                   categoryId === c.id
                     ? 'border-transparent text-white'
                     : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
                 style={categoryId === c.id ? { backgroundColor: c.color } : {}}
               >
-                <span className="text-base">{c.icon}</span>
-                <span className="truncate">{c.name}</span>
+                <span className="text-base leading-none">{c.icon}</span>
+                <span className="truncate w-full text-center text-[10px]">{c.name}</span>
               </button>
             ))}
           </div>
