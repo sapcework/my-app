@@ -5,9 +5,10 @@ import { useStorage } from '@/context/StorageContext'
 import { useNote } from '@/hooks/useNote'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useSyncStatus, useManualSync } from '@/hooks/useSyncStatus'
-import { useFontSize, FONT_SIZE_CLASS, FONT_SIZE_TITLE_CLASS } from '@/hooks/useFontSize'
+import { useFontSize, FONT_SIZE_CLASS } from '@/hooks/useFontSize'
 import { confirmDialog } from '@/lib/dialog'
 import { showToast } from '@/lib/toast'
+import { deriveTitle } from '@/lib/noteText'
 import type { Note } from '@/lib/types'
 
 type Props = {
@@ -17,8 +18,7 @@ type Props = {
 }
 
 type EditorState = {
-  title: string
-  content: string
+  content: string // 明細のみ。タイトルは1行目から自動導出する
 }
 
 const PinIcon = ({ className }: { className?: string }) => (
@@ -83,7 +83,7 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
   const manualSync = useManualSync()
   const { fontSize } = useFontSize()
   const [retrying, setRetrying] = useState(false)
-  const [state, setState] = useState<EditorState>({ title: '', content: '' })
+  const [state, setState] = useState<EditorState>({ content: '' })
   const [dates, setDates] = useState<{ createdAt: number; updatedAt: number }>({ createdAt: 0, updatedAt: 0 })
   const [pinned, setPinned] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -93,13 +93,13 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
 
   useEffect(() => {
     if (!noteId) {
-      setState({ title: '', content: '' })
+      setState({ content: '' })
       setDates({ createdAt: 0, updatedAt: 0 })
       return
     }
     storage.getNote(noteId).then((note: Note | null) => {
       if (!note) return
-      setState({ title: note.title, content: note.content })
+      setState({ content: note.content })
       setDates({ createdAt: note.createdAt, updatedAt: note.updatedAt })
       setPinned(note.pinned ?? false)
       loadedIdRef.current = noteId
@@ -112,14 +112,15 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
   useEffect(() => {
     if (!noteId || loadedIdRef.current !== noteId || !isDirtyRef.current) return
     setSaving(true)
-    updateNote(noteId, debouncedState)
+    // 1行目をタイトルとして保存（検索・並べ替え・一覧表示用）
+    updateNote(noteId, { title: deriveTitle(debouncedState.content), content: debouncedState.content })
       .then(() => setDates(d => ({ ...d, updatedAt: Date.now() })))
       .finally(() => setSaving(false))
   }, [debouncedState]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 戻る時、空のノート（タイトル・本文とも空）は破棄する（Simplenote 同様）
+  // 戻る時、空のノートは破棄する（Simplenote 同様）
   async function handleBack() {
-    if (noteId && loadedIdRef.current === noteId && !state.title.trim() && !state.content.trim()) {
+    if (noteId && loadedIdRef.current === noteId && !state.content.trim()) {
       await trashNote(noteId)
     }
     onBack()
@@ -146,7 +147,7 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
         >
           ← 戻る
         </button>
-        <span className="text-sm text-gray-500 dark:text-gray-400 truncate flex-1">{state.title || '無題のノート'}</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400 truncate flex-1">{deriveTitle(state.content) || '無題のノート'}</span>
         <button
           onClick={async () => { setPinned(v => !v); await togglePin(noteId) }}
           className={`ml-3 shrink-0 transition-colors ${pinned ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400 dark:hover:text-gray-500'}`}
@@ -197,25 +198,13 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
         </div>
       )}
 
-      {/* タイトル */}
-      <div className="px-8 pt-8 pb-2">
-        <input
-          type="text"
-          value={state.title}
-          onChange={(e) => { isDirtyRef.current = true; setState((s) => ({ ...s, title: e.target.value })) }}
-          placeholder="タイトル"
-          className={`w-full ${FONT_SIZE_TITLE_CLASS[fontSize]} font-semibold text-gray-800 dark:text-gray-100 bg-transparent outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600`}
-        />
-      </div>
-
-      <div className="mx-8 border-t border-gray-100 dark:border-gray-800" />
-
-      {/* 本文 */}
+      {/* 明細（1行目がタイトルになる） */}
       <textarea
         value={state.content}
-        onChange={(e) => { isDirtyRef.current = true; setState((s) => ({ ...s, content: e.target.value })) }}
-        placeholder="書き始めてください..."
-        className={`flex-1 px-8 py-4 ${FONT_SIZE_CLASS[fontSize]} text-gray-700 dark:text-gray-200 bg-transparent leading-relaxed outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600`}
+        onChange={(e) => { isDirtyRef.current = true; setState({ content: e.target.value }) }}
+        placeholder="1行目がタイトルになります。ここに書き始めてください…"
+        autoFocus
+        className={`flex-1 px-5 md:px-8 pt-5 md:pt-6 pb-4 ${FONT_SIZE_CLASS[fontSize]} text-gray-700 dark:text-gray-200 bg-transparent leading-relaxed outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600`}
       />
 
       {/* ステータスバー */}

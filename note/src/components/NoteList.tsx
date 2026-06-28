@@ -8,6 +8,7 @@ import { SideMenu } from '@/components/SideMenu'
 import type { ListView } from '@/components/SideMenu'
 import { confirmDialog } from '@/lib/dialog'
 import { showToast } from '@/lib/toast'
+import { deriveTitle, derivePreview } from '@/lib/noteText'
 import type { Note } from '@/lib/types'
 
 type Props = {
@@ -39,7 +40,8 @@ const HamburgerIcon = () => (
 )
 
 function NoteItem({ note, selected, onClick }: { note: Note; selected: boolean; onClick: () => void }) {
-  const preview = note.content.replace(/\n/g, ' ').slice(0, 60)
+  const title = deriveTitle(note.content)    // 1行目をタイトル表示
+  const preview = derivePreview(note.content) // 2行目以降をプレビュー
   return (
     <button
       onClick={onClick}
@@ -51,7 +53,7 @@ function NoteItem({ note, selected, onClick }: { note: Note; selected: boolean; 
         <div className="flex items-center gap-1 min-w-0">
           {note.pinned && <PinIcon className="w-3 h-3 text-blue-400 shrink-0" />}
           <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
-            {note.title || '無題のノート'}
+            {title || '無題のノート'}
           </span>
         </div>
         <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{formatDate(note.updatedAt)}</span>
@@ -64,12 +66,12 @@ function NoteItem({ note, selected, onClick }: { note: Note; selected: boolean; 
 function TrashItem({
   note, onRestore, onPurge,
 }: { note: Note; onRestore: () => void; onPurge: () => void }) {
-  const preview = note.content.replace(/\n/g, ' ').slice(0, 60)
+  const preview = derivePreview(note.content)
   return (
     <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
       <div className="flex justify-between items-baseline gap-2">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
-          {note.title || '無題のノート'}
+          {deriveTitle(note.content) || '無題のノート'}
         </span>
         <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{formatDate(note.deletedAt ?? note.updatedAt)}</span>
       </div>
@@ -156,7 +158,7 @@ export function NoteList({ selectedId, onSelect }: Props) {
         trashCount={trashed.length}
       />
 
-      <aside className="w-64 shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 h-full">
+      <aside className="w-full md:w-64 shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 h-full">
         {view === 'notes' ? (
           <>
             {/* 検索バー（ハンバーガー付き） */}
