@@ -51,8 +51,8 @@ function NoteItem({ note, selected, onClick }: { note: Note; selected: boolean; 
     >
       <div className="flex justify-between items-baseline gap-2">
         <div className="flex items-center gap-1 min-w-0">
-          {note.pinned && <PinIcon className="w-3 h-3 text-blue-400 shrink-0" />}
-          <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
+          {note.pinned && <PinIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+          <span className="text-base font-semibold text-gray-800 dark:text-gray-100 truncate">
             {title || '無題のノート'}
           </span>
         </div>
