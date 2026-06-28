@@ -1,0 +1,29 @@
+# 依存関係
+node_modules
+
+# Next.js
+.next
+out
+
+# Tauri
+src-tauri/target
+src-tauri/WixTools
+
+# ビルド成果物
+dist
+dist-ssr
+build
+
+# 環境変数・秘密情報
+.env*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+*.local
+.vscode/settings.json
+
+# Claude Code 個人設定
+CLAUDE.local.md
