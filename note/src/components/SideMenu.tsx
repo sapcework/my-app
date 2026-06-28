@@ -99,14 +99,19 @@ const IconLock = () => (
 
 // ---- バリデーター ----
 
+const ID_RE = /^[A-Za-z0-9_-]{1,128}$/   // crypto.randomUUID 形式を含む安全なID文字種
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']) // プロトタイプ汚染対策
+const MAX_LEN = 1_000_000 // 1ノートあたりのタイトル/本文の上限（肥大化・DoS防止）
+
 function isValidNote(obj: unknown): obj is Note {
   if (typeof obj !== 'object' || obj === null) return false
   const n = obj as Record<string, unknown>
-  return (
-    typeof n.id === 'string' && typeof n.title === 'string' &&
-    typeof n.content === 'string' && typeof n.createdAt === 'number' &&
-    typeof n.updatedAt === 'number'
-  )
+  if (typeof n.id !== 'string' || !ID_RE.test(n.id) || DANGEROUS_KEYS.has(n.id)) return false
+  if (typeof n.title !== 'string' || n.title.length > MAX_LEN) return false
+  if (typeof n.content !== 'string' || n.content.length > MAX_LEN) return false
+  if (!Number.isFinite(n.createdAt) || !Number.isFinite(n.updatedAt)) return false
+  if (n.version !== undefined && !Number.isFinite(n.version)) return false
+  return true
 }
 
 // ---- 並べ替えモーダル ----
