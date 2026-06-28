@@ -2,7 +2,12 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { StorageProvider } from '@/lib/types'
-import type { SyncEngine } from '@/lib/sync/SyncEngine'
+import { SyncEngine } from '@/lib/sync/SyncEngine'
+import { SyncedStorageProvider } from '@/lib/storage/SyncedStorageProvider'
+import { EncryptedStorageProvider } from '@/lib/storage/EncryptedStorageProvider'
+import { IndexedDBProvider } from '@/lib/storage/IndexedDBProvider'
+import { TauriProvider } from '@/lib/storage/TauriProvider'
+import { SupabaseRemoteProvider } from '@/lib/supabase/SupabaseRemoteProvider'
 import { supabase } from '@/lib/supabase/client'
 
 type ContextValue = {
@@ -20,44 +25,32 @@ export function StorageProviderComponent({ children }: { children: React.ReactNo
   const [value, setValue] = useState<ContextValue | null>(null)
 
   useEffect(() => {
-    async function init() {
-      const { SyncEngine } = await import('@/lib/sync/SyncEngine')
-      const { SyncedStorageProvider } = await import('@/lib/storage/SyncedStorageProvider')
-      const { EncryptedStorageProvider } = await import('@/lib/storage/EncryptedStorageProvider')
-      const { SupabaseRemoteProvider } = await import('@/lib/supabase/SupabaseRemoteProvider')
+    // 環境に応じて永続層を切り替え（静的importなので分割チャンク取得に失敗して固まらない）
+    const raw: StorageProvider = isTauri() ? new TauriProvider() : new IndexedDBProvider()
+    const base = new EncryptedStorageProvider(raw) // 暗号層（無効時は素通し）
+    const remote = new SupabaseRemoteProvider(supabase)
+    const sync = new SyncEngine(base, remote)
+    const storage = new SyncedStorageProvider(base, sync)
 
-      // 環境に応じて永続層を切り替え
-      let raw: StorageProvider
-      if (isTauri()) {
-        const { TauriProvider } = await import('@/lib/storage/TauriProvider')
-        raw = new TauriProvider()
-      } else {
-        const { IndexedDBProvider } = await import('@/lib/storage/IndexedDBProvider')
-        raw = new IndexedDBProvider()
-      }
-
-      // 暗号層で包む（保存=暗号 / 読み出し=復号、無効時は素通し）
-      const base = new EncryptedStorageProvider(raw)
-
-      const remote = new SupabaseRemoteProvider(supabase)
-      const sync = new SyncEngine(base, remote)
-      const storage = new SyncedStorageProvider(base, sync)
-
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        sync.setAuth(session.user.id)
-        await sync.startupSync()
-      }
-
-      supabase.auth.onAuthStateChange(async (_event, s) => {
-        const userId = s?.user?.id ?? null
-        sync.setAuth(userId)
-        if (userId) await sync.startupSync()
+    // 同期はバックグラウンドで実行し、UI表示をブロックしない（オフラインファースト）
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) {
+          sync.setAuth(session.user.id)
+          sync.startupSync().catch(() => { /* 同期失敗でもアプリは使える */ })
+        }
       })
+      .catch(() => { /* セッション取得失敗でもアプリは表示する */ })
 
-      setValue({ storage, sync })
-    }
-    init()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      const userId = s?.user?.id ?? null
+      sync.setAuth(userId)
+      if (userId) sync.startupSync().catch(() => {})
+    })
+
+    setValue({ storage, sync }) // 常に即座にアプリを表示（読込中で固まらせない）
+
+    return () => subscription.unsubscribe()
   }, [])
 
   if (!value) {

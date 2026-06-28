@@ -4,7 +4,7 @@
 //   - オフライン時: キャッシュから配信（圏外でも起動）
 // Supabase等の外部API（別オリジン）はキャッシュ対象外 → 同期は通常通りネット依存。
 
-const CACHE = 'simplenote-v1'
+const CACHE = 'luminote-v2'
 const APP_SHELL = ['/', '/auth']
 
 self.addEventListener('install', (event) => {
@@ -40,9 +40,13 @@ self.addEventListener('fetch', (event) => {
         return res
       })
       .catch(async () => {
-        // オフライン → キャッシュ、無ければトップページで代替
+        // オフライン時のフォールバック
         const cached = await caches.match(req)
-        return cached || caches.match('/')
+        if (cached) return cached
+        // ページ遷移のみトップページで代替。JS/CSS等のアセット要求にHTMLを返すと
+        // モジュール読込が壊れて画面が固まるため、アセットは素直にエラーにする。
+        if (req.mode === 'navigate') return caches.match('/')
+        return Response.error()
       })
   )
 })
