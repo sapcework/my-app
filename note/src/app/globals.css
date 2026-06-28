@@ -27,6 +27,14 @@ body {
     "Yu Gothic", "Meiryo", system-ui, sans-serif;
 }
 
+/* メモの1行目をタイトルとして強調（Simplenote風）。
+   textarea::first-line はブラウザがネイティブ描画するため、
+   カーソル位置やIME入力がずれない。font-size は本文比 1.25em。 */
+.note-body::first-line {
+  font-weight: 700;
+  font-size: 1.25em;
+}
+
 /* パスコード誤入力時のシェイク */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }

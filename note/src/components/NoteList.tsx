@@ -32,7 +32,7 @@ const PinIcon = ({ className }: { className?: string }) => (
 )
 
 const HamburgerIcon = () => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
     <line x1="3" y1="6" x2="21" y2="6"/>
     <line x1="3" y1="12" x2="21" y2="12"/>
     <line x1="3" y1="18" x2="21" y2="18"/>
@@ -139,7 +139,7 @@ export function NoteList({ selectedId, onSelect }: Props) {
   const hamburger = (
     <button
       onClick={() => setMenuOpen(true)}
-      className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors shrink-0 p-0.5"
+      className="shrink-0 w-11 h-11 -ml-1.5 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 active:bg-gray-300 dark:active:bg-gray-700 transition-colors"
       aria-label="メニューを開く"
     >
       <HamburgerIcon />

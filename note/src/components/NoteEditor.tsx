@@ -207,7 +207,7 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
         value={state.content}
         onChange={(e) => { isDirtyRef.current = true; setState({ content: e.target.value }) }}
         placeholder="1行目がタイトルになります。ここに書き始めてください…"
-        className={`flex-1 px-5 md:px-8 pt-5 md:pt-6 pb-4 ${FONT_SIZE_CLASS[fontSize]} text-gray-700 dark:text-gray-200 bg-transparent leading-relaxed outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600`}
+        className={`note-body flex-1 px-5 md:px-8 pt-5 md:pt-6 pb-4 ${FONT_SIZE_CLASS[fontSize]} text-gray-700 dark:text-gray-200 bg-transparent leading-relaxed outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600`}
       />
 
       {/* ステータスバー */}
