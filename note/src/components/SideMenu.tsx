@@ -323,7 +323,7 @@ export function SideMenu({ open, onClose, sortOrder, onSortChange, view, onViewC
       >
         {/* ヘッダー */}
         <div className="px-4 pt-5 pb-3 shrink-0">
-          <span className="text-base font-semibold text-gray-800 dark:text-gray-100 tracking-tight">SimpleNote</span>
+          <span className="text-base font-semibold text-gray-800 dark:text-gray-100 tracking-tight">LumiNote</span>
         </div>
 
         {/* メニュー（スクロール可） */}
@@ -493,13 +493,13 @@ export function SideMenu({ open, onClose, sortOrder, onSortChange, view, onViewC
 
         {/* バージョン情報（固定フッター） */}
         <div className="shrink-0 px-4 py-3 border-t border-gray-200 dark:border-gray-800">
-          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">SimpleNote</p>
+          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">LumiNote</p>
           <div className="mt-1 space-y-0.5 text-xs text-gray-400 dark:text-gray-500">
             <div className="flex justify-between"><span>バージョン</span><span>1.0.0</span></div>
             <div className="flex justify-between"><span>プラットフォーム</span><span>Web · Tauri</span></div>
             <div className="flex justify-between"><span>同期</span><span>Supabase</span></div>
           </div>
-          <p className="text-xs text-gray-300 dark:text-gray-600 mt-1.5">© 2026 SimpleNote</p>
+          <p className="text-xs text-gray-300 dark:text-gray-600 mt-1.5">© 2026 LumiNote</p>
         </div>
       </div>
 

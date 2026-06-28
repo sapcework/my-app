@@ -1,6 +1,6 @@
 {
-  "name": "SimpleNote",
-  "short_name": "SimpleNote",
+  "name": "LumiNote",
+  "short_name": "LumiNote",
   "description": "オフライン対応のシンプルなメモアプリ",
   "start_url": "/",
   "display": "standalone",

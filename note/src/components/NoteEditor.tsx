@@ -90,6 +90,7 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
   const [showProps, setShowProps] = useState(false)
   const loadedIdRef = useRef<string | null>(null)
   const isDirtyRef = useRef(false) // 読み込み後に実際に編集された場合のみ true
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     if (!noteId) {
@@ -104,6 +105,8 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
       setPinned(note.pinned ?? false)
       loadedIdRef.current = noteId
       isDirtyRef.current = false // ノート切替時にリセット
+      // 新規（空）ノートのみ自動フォーカス。既存ノートはキーボードを出さず閲覧優先
+      if (note.content === '') setTimeout(() => textareaRef.current?.focus(), 0)
     })
   }, [noteId, storage])
 
@@ -200,10 +203,10 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
 
       {/* 明細（1行目がタイトルになる） */}
       <textarea
+        ref={textareaRef}
         value={state.content}
         onChange={(e) => { isDirtyRef.current = true; setState({ content: e.target.value }) }}
         placeholder="1行目がタイトルになります。ここに書き始めてください…"
-        autoFocus
         className={`flex-1 px-5 md:px-8 pt-5 md:pt-6 pb-4 ${FONT_SIZE_CLASS[fontSize]} text-gray-700 dark:text-gray-200 bg-transparent leading-relaxed outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600`}
       />
 

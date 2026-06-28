@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "SimpleNote",
+  "productName": "LumiNote",
   "version": "0.1.0",
   "identifier": "com.tauri.dev",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "SimpleNote",
+        "title": "LumiNote",
         "width": 480,
         "height": 760,
         "resizable": true,

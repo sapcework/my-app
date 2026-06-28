@@ -19,11 +19,11 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'SimpleNote',
+  title: 'LumiNote',
   description: 'Offline-first note app',
   manifest: '/manifest.webmanifest', // PWA マニフェスト（public配下の静的ファイル）
   // PWA: iOS でもホーム画面追加時に全画面アプリ化
-  appleWebApp: { capable: true, title: 'SimpleNote', statusBarStyle: 'default' },
+  appleWebApp: { capable: true, title: 'LumiNote', statusBarStyle: 'default' },
   icons: { apple: '/icon-192.png' },
 }
 
