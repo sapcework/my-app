@@ -10,6 +10,7 @@ export type SyncStatus = 'offline' | 'idle' | 'syncing' | 'error'
 
 const DEBOUNCE_MS = 2000
 const MAX_RETRIES = 5
+const OP_TIMEOUT_MS = 15000 // 1件の送信がこれ以上かかったら失敗扱い（同期中で固まらせない）
 
 export class SyncEngine {
   private queue = new Map<string, 'upsert' | 'delete'>()
@@ -81,24 +82,23 @@ export class SyncEngine {
     this.syncing = true
     this.setStatus('syncing')
 
-    const entries = [...this.queue.entries()]
-    this.queue.clear()
-
     let hasError = false
-    for (const [noteId, action] of entries) {
-      const ok = await this.pushOnce(noteId, action)
-      if (!ok) {
-        this.queue.set(noteId, action) // 失敗は再キュー（1件の失敗で他をブロックしない）
-        hasError = true
+    try {
+      const entries = [...this.queue.entries()]
+      this.queue.clear()
+      for (const [noteId, action] of entries) {
+        const ok = await this.pushOnce(noteId, action)
+        if (!ok) {
+          this.queue.set(noteId, action) // 失敗は再キュー（1件の失敗で他をブロックしない）
+          hasError = true
+        }
       }
-    }
-
-    this.syncing = false
-
-    if (this.queue.size === 0) {
-      this.backoff = 0
-      this.setStatus('idle')
-      return
+    } catch (e) {
+      // 想定外の例外でも syncing を必ず解除し、固まらせない
+      console.warn('[SyncEngine] flush error:', e instanceof Error ? e.message : JSON.stringify(e))
+      hasError = true
+    } finally {
+      this.syncing = false
     }
 
     if (hasError) {
@@ -107,27 +107,44 @@ export class SyncEngine {
       const delay = Math.min(Math.pow(2, this.backoff) * 1000, 30000)
       this.backoff = Math.min(this.backoff + 1, MAX_RETRIES)
       this.scheduleFlush(delay)
-    } else {
-      // flush 中に来た新規変更のみ残存 → 通常デバウンスで処理
+    } else if (this.queue.size > 0) {
+      // flush 中に来た新規変更が残存 → 通常デバウンスで処理
       this.scheduleFlush()
+    } else {
+      this.backoff = 0
+      this.setStatus('idle')
     }
   }
 
   // 1回だけ送信を試みる（内部リトライなし）。失敗は flush 側で再キュー・再試行する。
+  // ハードタイムアウトを掛け、ネットワーク以外のハング（鍵待ち等）でも固まらせない。
   private async pushOnce(noteId: string, action: 'upsert' | 'delete'): Promise<boolean> {
     if (!this.remote || !this.userId) return false
     try {
-      if (action === 'upsert') {
-        const note = await this.storage.getNote(noteId)
-        if (note) await this.remote.upsert({ ...note, userId: this.userId })
-      } else {
-        await this.remote.delete(noteId, this.userId)
-      }
+      await this.withTimeout(this.doPush(noteId, action), OP_TIMEOUT_MS)
       return true
     } catch (e) {
       console.warn('[SyncEngine] push failed (will retry):', noteId, e instanceof Error ? e.message : JSON.stringify(e))
       return false
     }
+  }
+
+  private async doPush(noteId: string, action: 'upsert' | 'delete'): Promise<void> {
+    if (action === 'upsert') {
+      const note = await this.storage.getNote(noteId)
+      if (note && this.remote && this.userId) await this.remote.upsert({ ...note, userId: this.userId })
+    } else if (this.remote && this.userId) {
+      await this.remote.delete(noteId, this.userId)
+    }
+  }
+
+  // 指定ミリ秒で必ず決着する（タイムアウト時は reject）
+  private withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('operation timeout')), ms)
+    })
+    return Promise.race([p.finally(() => clearTimeout(timer)), timeout])
   }
 
   private async mergeWithLWW(local: Note[], remote: Note[]): Promise<void> {

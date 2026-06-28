@@ -11,29 +11,25 @@ function generateId(): string {
 export function useNote() {
   const storage = useStorage()
 
-  const createNote = useCallback(async (): Promise<Note> => {
+  // Note オブジェクトを返すだけ（ストレージに触れない＝ハングしない）。
+  // 実体は最初の編集時に updateNote が作成・保存する。空のまま離れたノートは保存されず破棄される。
+  const createNote = useCallback((): Note => {
     const now = Date.now()
-    const note: Note = {
-      id: generateId(),
-      title: '',
-      content: '',
-      createdAt: now,
-      updatedAt: now,
-      version: 1,
-    }
-    await storage.upsertNote(note)
-    return note
-  }, [storage])
+    return { id: generateId(), title: '', content: '', createdAt: now, updatedAt: now, version: 0 }
+  }, [])
 
+  // 無ければ作成、有れば更新（upsert セマンティクス）。新規ノートの取りこぼしを防ぐ。
   const updateNote = useCallback(
     async (id: string, patch: Partial<Pick<Note, 'title' | 'content'>>) => {
       const existing = await storage.getNote(id)
-      if (!existing) return
+      const base: Note = existing ?? {
+        id, title: '', content: '', createdAt: Date.now(), updatedAt: Date.now(), version: 0,
+      }
       const updated: Note = {
-        ...existing,
+        ...base,
         ...patch,
         updatedAt: Date.now(),
-        version: existing.version + 1,
+        version: base.version + 1,
       }
       await storage.upsertNote(updated)
     },

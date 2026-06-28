@@ -99,14 +99,14 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
       return
     }
     storage.getNote(noteId).then((note: Note | null) => {
-      if (!note) return
-      setState({ content: note.content })
-      setDates({ createdAt: note.createdAt, updatedAt: note.updatedAt })
-      setPinned(note.pinned ?? false)
+      // note が null = 未保存の新規ノート。空状態で編集可能にする
+      setState({ content: note?.content ?? '' })
+      setDates({ createdAt: note?.createdAt ?? Date.now(), updatedAt: note?.updatedAt ?? Date.now() })
+      setPinned(note?.pinned ?? false)
       loadedIdRef.current = noteId
       isDirtyRef.current = false // ノート切替時にリセット
       // 新規（空）ノートのみ自動フォーカス。既存ノートはキーボードを出さず閲覧優先
-      if (note.content === '') setTimeout(() => textareaRef.current?.focus(), 0)
+      if (!note?.content) setTimeout(() => textareaRef.current?.focus(), 0)
     })
   }, [noteId, storage])
 
