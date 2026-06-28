@@ -1,10 +1,11 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { AuthProvider } from '@/context/AuthContext'
 import { StorageProviderComponent } from '@/context/StorageContext'
 import { PasscodeProvider } from '@/context/PasscodeContext'
 import { ConfirmDialogHost } from '@/components/ConfirmDialogHost'
 import { ToastHost } from '@/components/ToastHost'
+import { PWARegister } from '@/components/PWARegister'
 import './globals.css'
 
 const geistSans = Geist({
@@ -20,6 +21,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'SimpleNote',
   description: 'Offline-first note app',
+  manifest: '/manifest.webmanifest', // PWA マニフェスト（public配下の静的ファイル）
+  // PWA: iOS でもホーム画面追加時に全画面アプリ化
+  appleWebApp: { capable: true, title: 'SimpleNote', statusBarStyle: 'default' },
+  icons: { apple: '/icon-192.png' },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#3b82f6', // ステータスバー等の配色（blue-500）
 }
 
 export default function RootLayout({
@@ -45,6 +54,7 @@ export default function RootLayout({
             <StorageProviderComponent>{children}</StorageProviderComponent>
             <ConfirmDialogHost />
             <ToastHost />
+            <PWARegister />
           </AuthProvider>
         </PasscodeProvider>
       </body>
