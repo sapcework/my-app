@@ -18,6 +18,7 @@ export const Navbar = () => (
           key={to}
           to={to}
           end={to === '/'}
+          replace
           className={({ isActive }) =>
             `flex flex-col items-center py-2.5 px-1 gap-0.5 flex-1 transition-colors ${
               isActive
