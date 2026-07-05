@@ -68,6 +68,12 @@ const InfoIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
+const BackIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+)
+
 function formatDateTime(ms: number): string {
   if (!ms) return '-'
   return new Date(ms).toLocaleString('ja-JP', {
@@ -159,13 +165,14 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
       onTouchEnd={onTouchEnd}
     >
       {/* ヘッダー */}
-      <div className="flex items-center px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex items-center px-2 py-2 border-b border-gray-100 dark:border-gray-800">
         <button
           onClick={handleBack}
-          className="text-blue-500 text-sm mr-3 shrink-0"
+          className="shrink-0 -ml-0.5 mr-1 h-11 pl-1.5 pr-3 flex items-center gap-0.5 rounded-lg text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 active:bg-blue-100 dark:active:bg-blue-950 transition-colors"
           aria-label="一覧に戻る"
         >
-          ← 戻る
+          <BackIcon className="w-6 h-6" />
+          <span className="text-sm font-medium">戻る</span>
         </button>
         <span className="text-sm text-gray-500 dark:text-gray-400 truncate flex-1">{deriveTitle(state.content) || '無題のノート'}</span>
         <button
