@@ -91,6 +91,7 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
   const loadedIdRef = useRef<string | null>(null)
   const isDirtyRef = useRef(false) // 読み込み後に実際に編集された場合のみ true
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const swipeStartXRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!noteId) {
@@ -121,12 +122,24 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
       .finally(() => setSaving(false))
   }, [debouncedState]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 戻る時、空のノートは破棄する（Simplenote 同様）
-  async function handleBack() {
+  // 戻る時、空のノートは破棄する（Simplenote 同様）。保存待ちで遷移をブロックしない
+  function handleBack() {
     if (noteId && loadedIdRef.current === noteId && !state.content.trim()) {
-      await trashNote(noteId)
+      trashNote(noteId).catch(() => {})
     }
     onBack()
+  }
+
+  // 左端から右へのスワイプで戻る（画面端＝親指で届きやすい）
+  function onTouchStart(e: React.TouchEvent) {
+    const x = e.touches[0].clientX
+    swipeStartXRef.current = x < 30 ? x : null // 左端(30px以内)開始のみ有効
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = swipeStartXRef.current
+    swipeStartXRef.current = null
+    if (start === null) return
+    if (e.changedTouches[0].clientX - start > 80) handleBack() // 右へ80px以上
   }
 
   if (!noteId) {
@@ -140,7 +153,11 @@ export function NoteEditor({ noteId, onDelete, onBack }: Props) {
   const sync = SYNC_LABEL[syncStatus] ?? SYNC_LABEL.offline
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-gray-950">
+    <div
+      className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-gray-950"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       {/* ヘッダー */}
       <div className="flex items-center px-4 py-3 border-b border-gray-100 dark:border-gray-800">
         <button
