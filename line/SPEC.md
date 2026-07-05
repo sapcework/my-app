@@ -56,17 +56,28 @@ line/
 │   │   │   ├── page.tsx        # トーク一覧画面
 │   │   │   └── [roomId]/
 │   │   │       └── page.tsx    # チャット画面（[roomId]は動的なID）
-│   │   └── settings/page.tsx   # 設定画面
+│   │   ├── settings/page.tsx   # 設定画面（マイページ）
+│   │   ├── voom/page.tsx       # VOOMタブ（未実装・準備中画面）
+│   │   ├── news/page.tsx       # ニュースタブ（未実装・準備中画面）
+│   │   ├── wallet/page.tsx     # ウォレットタブ（未実装・準備中画面）
+│   │   ├── not-found.tsx       # 存在しないURL用の共通404画面
+│   │   ├── join/[token]/       # 招待リンクからの参加画面
+│   │   ├── admin/              # 管理者ダッシュボード・ユーザー/ルーム管理
+│   │   ├── apple-icon.tsx      # iOSホーム画面用アイコン生成（ImageResponse）
+│   │   ├── icon-192.png/route.tsx  # PWAアイコン192px生成
+│   │   └── icon-512.png/route.tsx  # PWAアイコン512px生成
 │   │
 │   ├── hooks/                  # ロジック（データ取得・更新）
 │   │   ├── useAuth.ts          # ログイン状態の管理
 │   │   ├── useMessages.ts      # メッセージの取得・送信・削除
-│   │   ├── useRooms.ts         # トームの取得・作成・参加・退出
+│   │   ├── useRooms.ts         # ルームの取得・作成・参加・退出
 │   │   ├── useReadStatus.ts    # 既読状態の管理
 │   │   ├── useOnline.ts        # オンライン状態の管理
 │   │   ├── useProfile.ts       # アバター・表示名の更新
 │   │   ├── useUserSearch.ts    # ユーザー検索
-│   │   └── useTabNotification.ts # タブタイトルの通知
+│   │   ├── useTabNotification.ts # タブタイトルの通知
+│   │   ├── useAppBackButton.ts # 戻るボタンの誤終了防止（ルート画面のみ）
+│   │   └── useInstallPrompt.ts # PWAインストール促進（Android/iOS判定）
 │   │
 │   ├── components/             # 再利用できるUIパーツ
 │   │   ├── chat/
@@ -76,18 +87,27 @@ line/
 │   │   ├── room/
 │   │   │   └── RoomListItem.tsx   # トーク一覧の各行
 │   │   └── ui/
-│   │       ├── Avatar.tsx         # アバター画像
-│   │       ├── BottomNav.tsx      # 下部タブナビ
-│   │       └── UserSearchInput.tsx # ユーザー検索入力
+│   │       ├── Avatar.tsx              # アバター画像
+│   │       ├── BottomNav.tsx           # 下部タブナビ（5タブ・タブ切替はreplace）
+│   │       ├── UserSearchInput.tsx     # ユーザー検索入力
+│   │       ├── ComingSoon.tsx          # 未実装機能の「準備中」画面（共通部品）
+│   │       ├── AppBackButtonProvider.tsx # 戻るボタン制御の起動＋終了確認トースト
+│   │       └── InstallPrompt.tsx       # PWAインストール促進バナー
 │   │
 │   └── lib/
 │       ├── types.ts            # 型定義（TypeScriptの型）
+│       ├── appInfo.ts          # アプリ名・バージョン等の一元管理
 │       └── supabase/
 │           ├── client.ts       # ブラウザ用Supabaseクライアント
 │           └── server.ts       # サーバー用Supabaseクライアント
 │
 ├── supabase/
-│   └── schema.sql              # データベースのテーブル定義
+│   └── schema*.sql             # データベースのテーブル定義・追加マイグレーション
+│
+├── public/
+│   ├── manifest.json           # PWAマニフェスト（アプリ名・アイコン参照）
+│   ├── sw.js                   # Service Worker（キャッシュ・Push受信）
+│   └── icon.svg                # PWAアイコン（SVG）
 │
 ├── .env.local                  # 環境変数（Supabaseの接続情報）
 └── CLAUDE.md                   # 開発ルール
@@ -304,7 +324,11 @@ Supabase Realtime を使い、ポーリング（定期的にサーバーを確�
 - アバターを名前で自動色分け
 - アクセシビリティ（aria-label・キーボードフォーカスリング）
 - 新着で勝手にスクロールしない＋「新着メッセージ↓」ピル
-- PWA（ホーム画面に追加可能）
+- 下部タブ（トーク／VOOM／ニュース／ウォレット／マイページ）。**VOOM・ニュース・ウォレットは未実装のため「準備中」画面**を表示（`ComingSoon`コンポーネント）。存在しないURLは共通404画面（`not-found.tsx`）でトーク一覧への導線を表示
+- **戻るボタンの制御**（`useAppBackButton`）：トーク一覧・ログイン画面（ルート画面）でのみ「もう一度戻ると終了」を挟み誤終了を防止。サブ画面（チャット・設定・管理者画面等）は横取りせずNext.js標準の高速な戻る（キャッシュ復元）に任せる（横取りするとデータ再取得が走り体感が遅くなるため）
+- タブ切替（`BottomNav`）は`replace`遷移にし、タブ間の履歴の積み上がりを防止
+- **PWAインストール促進バナー**（`InstallPrompt`）：Androidは`beforeinstallprompt`を捕捉して「追加」ボタンを表示、iOSは「共有→ホーム画面に追加」の案内を表示。閉じるとlocalStorageに記憶し以後非表示
+- PWA（ホーム画面に追加可能。アイコン・アプリ名は`appInfo.ts`の`APP_INFO.name`と連動）
 
 ---
 
