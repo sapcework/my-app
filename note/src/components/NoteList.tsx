@@ -19,9 +19,11 @@ type Props = {
 function formatDate(ms: number): string {
   const d = new Date(ms)
   const now = new Date()
-  const diffDays = Math.floor((now.getTime() - ms) / 86400000)
-  if (diffDays === 0) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
-  if (diffDays < 7) return d.toLocaleDateString('ja-JP', { weekday: 'short' })
+  // 今日は時刻、それ以外は「月/日」（紛らわしい曜日表示はやめる）
+  const sameDay = d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate()
+  if (sameDay) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
   return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
 }
 
