@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { GlobalNotificationProvider } from '@/components/ui/GlobalNotificationProvider';
+import { AppBackButtonProvider } from '@/components/ui/AppBackButtonProvider';
+import { InstallPrompt } from '@/components/ui/InstallPrompt';
 import { APP_INFO } from '@/lib/appInfo';
 
 export const metadata: Metadata = {
@@ -39,6 +41,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="h-full antialiased">
         <AuthProvider>
           <GlobalNotificationProvider />
+          <AppBackButtonProvider />
+          <InstallPrompt />
           {children}
         </AuthProvider>
         <script

@@ -1,6 +1,6 @@
 {
-  "name": "LINE Chat",
-  "short_name": "LINE Chat",
+  "name": "TALK",
+  "short_name": "TALK",
   "description": "リアルタイムチャットアプリ",
   "start_url": "/rooms",
   "scope": "/",

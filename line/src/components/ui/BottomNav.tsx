@@ -62,6 +62,7 @@ export function BottomNav() {
           <Link
             key={href}
             href={href}
+            replace
             className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${active ? 'text-[#4CAF50]' : 'text-gray-400'}`}
           >
             {icon}
