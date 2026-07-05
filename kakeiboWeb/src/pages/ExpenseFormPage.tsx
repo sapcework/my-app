@@ -209,13 +209,16 @@ export const ExpenseFormPage = () => {
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={amount === 0}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-indigo-600/20"
-        >
-          {existing ? '更新する' : '追加する'}
-        </button>
+        {/* 追加ボタン（Navbar直上に固定・カテゴリが多くても常に押せる） */}
+        <div className="sticky bottom-0 -mx-4 px-4 pt-6 pb-[calc(5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-50 from-45% to-transparent dark:from-[#090912]">
+          <button
+            type="submit"
+            disabled={amount === 0}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-indigo-600/20"
+          >
+            {existing ? '更新する' : '追加する'}
+          </button>
+        </div>
       </form>
 
       {showCalc && (
