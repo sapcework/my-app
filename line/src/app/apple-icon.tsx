@@ -21,7 +21,7 @@ export default function AppleIcon() {
           fontFamily: 'Arial',
         }}
       >
-        L
+        T
       </div>
     ),
     { width: 180, height: 180 }

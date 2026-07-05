@@ -1,76 +1,58 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
-// 各画面の「上位（戻り先）」を返す。null はルート＝これ以上戻れない（終了）を意味する
-const getParentPath = (pathname: string): string | null => {
-  if (pathname === '/rooms') return null; // トーク一覧 → 終了
-  if (pathname === '/login') return null; // ログイン → 終了
-  if (/^\/rooms\/[^/]+$/.test(pathname)) return '/rooms'; // チャット画面 → トーク一覧
-  if (pathname === '/settings') return '/rooms'; // マイページ → トーク一覧
-  if (pathname === '/voom') return '/rooms'; // タブ → トーク一覧
-  if (pathname === '/news') return '/rooms'; // タブ → トーク一覧
-  if (pathname === '/wallet') return '/rooms'; // タブ → トーク一覧
-  if (/^\/admin\/rooms\/[^/]+\/messages$/.test(pathname)) return '/admin/rooms'; // メッセージ監視 → ルーム一覧
-  if (pathname === '/admin/rooms') return '/admin'; // 管理者ルーム一覧 → ダッシュボード
-  if (pathname === '/admin/users') return '/admin'; // 管理者ユーザー一覧 → ダッシュボード
-  if (pathname === '/admin') return '/rooms'; // 管理者ダッシュボード → トーク一覧
-  if (/^\/join\/[^/]+$/.test(pathname)) return '/rooms'; // 招待参加 → トーク一覧
-  return '/rooms'; // 不明なパスはトーク一覧へ
-};
+// ルート画面（これ以上戻ると終了になる画面）
+const ROOT_PATHS = new Set(['/rooms', '/login']);
 
 // 「戻る」捕捉用の履歴エントリを最上位に積む（URLは現在画面のまま、目印だけ足す）
 const armGuard = () =>
-  window.history.pushState({ ...window.history.state, __appBackGuard: true }, '');
+  window.history.pushState({ ...window.history.state, __appExitGuard: true }, '');
 
-// Android/ブラウザの「戻る」を、履歴の逆再生ではなく画面の上位へたどる動きに変える。
-// ルート画面（トーク一覧・ログイン）では「もう一度戻ると終了」を挟み、誤終了を防ぐ。
+// ルート画面（トーク一覧・ログイン）でのみ「もう一度戻ると終了」を挟み、誤終了を防ぐ。
+// サブ画面はNext.jsの標準の戻る（キャッシュからの高速復元）に任せる。
+// ⚠️ サブ画面まで戻るを毎回横取りして router.replace() し直すと、
+//    Next.jsの高速復元が使われず毎回データ再取得が走り「戻るが遅い」原因になるため、
+//    横取りはルート画面の二重終了防止だけに限定すること。
 export function useAppBackButton() {
-  const router = useRouter();
   const pathname = usePathname();
-  const pathRef = useRef(pathname); // 「戻る」を押した瞬間にいた画面を参照するため
-  const exitArmedRef = useRef(false); // ルート画面で一度戻るが押された状態か
+  const isRootRef = useRef(false);
+  const exitArmedRef = useRef(false);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [showExitToast, setShowExitToast] = useState(false);
 
-  // 画面が変わるたび、現在地を控え、最上位に捕捉用の履歴を積み直す
+  // 画面が変わるたび、ルート画面かどうかを控え、ルート画面なら捕捉用の履歴を積む
   useEffect(() => {
-    pathRef.current = pathname;
-    armGuard();
+    isRootRef.current = ROOT_PATHS.has(pathname);
+    if (isRootRef.current) armGuard();
   }, [pathname]);
 
   useEffect(() => {
     const onPop = () => {
-      const parent = getParentPath(pathRef.current);
+      if (!isRootRef.current) return; // サブ画面は素通り（標準の戻るに任せる）
 
-      if (parent === null) {
-        // ルート画面：もう一度戻ると終了
-        if (exitArmedRef.current) {
-          exitArmedRef.current = false;
-          setShowExitToast(false);
-          clearTimeout(exitTimerRef.current);
-          window.removeEventListener('popstate', onPop); // 捕捉をやめて…
-          window.history.back(); // …本当に戻す（アプリ終了）
-          return;
-        }
-        exitArmedRef.current = true;
-        setShowExitToast(true);
-        exitTimerRef.current = setTimeout(() => {
-          exitArmedRef.current = false;
-          setShowExitToast(false);
-        }, 2000);
-        armGuard(); // 再武装して留まる
+      // ルート画面：もう一度戻ると終了
+      if (exitArmedRef.current) {
+        exitArmedRef.current = false;
+        setShowExitToast(false);
+        clearTimeout(exitTimerRef.current);
+        window.removeEventListener('popstate', onPop); // 捕捉をやめて…
+        window.history.back(); // …本当に戻す（アプリ終了）
         return;
       }
-
-      // サブ画面／トップタブ：上位画面へ（履歴の逆再生はしない）
-      router.replace(parent); // pathname 変化で上のuseEffectが再武装する
+      exitArmedRef.current = true;
+      setShowExitToast(true);
+      exitTimerRef.current = setTimeout(() => {
+        exitArmedRef.current = false;
+        setShowExitToast(false);
+      }, 2000);
+      armGuard(); // 再武装して留まる
     };
 
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [router]);
+  }, []);
 
   return { showExitToast };
 }

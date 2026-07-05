@@ -20,7 +20,7 @@ export function GET() {
           fontFamily: 'Arial',
         }}
       >
-        L
+        T
       </div>
     ),
     { width: 512, height: 512 }
