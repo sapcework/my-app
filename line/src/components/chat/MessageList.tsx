@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { MessageWithStatus } from '@/lib/types';
 import { ReactionMap } from '@/hooks/useReactions';
+import { useSignedUrls } from '@/hooks/useSignedUrls';
 
 interface Props {
   messages: MessageWithStatus[];
@@ -40,6 +41,8 @@ function formatDateLabel(iso: string) {
 
 export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, onReply, reactions, onReact, searchQuery }: Props) {
   const byId = new Map(messages.map((m) => [m.id, m])); // 返信先解決用
+  const imagePaths = messages.filter((m) => m.type === 'image').map((m) => m.content);
+  const imageUrls = useSignedUrls(imagePaths); // 画像の署名URLを画面単位でまとめて取得
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);          // ユーザーが最下部付近にいるか
@@ -133,6 +136,7 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
               myUserId={currentUserId}
               onReact={onReact}
               searchQuery={query}
+              imageUrl={msg.type === 'image' ? imageUrls[msg.content] : undefined}
             />
           </div>
         );

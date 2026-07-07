@@ -4,7 +4,6 @@ import { useRef, useState } from 'react';
 import { MessageWithStatus, MessageReaction, User } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatMessageTime } from '@/lib/datetime';
-import { useSignedUrl } from '@/hooks/useSignedUrl';
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']; // クイックリアクション
 
@@ -21,6 +20,7 @@ interface Props {
   myUserId?: string;
   onReact?: (messageId: string, emoji: string) => void;
   searchQuery?: string;
+  imageUrl?: string; // 画像メッセージの署名URL（親でまとめて取得）
 }
 
 function highlightText(text: string, query: string) {
@@ -33,11 +33,10 @@ function highlightText(text: string, query: string) {
   );
 }
 
-export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, onReply, replyPreview, reactions = [], myUserId, onReact, searchQuery }: Props) {
+export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, onReply, replyPreview, reactions = [], myUserId, onReact, searchQuery, imageUrl }: Props) {
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
-  const imageUrl = useSignedUrl(message.content, isImage); // 画像は署名URLで表示
   const [showMenu, setShowMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送

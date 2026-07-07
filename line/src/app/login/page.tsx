@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { useState, FormEvent, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { identifierToEmail } from '@/lib/username';
