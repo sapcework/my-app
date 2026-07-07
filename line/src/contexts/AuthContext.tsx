@@ -32,6 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = createClient();
 
   useEffect(() => {
+    let cancelled = false;
+    let resolved = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
     const fetchProfile = async (userId: string) => {
       const { data } = await supabase
         .from('users')
@@ -45,19 +49,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return data as User | null;
     };
 
+    const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+      ]);
+
     const init = async () => {
-      // getUser() はネットワーク経由で cookie を検証（httpOnly cookie でも確実に読める）。
-      // AuthProvider は全画面共有で初回1回だけ実行されるため、遷移ごとの通信は発生しない。
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const profile = await fetchProfile(user.id);
-        setState({ supabaseUser: user, profile, loading: false });
-      } else {
-        setState({ supabaseUser: null, profile: null, loading: false });
+      try {
+        // getUser() はネットワーク経由で cookie を検証（httpOnly cookie でも確実に読める）。
+        // AuthProvider は全画面共有で初回1回だけ実行されるため、遷移ごとの通信は発生しない。
+        // ⚠️ スマホがスリープ後に復帰した直後は接続が半端に残り fetch が応答しないことがあるため、
+        //    タイムアウトを設けて「読み込み中...」のまま固まるのを防ぐ。
+        const { data: { user } } = await withTimeout(supabase.auth.getUser(), 8000);
+        if (cancelled) return;
+        resolved = true;
+        if (user) {
+          const profile = await fetchProfile(user.id);
+          if (!cancelled) setState({ supabaseUser: user, profile, loading: false });
+        } else {
+          setState({ supabaseUser: null, profile: null, loading: false });
+        }
+      } catch {
+        // タイムアウト/通信エラー時は「未ログイン」と誤判定せず、接続が戻るまで自動で再試行する
+        if (!cancelled) retryTimer = setTimeout(init, 4000);
       }
     };
 
     init();
+
+    // スリープ復帰などで画面に戻ってきた時、まだ読み込み中なら即座に再試行（バックオフ待ちを短縮）
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !resolved) {
+        clearTimeout(retryTimer);
+        init();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_, session) => {
@@ -70,7 +98,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+      document.removeEventListener('visibilitychange', onVisible);
+      subscription.unsubscribe();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = async (email: string, password: string) => {
