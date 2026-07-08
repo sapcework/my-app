@@ -23,7 +23,15 @@ export function Avatar({ user, size = 'md', className = '' }: Props) {
       className={`${SIZE[size]} rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white overflow-hidden ${className}`}
     >
       {user?.avatar_url ? (
-        <img src={user.avatar_url} alt={name || 'ユーザー'} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+        <img
+          src={user.avatar_url}
+          alt={name || 'ユーザー'}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover"
+          onContextMenu={(e) => e.preventDefault()} // 長押しでの画像コピー/ダウンロード等のメニューを抑制
+          style={{ WebkitTouchCallout: 'none' } as React.CSSProperties}
+        />
       ) : (
         name[0]?.toUpperCase() ?? '?'
       )}

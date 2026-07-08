@@ -141,11 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const userId = state.profile?.id;
     if (!userId) return;
+    // ⚠️ Supabaseのクエリビルダーはawait/.then()するまで実際には通信しない遅延実行のため、
+    //    .then()を付けずに呼ぶだけだと更新リクエストが一度も送信されない（実際に発生していた不具合）
     const update = () =>
-      supabase
+      void supabase
         .from('users')
         .update({ last_seen: new Date().toISOString() })
-        .eq('id', userId);
+        .eq('id', userId)
+        .then();
 
     update();
     const interval = setInterval(update, 60_000);

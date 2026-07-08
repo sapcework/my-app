@@ -18,7 +18,7 @@ export function NotificationToast({ toasts, onDismiss }: Props) {
       {toasts.map((toast) => (
         <button
           key={toast.id}
-          onClick={() => { onDismiss(toast.id); router.push(`/rooms/${toast.roomId}`); }}
+          onClick={() => { onDismiss(toast.id); router.replace(`/rooms/${toast.roomId}`); }} // replace: 別ルーム表示中でも履歴を積み上げず戻るを1回で済ませる
           className="flex items-center gap-3 bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-gray-100/80 px-3 py-2.5 text-left w-full animate-toast-in"
         >
           {/* LINE風アイコン */}
