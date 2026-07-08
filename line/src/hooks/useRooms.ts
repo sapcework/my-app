@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { withTimeout } from '@/lib/withTimeout';
 import { Room } from '@/lib/types';
 
 export function useRooms(userId: string | null) {
@@ -18,11 +19,16 @@ export function useRooms(userId: string | null) {
     if (!userId) return;
 
     // 直接クエリ（RLS: rooms_select_member で所属ルーム、rooms_select_creator で作成ルームを取得）
-    const [{ data: allRooms }, { data: memberships }, { data: unreadData }] = await Promise.all([
-      supabase.from('rooms').select('*').order('last_message_at', { ascending: false }),
-      supabase.from('room_members').select('room_id').eq('user_id', userId),
-      supabase.rpc('get_unread_counts', { p_user_id: userId }),
-    ]);
+    // ⚠️ タイムアウトを付けないと、起動直後・スリープ復帰直後で回線が不安定な時に
+    //    応答が返らないまま「読み込み中」で固まり続けるため必須。
+    const [{ data: allRooms }, { data: memberships }, { data: unreadData }] = await withTimeout(
+      Promise.all([
+        supabase.from('rooms').select('*').order('last_message_at', { ascending: false }),
+        supabase.from('room_members').select('room_id').eq('user_id', userId),
+        supabase.rpc('get_unread_counts', { p_user_id: userId }),
+      ]),
+      8000
+    );
 
     setRooms((allRooms ?? []) as Room[]);
     setMemberRoomIds(new Set((memberships ?? []).map((m) => (m as { room_id: string }).room_id)));
@@ -36,7 +42,18 @@ export function useRooms(userId: string | null) {
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchRooms();
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = () => {
+      fetchRooms().catch(() => {
+        // タイムアウト/通信エラー時は諦めず、接続が戻るまで自動で再試行する
+        if (!cancelled) retryTimer = setTimeout(load, 4000);
+      });
+    };
+    load();
+
+    return () => { cancelled = true; clearTimeout(retryTimer); };
   }, [fetchRooms]);
 
   // 新着メッセージをリアルタイムで受信 → 未読カウント増加・ルーム順序更新

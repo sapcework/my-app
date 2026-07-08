@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { AuthError, User as SupabaseUser } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
+import { withTimeout } from '@/lib/withTimeout';
 import { User } from '@/lib/types';
 
 interface AuthContextValue {
@@ -37,23 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     const fetchProfile = async (userId: string) => {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // ⚠️ getUser() 同様、このクエリにもタイムアウトを設けないと固まる原因になる
+      const { data } = await withTimeout(
+        supabase.from('users').select('*').eq('id', userId).single(),
+        8000
+      );
       if (data?.is_suspended) { // 停止済みユーザーは即時サインアウト
         await supabase.auth.signOut();
         return null;
       }
       return data as User | null;
     };
-
-    const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
-      Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
-      ]);
 
     const init = async () => {
       try {
@@ -90,8 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_, session) => {
         if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          setState({ supabaseUser: session.user, profile, loading: false });
+          try {
+            const profile = await fetchProfile(session.user.id);
+            setState({ supabaseUser: session.user, profile, loading: false });
+          } catch {
+            // タイムアウト時は無視（init()側の自動リトライがloadingの解消を担う）
+          }
         } else {
           setState({ supabaseUser: null, profile: null, loading: false });
         }

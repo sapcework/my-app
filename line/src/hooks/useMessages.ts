@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { withTimeout } from '@/lib/withTimeout';
 import { Message, MessageWithStatus } from '@/lib/types';
 
 export function useMessages(roomId: string, userId: string | null) {
@@ -17,12 +18,17 @@ export function useMessages(roomId: string, userId: string | null) {
   });
 
   const fetchMessages = useCallback(async () => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*, sender:users!messages_sender_id_fkey(*)')
-      .eq('room_id', roomId)
-      .order('created_at', { ascending: true })
-      .limit(100);
+    // ⚠️ タイムアウトを付けないと、起動直後・スリープ復帰直後で回線が不安定な時に
+    //    応答が返らないまま「読み込み中」で固まり続けるため必須。
+    const { data } = await withTimeout(
+      supabase
+        .from('messages')
+        .select('*, sender:users!messages_sender_id_fkey(*)')
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: true })
+        .limit(100),
+      8000
+    );
 
     const fetched = (data ?? []) as Message[];
     setMessages(fetched.map(toWithStatus));
@@ -33,7 +39,18 @@ export function useMessages(roomId: string, userId: string | null) {
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchMessages();
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = () => {
+      fetchMessages().catch(() => {
+        // タイムアウト/通信エラー時は諦めず、接続が戻るまで自動で再試行する
+        if (!cancelled) retryTimer = setTimeout(load, 4000);
+      });
+    };
+    load();
+
+    return () => { cancelled = true; clearTimeout(retryTimer); };
   }, [fetchMessages]);
 
   const deleteMessage = async (messageId: string) => {
