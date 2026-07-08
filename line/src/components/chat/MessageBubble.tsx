@@ -38,11 +38,20 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
   const [showMenu, setShowMenu] = useState(false);
+  const [menuOpensDown, setMenuOpensDown] = useState(false); // 画面上端に近い時は下向きに開く
   const [lightbox, setLightbox] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
   const canInteract = !isFailed && (canDelete || !!onReact || !!onReply); // メニュー（返信/リアクション/削除）を出せるか
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false); // 長押し直後のclick(画像オープン等)を抑制
+  const bubbleWrapRef = useRef<HTMLDivElement>(null);
+
+  // メニュー表示位置を決定：上に十分な余白が無ければ下向きに開く（先頭付近のメッセージ対策）
+  const openMenu = () => {
+    const rect = bubbleWrapRef.current?.getBoundingClientRect();
+    setMenuOpensDown(!!rect && rect.top < 230);
+    setShowMenu(true);
+  };
 
   // 絵文字ごとに集計（count と自分が押したか）
   const grouped = reactions.reduce<Record<string, { count: number; mine: boolean }>>((acc, r) => {
@@ -58,7 +67,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
     suppressClick.current = false;
     pressTimer.current = setTimeout(() => {
       suppressClick.current = true;
-      setShowMenu(true);
+      openMenu();
       navigator.vibrate?.(10);
     }, 450);
   };
@@ -68,7 +77,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!canInteract) return;
     e.preventDefault(); // PCの右クリックでメニュー
-    setShowMenu(true);
+    openMenu();
   };
   const handleDelete = () => {
     setShowMenu(false);
@@ -96,7 +105,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
 
         <div className={`flex items-end gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* 吹き出し */}
-          <div className="relative">
+          <div className="relative" ref={bubbleWrapRef}>
             <div
               onTouchStart={startPress}
               onTouchEnd={cancelPress}
@@ -138,7 +147,7 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
             </div>
             {/* メニュー（長押し / 右クリックで表示）：リアクション＋削除 */}
             {showMenu && (
-              <div className={`absolute bottom-full mb-1 ${isOwn ? 'right-0' : 'left-0'} bg-white dark:bg-[#2a2a2a] rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-10`}>
+              <div className={`absolute ${menuOpensDown ? 'top-full mt-1' : 'bottom-full mb-1'} ${isOwn ? 'right-0' : 'left-0'} bg-white dark:bg-[#2a2a2a] rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-10`}>
                 {/* リアクション絵文字の行 */}
                 {onReact && (
                   <div className="flex gap-1 px-2 py-2 border-b border-gray-100">
