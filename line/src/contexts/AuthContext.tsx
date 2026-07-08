@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { AuthError, User as SupabaseUser } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/withTimeout';
+import { getCachedProfile, setCachedProfile } from '@/lib/authCache';
 import { User } from '@/lib/types';
 
 interface AuthContextValue {
@@ -24,10 +25,12 @@ interface AuthState {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    supabaseUser: null,
-    profile: null,
-    loading: true,
+  // 前回のプロフィールがキャッシュにあれば、サーバー確認を待たずに即座に表示する
+  // （LINE等の一般的なチャットアプリと同様のstale-while-revalidate方式）。
+  // 裏側で本当のログイン状態を確認し、無効だった場合のみ後から未ログイン状態に切り替える。
+  const [state, setState] = useState<AuthState>(() => {
+    const cached = getCachedProfile();
+    return { supabaseUser: null, profile: cached, loading: !cached };
   });
 
   const supabase = createClient();
@@ -45,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       if (data?.is_suspended) { // 停止済みユーザーは即時サインアウト
         await supabase.auth.signOut();
+        setCachedProfile(null);
         return null;
       }
       return data as User | null;
@@ -61,8 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resolved = true;
         if (user) {
           const profile = await fetchProfile(user.id);
+          setCachedProfile(profile); // 最新のプロフィールでキャッシュを更新
           if (!cancelled) setState({ supabaseUser: user, profile, loading: false });
         } else {
+          setCachedProfile(null); // 本当に未ログインと確定した場合のみキャッシュを消す
           setState({ supabaseUser: null, profile: null, loading: false });
         }
       } catch {
@@ -87,11 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           try {
             const profile = await fetchProfile(session.user.id);
+            setCachedProfile(profile);
             setState({ supabaseUser: session.user, profile, loading: false });
           } catch {
             // タイムアウト時は無視（init()側の自動リトライがloadingの解消を担う）
           }
         } else {
+          setCachedProfile(null);
           setState({ supabaseUser: null, profile: null, loading: false });
         }
       }
@@ -125,21 +133,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setCachedProfile(null);
   };
 
-  // last_seen を定期更新（60秒ごと）
+  // last_seen を定期更新（60秒ごと）。キャッシュ表示中（supabaseUser未確定）でも
+  // profile.id は分かっているため、検証完了を待たずに更新を開始できる。
   useEffect(() => {
-    if (!state.supabaseUser) return;
+    const userId = state.profile?.id;
+    if (!userId) return;
     const update = () =>
       supabase
         .from('users')
         .update({ last_seen: new Date().toISOString() })
-        .eq('id', state.supabaseUser!.id);
+        .eq('id', userId);
 
     update();
     const interval = setInterval(update, 60_000);
     return () => clearInterval(interval);
-  }, [state.supabaseUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state.profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AuthContext.Provider value={{ ...state, signIn, signUp, signOut }}>
