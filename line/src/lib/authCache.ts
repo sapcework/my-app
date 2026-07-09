@@ -17,6 +17,10 @@ export function getCachedProfile(): User | null {
 
 export function setCachedProfile(profile: User | null) {
   if (typeof window === 'undefined') return;
-  if (profile) localStorage.setItem(KEY, JSON.stringify(profile));
-  else localStorage.removeItem(KEY);
+  try {
+    if (profile) localStorage.setItem(KEY, JSON.stringify(profile));
+    else localStorage.removeItem(KEY);
+  } catch {
+    // ストレージ容量オーバー等は無視（キャッシュは無くても動作に支障はない）
+  }
 }
