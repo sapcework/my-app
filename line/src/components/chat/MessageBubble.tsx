@@ -40,8 +40,10 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const [showMenu, setShowMenu] = useState(false);
   const [menuOpensDown, setMenuOpensDown] = useState(false); // 画面上端に近い時は下向きに開く
   const [lightbox, setLightbox] = useState(false);
+  const [copied, setCopied] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
-  const canInteract = !isFailed && (canDelete || !!onReact || !!onReply); // メニュー（返信/リアクション/削除）を出せるか
+  const canCopy = !isFailed && !isImage; // 画像はパスをコピーしても意味が無いため対象外
+  const canInteract = !isFailed && (canDelete || !!onReact || !!onReply || canCopy); // メニューを出せるか
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false); // 長押し直後のclick(画像オープン等)を抑制
   const bubbleWrapRef = useRef<HTMLDivElement>(null);
@@ -90,6 +92,16 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const handleReply = () => {
     setShowMenu(false);
     onReply?.(message);
+  };
+  const handleCopy = async () => {
+    setShowMenu(false);
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // クリップボード権限が無い等の場合は何もしない
+    }
   };
 
   return (
@@ -163,6 +175,14 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                     ))}
                   </div>
                 )}
+                {canCopy && (
+                  <button
+                    onClick={handleCopy}
+                    className="w-full px-4 py-2 text-sm text-gray-700 font-medium whitespace-nowrap hover:bg-gray-50 text-left"
+                  >
+                    コピー
+                  </button>
+                )}
                 {onReply && (
                   <button
                     onClick={handleReply}
@@ -185,6 +205,12 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                 >
                   キャンセル
                 </button>
+              </div>
+            )}
+            {/* コピー完了トースト */}
+            {copied && (
+              <div className={`absolute ${menuOpensDown ? 'top-full mt-1' : 'bottom-full mb-1'} ${isOwn ? 'right-0' : 'left-0'} bg-black/80 text-white text-xs px-3 py-1.5 rounded-full whitespace-nowrap z-10`}>
+                コピーしました
               </div>
             )}
           </div>
