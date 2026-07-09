@@ -3,6 +3,7 @@
 import { useState, useRef, KeyboardEvent } from 'react';
 
 const STAMPS = ['😂', '😍', '👍', '❤️', '🎉', '😭', '🔥', '✨', '🤣', '😊'];
+const MAX_MESSAGE_LENGTH = 2000; // DB側のCHECK制約(schema_messages_length.sql)と揃える
 
 interface Props {
   onSend: (content: string, type: 'text' | 'stamp') => void;
@@ -128,6 +129,7 @@ export function MessageInput({ onSend, onSendImage, replyingTo, onCancelReply, d
           onKeyDown={handleKeyDown}
           placeholder="メッセージを入力"
           rows={1}
+          maxLength={MAX_MESSAGE_LENGTH}
           className="flex-1 resize-none bg-white dark:bg-[#2a2a2a] dark:text-gray-100 rounded-2xl px-4 py-2 text-[15px] outline-none max-h-24 overflow-y-auto leading-relaxed"
         />
 
