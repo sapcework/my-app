@@ -3,19 +3,24 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/withTimeout';
+import { getCachedMessages, setCachedMessages } from '@/lib/messagesCache';
 import { Message, MessageWithStatus } from '@/lib/types';
 
 export function useMessages(roomId: string, userId: string | null) {
-  const [messages, setMessages] = useState<MessageWithStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const supabase = createClient();
-  const latestIdRef = useRef<string | null>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
   const toWithStatus = (msg: Message): MessageWithStatus => ({
     ...msg,
     status: 'sent',
   });
+
+  // 前回のメッセージがキャッシュにあれば、サーバー応答を待たずに即座に表示する
+  // （プロフィール・トーク一覧と同じstale-while-revalidate方式）。裏側で最新化する。
+  const [messages, setMessages] = useState<MessageWithStatus[]>(
+    () => getCachedMessages(roomId)?.map(toWithStatus) ?? []
+  );
+  const [loading, setLoading] = useState(() => !getCachedMessages(roomId));
+  const supabase = createClient();
+  const latestIdRef = useRef<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const fetchMessages = useCallback(async () => {
     // ⚠️ タイムアウトを付けないと、起動直後・スリープ復帰直後で回線が不安定な時に
@@ -36,6 +41,7 @@ export function useMessages(roomId: string, userId: string | null) {
       latestIdRef.current = fetched[fetched.length - 1].id;
     }
     setLoading(false);
+    setCachedMessages(roomId, fetched);
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
