@@ -3,13 +3,20 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/withTimeout';
+import { getCachedRooms, setCachedRooms } from '@/lib/roomsCache';
 import { Room } from '@/lib/types';
 
 export function useRooms(userId: string | null) {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [memberRoomIds, setMemberRoomIds] = useState<Set<string>>(new Set());
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  // 前回のトーク一覧がキャッシュにあれば、サーバー応答を待たずに即座に表示する
+  // （プロフィールと同じstale-while-revalidate方式）。裏側で最新データに更新する。
+  const [rooms, setRooms] = useState<Room[]>(() => (userId ? getCachedRooms(userId)?.rooms ?? [] : []));
+  const [memberRoomIds, setMemberRoomIds] = useState<Set<string>>(
+    () => new Set(userId ? getCachedRooms(userId)?.memberRoomIds ?? [] : [])
+  );
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(
+    () => (userId ? getCachedRooms(userId)?.unreadCounts ?? {} : {})
+  );
+  const [loading, setLoading] = useState(() => !(userId && getCachedRooms(userId)));
   const supabase = createClient();
   const memberRoomIdsRef = useRef(memberRoomIds); // Realtimeコールバック内で最新値を参照するためのref
 
@@ -30,15 +37,19 @@ export function useRooms(userId: string | null) {
       8000
     );
 
-    setRooms((allRooms ?? []) as Room[]);
-    setMemberRoomIds(new Set((memberships ?? []).map((m) => (m as { room_id: string }).room_id)));
+    const nextRooms = (allRooms ?? []) as Room[];
+    const nextMemberIds = (memberships ?? []).map((m) => (m as { room_id: string }).room_id);
 
     const counts: Record<string, number> = {};
     for (const row of (unreadData ?? []) as { room_id: string; unread_count: number }[]) {
       counts[row.room_id] = Number(row.unread_count);
     }
+
+    setRooms(nextRooms);
+    setMemberRoomIds(new Set(nextMemberIds));
     setUnreadCounts(counts);
     setLoading(false);
+    setCachedRooms(userId, { rooms: nextRooms, memberRoomIds: nextMemberIds, unreadCounts: counts });
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
