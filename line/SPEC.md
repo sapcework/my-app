@@ -94,12 +94,19 @@ line/
 │   │       ├── AppBackButtonProvider.tsx # 戻るボタン制御の起動＋終了確認トースト
 │   │       └── InstallPrompt.tsx       # PWAインストール促進バナー
 │   │
-│   └── lib/
-│       ├── types.ts            # 型定義（TypeScriptの型）
-│       ├── appInfo.ts          # アプリ名・バージョン等の一元管理
-│       └── supabase/
-│           ├── client.ts       # ブラウザ用Supabaseクライアント
-│           └── server.ts       # サーバー用Supabaseクライアント
+│   ├── lib/
+│   │   ├── types.ts            # 型定義（TypeScriptの型）
+│   │   ├── appInfo.ts          # アプリ名・バージョン等の一元管理
+│   │   ├── withTimeout.ts      # Supabase通信にタイムアウトを付与する共通関数
+│   │   ├── authCache.ts        # プロフィールのlocalStorageキャッシュ（起動時の即時表示用）
+│   │   ├── roomsCache.ts       # トーク一覧のlocalStorageキャッシュ
+│   │   ├── messagesCache.ts    # メッセージ一覧のlocalStorageキャッシュ
+│   │   └── supabase/
+│   │       ├── client.ts       # ブラウザ用Supabaseクライアント
+│   │       └── server.ts       # サーバー用Supabaseクライアント
+│   │
+│   ├── app/error.tsx            # 画面内エラーの共通フォールバック（Error Boundary）
+│   └── app/global-error.tsx     # ルートレイアウト自体が壊れた場合の最終フォールバック
 │
 ├── supabase/
 │   └── schema*.sql             # データベースのテーブル定義・追加マイグレーション
@@ -220,6 +227,16 @@ users ──< room_reads >── rooms
 - **ログインロック**：同一(email+ip)で5回失敗→15分ロック＋IP単位の総量制限（DoS緩和）。失敗履歴は service role のみアクセス可。
 - **停止アカウントの実効化**：表示制御だけでなく実際にログインを遮断。①ログインAPIで認証成功後に停止判定し、停止時はcookie未設定＋サーバー側signOutで403（「停止されています」を表示）。②停止操作時にSupabase Authも `ban`（解除時は `none`）し、**既存セッションのトークン更新も止める**。
 
+### セキュリティ監査対応（実施済み）
+
+Git/GitHub・Next.js・Supabase・Vercel・OWASP Top10観点での監査を実施し、以下を対応済み：
+
+- `room_invites` のRLSを閲覧・作成ともメンバーのみに限定（未対応時は招待トークンが第三者から閲覧可能だった）
+- `rooms.created_by` の改ざん防止トリガー（作成者の付け替えを拒否）
+- Storage（avatars / chat-images）バケットのポリシーをSQLファイルとしてバージョン管理化（ダッシュボード設定の暗黙化を解消）
+- HTTPレスポンスヘッダーに `Strict-Transport-Security`（HSTS）を追加
+- メッセージ本文の文字数上限をDB側CHECK制約でも強制（クライアント側バリデーションのみだと直接API呼び出しで回避可能だった）
+
 ---
 
 ## 6. リアルタイム通信の仕組み
@@ -284,8 +301,11 @@ Supabase Realtime を使い、ポーリング（定期的にサーバーを確�
 - メッセージの削除（自分のメッセージのみ・長押し/右クリックメニュー＋確認）
 - **リアクション**（絵文字・集計表示・自分のトグル）
 - **リプライ／引用**（返信先の抜粋を吹き出しに表示）
+- **クリップボードへのコピー**（長押し/右クリックメニューから本文をコピー・画像は対象外）
 - メッセージ検索・ハイライト
 - 画像の**アプリ内ライトボックス**表示
+- **文字数上限**：1メッセージ2000字（クライアント側`maxLength`＋DB側CHECK制約の二重防御）
+- 長押しメニューは画面上端付近のメッセージでは自動的に下向きに開く（先頭メッセージでもメニューが隠れない）
 
 > **楽観的更新とは？**
 > サーバーの応答を待たずに、まず画面に表示してしまう手法。
@@ -329,6 +349,27 @@ Supabase Realtime を使い、ポーリング（定期的にサーバーを確�
 - タブ切替（`BottomNav`）は`replace`遷移にし、タブ間の履歴の積み上がりを防止
 - **PWAインストール促進バナー**（`InstallPrompt`）：Androidは`beforeinstallprompt`を捕捉して「追加」ボタンを表示、iOSは「共有→ホーム画面に追加」の案内を表示。閉じるとlocalStorageに記憶し以後非表示
 - PWA（ホーム画面に追加可能。アイコン・アプリ名は`appInfo.ts`の`APP_INFO.name`と連動）
+- アバター画像の長押しで、ブラウザ標準の「画像を保存/コピー/新しいタブで開く」メニューが出ないよう抑制（誤操作防止）
+
+---
+
+## 7.5 起動時の体感速度改善（キャッシュ＋タイムアウト）
+
+チャットアプリ（LINE・WhatsApp等）で一般的な **stale-while-revalidate**（まず古いデータを即表示し、裏で最新化する）方式を採用。
+
+```
+[アプリ起動]
+     ↓
+[localStorageのキャッシュがあれば即座に画面表示]（プロフィール／トーク一覧／メッセージ一覧）
+     ↓
+[裏でSupabaseに最新データを問い合わせ]
+     ↓
+[取得できたら画面を差し替え＋キャッシュを更新]
+```
+
+- 対象：ログイン中プロフィール（`authCache.ts`）、トーク一覧（`roomsCache.ts`）、各ルームのメッセージ（`messagesCache.ts`）
+- 通信には`withTimeout`で必ずタイムアウト（8秒程度）を設定し、電波が不安定でも「読み込み中」のまま固まらないようにしている。タイムアウト時は自動で再試行し、アプリを再表示（フォアグラウンド復帰）したタイミングでも再試行する
+- スマホの電源OFF後の起動など、回線が不安定な状況でも**キャッシュがあれば一瞬で画面が表示される**（実機で数時間の電源OFF後の起動を確認済み）
 
 ---
 
@@ -386,7 +427,18 @@ npm run dev       # 開発サーバー起動
 npm run build     # 本番ビルド（エラーチェックも兼ねる）
 npm run lint      # コード品質チェック
 npx tsc --noEmit  # TypeScriptの型チェックのみ
+npm test          # 単体テスト（Vitest）
 ```
+
+### 品質保証（テスト・CI）
+
+- **単体テスト**：Vitest + Testing Library。認証キャッシュの即時表示、メッセージ送受信の楽観的更新、タイムアウト処理などの重要ロジックをカバー（`*.test.ts(x)`ファイル）
+- **CI（継続的インテグレーション）**：GitHub Actionsが`line/`配下への push・PR で自動実行（`.github/workflows/line-ci.yml`）。lint→型チェック→テスト→ビルドの4段階がすべて通らないとNG
+- **Error Boundary**：画面内で予期しないエラーが起きても白画面にならず、再試行ボタン付きのエラー画面を表示（`app/error.tsx`）。ルートレイアウト自体が壊れた場合の最終防御として`app/global-error.tsx`も用意
+
+> **CI（Continuous Integration）とは？**
+> コードをpushするたびに自動でチェック（lint・型チェック・テスト・ビルド）を走らせる仕組み。
+> 人が確認する前に機械的な不具合を検出でき、壊れたコードが本番に混ざるのを防ぎます。
 
 ---
 
