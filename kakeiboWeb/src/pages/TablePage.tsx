@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Grid3X3 } from 'lucide-react'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
 import { toYearMonth, formatTableMonth, formatDateWithDay, formatYearMonth } from '../utils/date'
+import { useModalA11y } from '../hooks/useModalA11y'
 import type { Category } from '../types'
 
 type CellDetail = {
@@ -20,21 +21,43 @@ export const TablePage = () => {
   const { categories } = useCategoryStore()
   const { getBudget } = useBudgetStore()
   const [detail, setDetail] = useState<CellDetail | null>(null)
+  const detailRef = useModalA11y<HTMLDivElement>(detail !== null, () => setDetail(null))
 
   const currentYear = new Date().getFullYear()
   const currentMonth = toYearMonth(new Date())
 
-  const months: string[] = (() => {
+  const months: string[] = useMemo(() => {
     const set = new Set([...expenses.map((e) => e.date.substring(0, 7)), currentMonth])
     return [...set].sort().slice(-12)
-  })()
+  }, [expenses, currentMonth])
+
+  // expensesを1回だけ走査し、月×カテゴリの合計をMapに事前集計しておく（O(件数)）
+  const monthCatTotals = useMemo(() => {
+    const map = new Map<string, Map<string, number>>()
+    for (const e of expenses) {
+      const m = e.date.substring(0, 7)
+      if (!map.has(m)) map.set(m, new Map())
+      const catMap = map.get(m)!
+      catMap.set(e.categoryId, (catMap.get(e.categoryId) ?? 0) + e.amount)
+    }
+    return map
+  }, [expenses])
+
+  const monthTotals = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const [m, catMap] of monthCatTotals) {
+      let sum = 0
+      for (const v of catMap.values()) sum += v
+      map.set(m, sum)
+    }
+    return map
+  }, [monthCatTotals])
 
   const getAmount = (catId: string, month: string): number =>
-    expenses.filter((e) => e.categoryId === catId && e.date.startsWith(month))
-      .reduce((s, e) => s + e.amount, 0)
+    monthCatTotals.get(month)?.get(catId) ?? 0
 
   const getMonthTotal = (month: string): number =>
-    expenses.filter((e) => e.date.startsWith(month)).reduce((s, e) => s + e.amount, 0)
+    monthTotals.get(month) ?? 0
 
   const getCatAvg = (catId: string): number => {
     const vals = months.map((m) => getAmount(catId, m)).filter((v) => v > 0)
@@ -200,9 +223,9 @@ export const TablePage = () => {
 
       {/* セル詳細モーダル */}
       {detail && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={`${detail.label}の明細`}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDetail(null)} />
-          <div className="relative bg-white dark:bg-slate-900 rounded-t-3xl max-h-[70vh] flex flex-col max-w-lg mx-auto w-full">
+          <div ref={detailRef} tabIndex={-1} className="relative bg-white dark:bg-slate-900 rounded-t-3xl max-h-[70vh] flex flex-col max-w-lg mx-auto w-full">
             <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <p className="text-sm font-bold" style={{ color: detail.color }}>{detail.label}</p>

@@ -1,15 +1,18 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { dbSyncCategories } from '../lib/db'
+import { dbAddCategory, dbUpdateCategory, dbDeleteCategory } from '../lib/db'
+import { showToast } from './toastStore'
 import type { Category } from '../types/index'
 
 type CategoryStore = {
   categories: Category[]
-  addCategory: (category: Omit<Category, 'id'>) => void
-  updateCategory: (id: string, data: Partial<Category>) => void
-  deleteCategory: (id: string) => void
+  addCategory: (category: Omit<Category, 'id'>) => Promise<void>
+  updateCategory: (id: string, data: Partial<Category>) => Promise<void>
+  deleteCategory: (id: string) => Promise<void>
   restoreCategories: (categories: Category[]) => void
 }
+
+const SYNC_FAILED = 'カテゴリの保存に失敗しました。通信状況を確認してください'
 
 export const DEFAULT_CATEGORIES: Category[] = [
   { id: '1',  name: '食費',      color: '#FF9800', icon: '🍽️' },
@@ -34,17 +37,39 @@ export const useCategoryStore = create<CategoryStore>()(
   persist(
     (set, get) => ({
       categories: DEFAULT_CATEGORIES,
-      addCategory: (data) => {
-        const next = [...get().categories, { ...data, id: crypto.randomUUID() }]
-        set({ categories: next }); dbSyncCategories(next)
+      addCategory: async (data) => {
+        const prev = get().categories
+        const newCategory: Category = { ...data, id: crypto.randomUUID() }
+        set({ categories: [...prev, newCategory] })
+        const { error } = await dbAddCategory(newCategory, prev.length)
+        if (error) {
+          console.error('addCategory failed', error)
+          set({ categories: prev })
+          showToast({ message: SYNC_FAILED })
+        }
       },
-      updateCategory: (id, data) => {
-        const next = get().categories.map((c) => (c.id === id ? { ...c, ...data } : c))
-        set({ categories: next }); dbSyncCategories(next)
+      updateCategory: async (id, data) => {
+        const prev = get().categories
+        const next = prev.map((c) => (c.id === id ? { ...c, ...data } : c))
+        set({ categories: next })
+        const updated = next.find((c) => c.id === id)
+        if (!updated) return
+        const { error } = await dbUpdateCategory(updated)
+        if (error) {
+          console.error('updateCategory failed', error)
+          set({ categories: prev })
+          showToast({ message: SYNC_FAILED })
+        }
       },
-      deleteCategory: (id) => {
-        const next = get().categories.filter((c) => c.id !== id)
-        set({ categories: next }); dbSyncCategories(next)
+      deleteCategory: async (id) => {
+        const prev = get().categories
+        set({ categories: prev.filter((c) => c.id !== id) })
+        const { error } = await dbDeleteCategory(id)
+        if (error) {
+          console.error('deleteCategory failed', error)
+          set({ categories: prev })
+          showToast({ message: SYNC_FAILED })
+        }
       },
       restoreCategories: (categories) => set({ categories }),
     }),

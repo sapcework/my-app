@@ -6,10 +6,11 @@ import { MonthSwitcher } from '../components/MonthSwitcher'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
-import { formatDateWithDay, formatTimestamp } from '../utils/date'
+import { formatDateWithDay } from '../utils/date'
 import { formatWan } from '../utils/format'
-import { downloadCsv } from '../utils/csv'
+import { downloadCsv, expenseDetailRows } from '../utils/csv'
 import { activatable } from '../utils/interactive'
+import { useModalA11y } from '../hooks/useModalA11y'
 import type { Category } from '../types'
 
 export const StatsPage = () => {
@@ -19,6 +20,7 @@ export const StatsPage = () => {
   const { categories } = useCategoryStore()
   const [detailCat, setDetailCat] = useState<Category | null>(null)
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const detailRef = useModalA11y<HTMLDivElement>(detailCat !== null, () => setDetailCat(null))
 
   const monthExpenses = getMonthlyExpenses(selectedMonth)
   const total = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
@@ -36,25 +38,7 @@ export const StatsPage = () => {
   const activeData = activeIndex !== null ? data[activeIndex] : null
 
   const exportCSV = () => {
-    const rows = [
-      ['日付', 'カテゴリ', '項目名', 'メモ', '金額', '登録日時', '更新日時'],
-      ...monthExpenses
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map((e) => {
-          const cat = categories.find((c) => c.id === e.categoryId)
-          return [
-            e.date,
-            cat?.name ?? '不明',
-            e.itemName ?? '',
-            e.note ?? '',
-            e.amount.toString(),
-            formatTimestamp(e.createdAt),
-            formatTimestamp(e.updatedAt),
-          ]
-        }),
-    ]
-    downloadCsv(rows, `kakeibo_${selectedMonth}.csv`)
+    downloadCsv(expenseDetailRows(monthExpenses, categories), `kakeibo_${selectedMonth}.csv`)
   }
 
   const detailExpenses = detailCat
@@ -202,9 +186,9 @@ export const StatsPage = () => {
 
       {/* カテゴリ詳細モーダル */}
       {detailCat && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label={`${detailCat.name}の明細`}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDetailCat(null)} />
-          <div className="relative bg-white dark:bg-slate-900 rounded-3xl max-h-[70vh] flex flex-col w-full max-w-sm shadow-xl">
+          <div ref={detailRef} tabIndex={-1} className="relative bg-white dark:bg-slate-900 rounded-3xl max-h-[70vh] flex flex-col w-full max-w-sm shadow-xl">
             <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-slate-100 dark:border-slate-700/50">
               <div className="flex items-center gap-3">
                 <div

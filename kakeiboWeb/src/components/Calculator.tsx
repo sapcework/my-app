@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Delete } from 'lucide-react'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 type Props = {
   initialValue?: number
@@ -25,6 +26,7 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
   const [prev, setPrev] = useState(initialValue ?? 0)
   const [op, setOp] = useState<string | null>(null)
   const [clearNext, setClearNext] = useState(!!initialValue && initialValue > 0)
+  const panelRef = useModalA11y<HTMLDivElement>(true, onClose)
 
   const pressDigit = (d: string) => {
     if (clearNext) {
@@ -82,9 +84,9 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
     }`
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="電卓">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-900 rounded-3xl p-4 pb-6 w-full max-w-sm shadow-2xl">
+      <div ref={panelRef} tabIndex={-1} className="relative bg-white dark:bg-slate-900 rounded-3xl p-4 pb-6 w-full max-w-sm shadow-2xl">
         {/* 表示エリア */}
         <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 mb-3 text-right">
           <p className="text-xs text-slate-400 dark:text-slate-400 min-h-4 font-mono">{expression || ' '}</p>

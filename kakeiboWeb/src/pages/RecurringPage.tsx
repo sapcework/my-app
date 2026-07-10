@@ -186,6 +186,7 @@ export const RecurringPage = () => {
                     <option key={d} value={d}>毎月{d}日に自動登録</option>
                   ))}
                 </select>
+                <p className="text-xs text-slate-400 dark:text-slate-400 mt-1.5">アプリを開いたときに自動登録されます</p>
               </div>
               <div className="flex gap-3 pt-1">
                 {editingId && (

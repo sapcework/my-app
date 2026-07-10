@@ -27,4 +27,5 @@ export type RecurringExpense = {
   categoryId: string
   name: string       // 支出名（必須）
   dayOfMonth: number // 毎月何日に発生するか
+  lastGeneratedMonth?: string // 最後に自動生成した年月（YYYY-MM）
 }

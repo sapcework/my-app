@@ -5,6 +5,7 @@ import { useExpenseStore } from './expenseStore'
 import { useCategoryStore, DEFAULT_CATEGORIES } from './categoryStore'
 import { useBudgetStore } from './budgetStore'
 import { useRecurringStore } from './recurringStore'
+import { generateDueRecurringExpenses } from '../utils/recurringGenerator'
 import type { User } from '@supabase/supabase-js'
 
 type AuthStore = {
@@ -31,6 +32,7 @@ const loadStores = async () => {
   )
   useBudgetStore.getState().restoreBudgets(data.budgets)
   useRecurringStore.getState().restoreRecurring(data.recurring)
+  generateDueRecurringExpenses()
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({

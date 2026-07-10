@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Tag } from 'lucide-react'
 import { useCategoryStore } from '../store/categoryStore'
+import { useExpenseStore } from '../store/expenseStore'
 import { confirmDialog } from '../store/dialogStore'
 import { showToast } from '../store/toastStore'
 
@@ -15,6 +16,7 @@ const ICONS = ['🍽️', '🚗', '🛒', '🎮', '🏥', '🏠', '💼', '🎓'
 export const CategoryPage = () => {
   const navigate = useNavigate()
   const { categories, addCategory, deleteCategory } = useCategoryStore()
+  const { expenses } = useExpenseStore()
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [color, setColor] = useState(COLORS[0])
@@ -163,7 +165,11 @@ export const CategoryPage = () => {
               </div>
               <button
                 onClick={async () => {
-                  const ok = await confirmDialog({ title: 'カテゴリを削除', message: `「${c.name}」を削除しますか？`, confirmLabel: '削除', danger: true })
+                  const usedCount = expenses.filter((e) => e.categoryId === c.id).length
+                  const message = usedCount > 0
+                    ? `「${c.name}」を削除しますか？\nこのカテゴリを使用している支出が${usedCount}件あります（削除後も支出データ自体は残り、カテゴリ表示が「不明」になります）。`
+                    : `「${c.name}」を削除しますか？`
+                  const ok = await confirmDialog({ title: 'カテゴリを削除', message, confirmLabel: '削除', danger: true })
                   if (ok) { deleteCategory(c.id); showToast({ message: `「${c.name}」を削除しました` }) }
                 }}
                 aria-label={`${c.name} を削除`}

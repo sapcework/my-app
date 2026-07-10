@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 type Props = {
   value: string // YYYY-MM-DD
@@ -15,6 +16,7 @@ export const DatePicker = ({ value, onChange }: Props) => {
   const [open, setOpen] = useState(false)
   const [calYear, setCalYear] = useState(value ? Number(value.substring(0, 4)) : today.getFullYear())
   const [calMonth, setCalMonth] = useState(value ? Number(value.substring(5, 7)) : today.getMonth() + 1)
+  const panelRef = useModalA11y<HTMLDivElement>(open, () => setOpen(false))
 
   const firstDow = new Date(calYear, calMonth - 1, 1).getDay() // 月初の曜日
   const daysInMonth = new Date(calYear, calMonth, 0).getDate()
@@ -58,9 +60,9 @@ export const DatePicker = ({ value, onChange }: Props) => {
 
       {/* カレンダーパネル */}
       {open && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="日付を選択">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-sm p-4">
+          <div ref={panelRef} tabIndex={-1} className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-sm p-4">
             {/* 月ナビ */}
             <div className="flex items-center justify-between mb-3">
               <button

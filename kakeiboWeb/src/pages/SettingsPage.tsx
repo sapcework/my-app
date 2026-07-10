@@ -5,14 +5,15 @@ import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
 import { useRecurringStore } from '../store/recurringStore'
-import { downloadCsv } from '../utils/csv'
-import { formatTimestamp } from '../utils/date'
+import { dbRestoreAll } from '../lib/db'
+import { downloadCsv, expenseDetailRows } from '../utils/csv'
 import { confirmDialog } from '../store/dialogStore'
 import { showToast } from '../store/toastStore'
 import { useThemeStore } from '../store/themeStore'
 import { usePasscodeStore } from '../store/passcodeStore'
 import { PinPad } from '../components/PinPad'
 import { useAuthStore } from '../store/authStore'
+import { useModalA11y } from '../hooks/useModalA11y'
 import type { Expense, Category, Budget, RecurringExpense } from '../types/index'
 
 type BackupData = {
@@ -35,6 +36,7 @@ export const SettingsPage = () => {
   const [pinError, setPinError] = useState(false)
 
   const closePinSheet = () => { setPinSheet(null); setFirstPin(''); setPinError(false) }
+  const pinSheetRef = useModalA11y<HTMLDivElement>(pinSheet !== null, closePinSheet)
 
   const handleSetup1 = (pin: string) => { setFirstPin(pin); setPinSheet('setup2') }
 
@@ -101,6 +103,18 @@ export const SettingsPage = () => {
           danger: true, // 上書きは破壊的操作
         })
         if (!ok) return
+        // クラウドへの反映が成功してからローカルに適用する（クラウドを正とするため）
+        const { error } = await dbRestoreAll({
+          expenses: data.expenses,
+          categories: data.categories,
+          budgets: data.budgets ?? [],
+          recurring: data.recurring ?? [],
+        })
+        if (error) {
+          console.error('dbRestoreAll failed', error)
+          showToast({ message: '復元に失敗しました。通信状況を確認してもう一度お試しください' })
+          return
+        }
         restoreExpenses(data.expenses)
         restoreCategories(data.categories)
         restoreBudgets(data.budgets ?? [])
@@ -124,25 +138,7 @@ export const SettingsPage = () => {
       confirmLabel: '書き出す',
     })
     if (!ok) return // 出力前の確認
-    const rows: string[][] = [
-      ['日付', 'カテゴリ', '項目名', 'メモ', '金額', '登録日時', '更新日時'],
-      ...expenses
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map((e) => {
-          const cat = categories.find((c) => c.id === e.categoryId)
-          return [
-            e.date,
-            cat?.name ?? '不明',
-            e.itemName ?? '',
-            e.note ?? '',
-            e.amount.toString(),
-            formatTimestamp(e.createdAt),
-            formatTimestamp(e.updatedAt),
-          ]
-        }),
-    ]
-    downloadCsv(rows, filename)
+    downloadCsv(expenseDetailRows(expenses, categories), filename)
     showToast({ message: 'CSVを書き出しました' })
   }
 
@@ -310,9 +306,9 @@ export const SettingsPage = () => {
 
       {/* パスコード設定モーダル */}
       {pinSheet && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="パスコード設定">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closePinSheet} />
-          <div className="relative bg-white dark:bg-slate-900 rounded-3xl px-8 pt-8 pb-10 w-full max-w-sm shadow-xl">
+          <div ref={pinSheetRef} tabIndex={-1} className="relative bg-white dark:bg-slate-900 rounded-3xl px-8 pt-8 pb-10 w-full max-w-sm shadow-xl">
             <button
               onClick={closePinSheet}
               aria-label="閉じる"
