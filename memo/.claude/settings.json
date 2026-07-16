@@ -1,13 +1,12 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "Stop": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/ktlint-format.js\"",
-            "timeout": 120,
+            "timeout": 180,
             "statusMessage": "ktlintで整形中..."
           }
         ]
