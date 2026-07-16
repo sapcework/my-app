@@ -26,7 +26,14 @@ interface TagDao {
     @Query("SELECT * FROM tags WHERE name = :name")
     suspend fun findByName(name: String): TagEntity?
 
-    @Query("SELECT * FROM tags WHERE name LIKE '%' || :query || '%' ESCAPE '\' ORDER BY name COLLATE NOCASE ASC")
+    /** `\`を活かすためraw stringで書く。通常の文字列リテラルでは`\'`が`'`に潰れ、ESCAPEが空文字になる。 */
+    @Query(
+        """
+        SELECT * FROM tags
+        WHERE name LIKE '%' || :query || '%' ESCAPE '\'
+        ORDER BY name COLLATE NOCASE ASC
+        """,
+    )
     fun searchByName(query: String): Flow<List<TagEntity>>
 
     /** 名前が一意のため、重複作成はIGNOREで無視する（既存IDは[findByName]で解決する）。 */
