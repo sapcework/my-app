@@ -35,10 +35,11 @@ interface MemoRepository {
     suspend fun deletePermanently(id: Long)
 
     /**
-     * 保持期間を過ぎたゴミ箱を物理削除する。
+     * 指定時刻より前にゴミ箱へ入れられたメモを物理削除する。
+     * 保持期間の判断は業務ルールのためUseCase側が担い、ここでは永続化のみを行う。
      * @return 削除した件数
      */
-    suspend fun purgeExpiredTrash(): Int
+    suspend fun purgeTrashOlderThan(threshold: Long): Int
 
     suspend fun setPinned(id: Long, pinned: Boolean)
 

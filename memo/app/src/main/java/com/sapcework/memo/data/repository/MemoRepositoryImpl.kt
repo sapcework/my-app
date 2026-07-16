@@ -6,7 +6,6 @@ import com.sapcework.memo.data.entity.MemoWithTags
 import com.sapcework.memo.di.IoDispatcher
 import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.model.MemoFilter
-import com.sapcework.memo.domain.model.TrashPolicy
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.util.TimeProvider
 import com.sapcework.memo.util.escapeLikeWildcards
@@ -80,8 +79,7 @@ class MemoRepositoryImpl @Inject constructor(
 
     override suspend fun deletePermanently(id: Long) = memoDao.deletePermanently(id)
 
-    override suspend fun purgeExpiredTrash(): Int =
-        memoDao.purgeExpired(TrashPolicy.expiryThreshold(timeProvider.nowMillis()))
+    override suspend fun purgeTrashOlderThan(threshold: Long): Int = memoDao.purgeExpired(threshold)
 
     override suspend fun setPinned(id: Long, pinned: Boolean) = memoDao.setPinned(id, pinned)
 
