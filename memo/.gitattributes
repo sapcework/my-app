@@ -1,0 +1,14 @@
+# core.autocrlf=true のWindows環境でもLFを維持する。
+# .editorconfig が end_of_line=lf を宣言しており、CRLFで展開されるとktlintCheckが失敗するため。
+* text=auto eol=lf
+
+# Windowsバッチは実行にCRLFが必要
+*.bat text eol=crlf
+
+*.jar binary
+*.apk binary
+*.aab binary
+*.keystore binary
+*.png binary
+*.jpg binary
+*.webp binary
