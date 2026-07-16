@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.sapcework.memo.data.entity.MemoTagCrossRef
 import com.sapcework.memo.data.entity.TagEntity
@@ -18,6 +19,9 @@ interface TagDao {
 
     @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC")
     fun observeAll(): Flow<List<TagEntity>>
+
+    @Query("SELECT * FROM tags WHERE id = :id")
+    suspend fun findById(id: Long): TagEntity?
 
     @Query("SELECT * FROM tags WHERE name = :name")
     suspend fun findByName(name: String): TagEntity?
@@ -44,6 +48,28 @@ interface TagDao {
 
     @Query("DELETE FROM memo_tag_cross_ref WHERE memo_id = :memoId")
     suspend fun clearTagsOfMemo(memoId: Long)
+
+    /**
+     * タグを作成し、同名が既にあれば既存のIDを返す。
+     * 挿入と既存検索をトランザクションで囲み、並行実行時の取りこぼしを防ぐ。
+     */
+    @Transaction
+    suspend fun insertOrGet(tag: TagEntity): Long {
+        val inserted = insert(tag)
+        if (inserted != -1L) return inserted // -1 はIGNOREにより挿入されなかったことを示す
+        // 例外メッセージにタグ名を含めない（利用者のデータをログへ出さないため）
+        return findByName(tag.name)?.id ?: error("タグの作成に失敗しました")
+    }
+
+    /**
+     * メモに紐づくタグを指定内容へ置き換える。
+     * 全削除と再登録の間で中断されるとタグが失われるため、トランザクションで囲む。
+     */
+    @Transaction
+    suspend fun replaceTagsOfMemo(memoId: Long, tagIds: List<Long>) {
+        clearTagsOfMemo(memoId)
+        tagIds.forEach { addTagToMemo(MemoTagCrossRef(memoId = memoId, tagId = it)) }
+    }
 
     /** タグ一覧に付与件数を出すため。ゴミ箱内のメモは数えない。 */
     @Query(

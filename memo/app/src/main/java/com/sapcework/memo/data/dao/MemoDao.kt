@@ -5,7 +5,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import androidx.room.Update
 import com.sapcework.memo.data.entity.MemoEntity
 import com.sapcework.memo.data.entity.MemoWithTags
 import kotlinx.coroutines.flow.Flow
@@ -81,8 +80,13 @@ interface MemoDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(memo: MemoEntity): Long
 
-    @Update
-    suspend fun update(memo: MemoEntity)
+    /**
+     * タイトルと本文を更新する。
+     * 自動保存で頻繁に呼ばれるため、読み出してから書き戻す方式は競合の余地がある。
+     * 単一のUPDATEで原子的に更新する。
+     */
+    @Query("UPDATE memos SET title = :title, content = :content, updated_at = :updatedAt WHERE id = :id")
+    suspend fun updateContent(id: Long, title: String, content: String, updatedAt: Long)
 
     @Query("UPDATE memos SET deleted_at = :deletedAt WHERE id = :id")
     suspend fun moveToTrash(id: Long, deletedAt: Long)
