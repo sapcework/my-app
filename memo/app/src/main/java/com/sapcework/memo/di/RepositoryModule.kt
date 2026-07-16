@@ -1,8 +1,10 @@
 package com.sapcework.memo.di
 
 import com.sapcework.memo.data.repository.MemoRepositoryImpl
+import com.sapcework.memo.data.repository.SettingsRepositoryImpl
 import com.sapcework.memo.data.repository.TagRepositoryImpl
 import com.sapcework.memo.domain.repository.MemoRepository
+import com.sapcework.memo.domain.repository.SettingsRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import dagger.Binds
 import dagger.Module
@@ -25,4 +27,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTagRepository(impl: TagRepositoryImpl): TagRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
 }
