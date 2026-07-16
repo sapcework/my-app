@@ -11,6 +11,8 @@ complexity:
   TooManyFunctions:
     thresholdInFiles: 30
     thresholdInClasses: 20
+    # DAOは本質的にクエリの集合で、分割すると凝集度がむしろ下がるため緩和
+    thresholdInInterfaces: 25
     ignorePrivate: true
 
 style:
