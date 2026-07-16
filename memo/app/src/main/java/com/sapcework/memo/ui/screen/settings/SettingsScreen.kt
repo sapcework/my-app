@@ -1,0 +1,159 @@
+package com.sapcework.memo.ui.screen.settings
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sapcework.memo.R
+import com.sapcework.memo.domain.model.FontSize
+import com.sapcework.memo.domain.model.ListStyle
+import com.sapcework.memo.domain.model.ThemeMode
+import com.sapcework.memo.ui.theme.Spacing
+
+private val CONTENT_MAX_WIDTH = 640.dp
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: SettingsViewModel = hiltViewModel()) {
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .widthIn(max = CONTENT_MAX_WIDTH)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            SettingGroup(
+                title = stringResource(R.string.settings_theme),
+                options = ThemeMode.entries,
+                selected = settings.themeMode,
+                label = { stringResource(it.labelRes()) },
+                onSelect = viewModel::onThemeModeChange,
+            )
+            HorizontalDivider()
+            SettingGroup(
+                title = stringResource(R.string.settings_font_size),
+                options = FontSize.entries,
+                selected = settings.fontSize,
+                label = { stringResource(it.labelRes()) },
+                onSelect = viewModel::onFontSizeChange,
+            )
+            HorizontalDivider()
+            SettingGroup(
+                title = stringResource(R.string.settings_list_style),
+                options = ListStyle.entries,
+                selected = settings.listStyle,
+                label = { stringResource(it.labelRes()) },
+                onSelect = viewModel::onListStyleChange,
+            )
+        }
+    }
+}
+
+/**
+ * 単一選択の設定項目。
+ * selectableGroup と Role.RadioButton を付け、読み上げでも選択肢の集合だと伝わるようにする。
+ */
+@Composable
+private fun <T> SettingGroup(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    Column(modifier = Modifier.selectableGroup()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(
+                start = Spacing.md,
+                end = Spacing.md,
+                top = Spacing.md,
+                bottom = Spacing.sm,
+            ),
+        )
+        options.forEach { option ->
+            val isSelected = option == selected
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = isSelected,
+                        onClick = { onSelect(option) },
+                        role = Role.RadioButton,
+                    )
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = isSelected, onClick = null) // 行全体が押せるため個別のクリックは持たせない
+                Text(
+                    text = label(option),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = Spacing.md),
+                )
+            }
+        }
+    }
+}
+
+private fun ThemeMode.labelRes(): Int = when (this) {
+    ThemeMode.LIGHT -> R.string.settings_theme_light
+    ThemeMode.DARK -> R.string.settings_theme_dark
+    ThemeMode.SYSTEM -> R.string.settings_theme_system
+}
+
+private fun FontSize.labelRes(): Int = when (this) {
+    FontSize.SMALL -> R.string.settings_font_small
+    FontSize.MEDIUM -> R.string.settings_font_medium
+    FontSize.LARGE -> R.string.settings_font_large
+    FontSize.EXTRA_LARGE -> R.string.settings_font_extra_large
+}
+
+private fun ListStyle.labelRes(): Int = when (this) {
+    ListStyle.LIST -> R.string.list_style_list
+    ListStyle.GRID -> R.string.list_style_grid
+}

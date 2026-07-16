@@ -3,6 +3,11 @@ build:
   maxIssues: 0
 
 complexity:
+  LongMethod:
+    # Composableは宣言的なUIツリーであり、行数が複雑度の指標にならない。
+    # 分岐やロジックの複雑さは CyclomaticComplexMethod / CognitiveComplexMethod が引き続き見張る。
+    # 肥大したComposableの分割は、行数ではなく責務を基準にレビューで判断する。
+    ignoreAnnotated: ['Composable']
   LongParameterList:
     # Composable関数は引数が多くなりやすいため緩和
     functionThreshold: 8

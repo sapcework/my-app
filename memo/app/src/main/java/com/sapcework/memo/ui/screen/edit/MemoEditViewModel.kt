@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.TagRepository
+import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
 import com.sapcework.memo.domain.usecase.SaveMemoUseCase
 import com.sapcework.memo.domain.usecase.SetMemoTagsUseCase
 import com.sapcework.memo.util.EditHistory
@@ -42,6 +43,7 @@ class MemoEditViewModel @Inject constructor(
     private val tagRepository: TagRepository,
     private val saveMemo: SaveMemoUseCase,
     private val setMemoTags: SetMemoTagsUseCase,
+    private val deleteMemo: DeleteMemoUseCase,
     private val timeProvider: TimeProvider,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -53,6 +55,10 @@ class MemoEditViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(MemoEditUiState())
     val uiState: StateFlow<MemoEditUiState> = _uiState.asStateFlow()
+
+    /** 削除が完了したか。画面はこれを見て閉じる。 */
+    private val _isDeleted = MutableStateFlow(false)
+    val isDeleted: StateFlow<Boolean> = _isDeleted.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -149,6 +155,23 @@ class MemoEditViewModel @Inject constructor(
                 canUndo = next.canUndo,
                 canRedo = next.canRedo,
             )
+        }
+    }
+
+    /**
+     * 削除する。ゴミ箱にあるものは完全削除、それ以外はゴミ箱へ移す（判断はUseCase側）。
+     * 完了は状態で通知し、画面遷移は画面側が決める。
+     */
+    fun onDelete() {
+        val id = memoId
+        if (id == null) {
+            _isDeleted.update { true } // 未保存なら消すものが無いのでそのまま閉じる
+            return
+        }
+        viewModelScope.launch {
+            runCatching { deleteMemo(id) }
+                .onFailure { Timber.w(it, "メモの削除に失敗しました") }
+            _isDeleted.update { true }
         }
     }
 

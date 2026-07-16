@@ -8,7 +8,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 private val LightColorScheme = lightColorScheme(
     primary = lightPrimary,
@@ -64,12 +67,15 @@ private val DarkColorScheme = darkColorScheme(
 
 /**
  * アプリ全体のテーマ。
- * darkThemeはStep5以降でユーザー設定（ライト/ダーク/システム追従）から解決した値を渡す。
+ *
+ * @param fontScale 設定によるフォント倍率。端末のフォント設定に対して乗算するため、
+ *   利用者が端末側で大きくしている場合もその意図を打ち消さない。
  */
 @Composable
 fun MemoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    fontScale: Float = 1.0f,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
@@ -82,9 +88,19 @@ fun MemoTheme(
         else -> LightColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = memoTypography,
-        content = content,
+    val density = LocalDensity.current
+    // 個々のTextStyleを書き換える代わりにDensityのfontScaleを調整し、
+    // sp指定のテキスト全体へ一律に反映させる
+    val scaledDensity = Density(
+        density = density.density,
+        fontScale = density.fontScale * fontScale,
     )
+
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = memoTypography,
+            content = content,
+        )
+    }
 }

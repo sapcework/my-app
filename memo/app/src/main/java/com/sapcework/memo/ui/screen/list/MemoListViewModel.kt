@@ -2,6 +2,7 @@ package com.sapcework.memo.ui.screen.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sapcework.memo.domain.model.ListStyle
 import com.sapcework.memo.domain.model.MemoFilter
 import com.sapcework.memo.domain.model.MemoSortOrder
 import com.sapcework.memo.domain.repository.MemoRepository
@@ -123,6 +124,17 @@ class MemoListViewModel @Inject constructor(
     /** 並び順は設定として永続化し、次回起動でも維持する。 */
     fun onSortOrderChange(order: MemoSortOrder) {
         viewModelScope.launch { settingsRepository.setSortOrder(order) }
+    }
+
+    /** 表示形式も設定として永続化する。 */
+    fun onListStyleToggle() {
+        viewModelScope.launch {
+            val next = when (uiState.value.listStyle) {
+                ListStyle.LIST -> ListStyle.GRID
+                ListStyle.GRID -> ListStyle.LIST
+            }
+            settingsRepository.setListStyle(next)
+        }
     }
 
     fun onPinnedChange(id: Long, pinned: Boolean) {

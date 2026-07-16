@@ -1,4 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Memo</string>
+
+    <!-- 一覧画面 -->
+    <string name="list_title">メモ</string>
+    <string name="list_search_placeholder">メモを検索</string>
+    <string name="list_empty">メモがありません</string>
+    <string name="list_empty_hint">右下のボタンから作成できます</string>
+    <string name="list_no_results">該当するメモがありません</string>
+    <string name="list_no_results_hint">検索条件を変えてお試しください</string>
+    <string name="list_create">メモを作成</string>
+    <string name="list_filter_favorite">お気に入りのみ</string>
+    <string name="list_filter_title_only">タイトルのみ検索</string>
+    <string name="list_clear_filters">条件をクリア</string>
+    <string name="list_updated_at">更新 %1$s</string>
+
+    <!-- 並び替え -->
+    <string name="sort_label">並び替え</string>
+    <string name="sort_updated_desc">更新日</string>
+    <string name="sort_created_desc">作成日</string>
+    <string name="sort_title_asc">タイトル</string>
+    <string name="sort_favorite_first">お気に入り</string>
+
+    <!-- 表示形式 -->
+    <string name="list_style_toggle">表示形式を切り替え</string>
+    <string name="list_style_list">リスト</string>
+    <string name="list_style_grid">タイル</string>
+
+    <!-- 編集画面 -->
+    <string name="edit_title_placeholder">タイトル</string>
+    <string name="edit_content_placeholder">本文</string>
+    <string name="edit_character_count">%1$d 文字</string>
+    <string name="edit_saved_at">%1$s に保存</string>
+    <string name="edit_not_saved">未保存</string>
+    <string name="edit_undo">元に戻す</string>
+    <string name="edit_redo">やり直す</string>
+    <string name="edit_add_tag">タグを追加</string>
+    <string name="edit_tag_input_placeholder">タグ名</string>
+
+    <!-- ゴミ箱 -->
+    <string name="trash_title">ゴミ箱</string>
+    <string name="trash_empty">ゴミ箱は空です</string>
+    <string name="trash_retention_notice">ゴミ箱のメモは %1$d 日後に完全に削除されます</string>
+    <string name="trash_restore">復元</string>
+    <string name="trash_delete_permanently">完全に削除</string>
+    <string name="trash_empty_all">ゴミ箱を空にする</string>
+    <string name="trash_delete_confirm_title">完全に削除しますか</string>
+    <string name="trash_delete_confirm_message">この操作は取り消せません。</string>
+    <string name="trash_empty_confirm_title">ゴミ箱を空にしますか</string>
+    <string name="trash_empty_confirm_message">すべてのメモが完全に削除されます。この操作は取り消せません。</string>
+
+    <!-- タグ -->
+    <string name="tag_title">タグ</string>
+    <string name="tag_empty">タグがありません</string>
+    <string name="tag_create">タグを作成</string>
+    <string name="tag_edit">タグ名を変更</string>
+    <string name="tag_delete">タグを削除</string>
+    <string name="tag_delete_confirm_title">タグを削除しますか</string>
+    <string name="tag_delete_confirm_message">メモからこのタグが外れます。メモ自体は削除されません。</string>
+    <string name="tag_error_blank">タグ名を入力してください</string>
+    <string name="tag_error_too_long">タグ名は %1$d 文字以内で入力してください</string>
+
+    <!-- 設定 -->
+    <string name="settings_title">設定</string>
+    <string name="settings_theme">テーマ</string>
+    <string name="settings_theme_light">ライト</string>
+    <string name="settings_theme_dark">ダーク</string>
+    <string name="settings_theme_system">端末の設定に従う</string>
+    <string name="settings_font_size">文字の大きさ</string>
+    <string name="settings_font_small">小</string>
+    <string name="settings_font_medium">標準</string>
+    <string name="settings_font_large">大</string>
+    <string name="settings_font_extra_large">特大</string>
+    <string name="settings_list_style">一覧の表示形式</string>
+
+    <!-- 共通 -->
+    <string name="action_back">戻る</string>
+    <string name="action_menu">メニュー</string>
+    <string name="action_save">保存</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_delete">削除</string>
+    <string name="action_close">閉じる</string>
+
+    <!-- 読み上げ用 -->
+    <string name="cd_pin_on">ピン留めを解除</string>
+    <string name="cd_pin_off">ピン留めする</string>
+    <string name="cd_favorite_on">お気に入りから外す</string>
+    <string name="cd_favorite_off">お気に入りに追加</string>
+    <string name="cd_pinned">ピン留め済み</string>
+    <string name="cd_favorite">お気に入り</string>
 </resources>
