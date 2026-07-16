@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 実際の配色はCompose側のMemoTheme（Material3）が担う -->
+    <style name="Theme.Memo" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

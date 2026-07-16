@@ -1,0 +1,37 @@
+# 既定ルール（buildUponDefaultConfig = true）に対する差分のみを記述する
+build:
+  maxIssues: 0
+
+complexity:
+  LongParameterList:
+    # Composable関数は引数が多くなりやすいため緩和
+    functionThreshold: 8
+    constructorThreshold: 8
+    ignoreDefaultParameters: true
+  TooManyFunctions:
+    thresholdInFiles: 30
+    thresholdInClasses: 20
+    ignorePrivate: true
+
+style:
+  MagicNumber:
+    # Magic Number禁止方針の中核ルール。テストとComposeプレビューのみ除外
+    excludes: ['**/test/**', '**/androidTest/**']
+    ignorePropertyDeclaration: true
+    ignoreAnnotated: ['Preview']
+  MaxLineLength:
+    maxLineLength: 120
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+  ForbiddenComment:
+    # TODOはStep進行中に使うため、コミット前レビューで個別に潰す方針
+    active: false
+
+naming:
+  FunctionNaming:
+    # @ComposableはPascalCaseが公式規約
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
+    propertyPattern: '[a-z][A-Za-z0-9]*'
+    privatePropertyPattern: '[A-Za-z][_A-Za-z0-9]*'
