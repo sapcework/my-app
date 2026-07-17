@@ -16,11 +16,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +46,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sapcework.memo.R
 import com.sapcework.memo.ui.component.SelectableTagChip
+import com.sapcework.memo.ui.component.TagInputDialog
 import com.sapcework.memo.ui.theme.Spacing
 import com.sapcework.memo.util.DateFormat
 
@@ -60,6 +63,8 @@ fun MemoEditScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isDeleted by viewModel.isDeleted.collectAsStateWithLifecycle()
+    val tagInputError by viewModel.tagInputError.collectAsStateWithLifecycle()
+    val isAddingTag by viewModel.isAddingTag.collectAsStateWithLifecycle()
 
     // 削除の完了はViewModelが状態で知らせ、遷移の判断は画面側が持つ
     LaunchedEffect(isDeleted) {
@@ -105,6 +110,7 @@ fun MemoEditScreen(
                     val next = if (tagName in current) current - tagName else current + tagName
                     viewModel.onTagsChange(next)
                 },
+                onTagAddClick = viewModel::onTagAddClick,
             )
 
             TextField(
@@ -116,6 +122,15 @@ fun MemoEditScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+
+    if (isAddingTag) {
+        TagInputDialog(
+            title = stringResource(R.string.edit_add_tag),
+            error = tagInputError,
+            onConfirm = viewModel::onTagAdd,
+            onDismiss = viewModel::onTagAddDismiss,
+        )
     }
 }
 
@@ -200,15 +215,23 @@ private fun ToggleIconButton(
     }
 }
 
+/** タグが1件も無くても追加の導線は残す。ここが唯一の入口になる利用者がいるため。 */
 @Composable
-private fun TagRow(uiState: MemoEditUiState, onTagToggle: (String) -> Unit) {
-    if (uiState.allTags.isEmpty()) return
+private fun TagRow(uiState: MemoEditUiState, onTagToggle: (String) -> Unit, onTagAddClick: () -> Unit) {
     val attached = uiState.tags.map { it.id }.toSet()
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         contentPadding = PaddingValues(horizontal = Spacing.md),
         modifier = Modifier.padding(vertical = Spacing.sm),
     ) {
+        item {
+            // 既存タグのトグルとは別種の操作のため、AssistChipで見分けが付く形にする
+            AssistChip(
+                onClick = onTagAddClick,
+                label = { Text(stringResource(R.string.edit_add_tag)) },
+                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            )
+        }
         items(items = uiState.allTags, key = { it.id }) { tag ->
             SelectableTagChip(
                 name = tag.name,

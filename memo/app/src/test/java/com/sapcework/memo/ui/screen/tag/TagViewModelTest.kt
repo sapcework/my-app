@@ -6,6 +6,7 @@ import com.sapcework.memo.domain.model.TagSaveResult
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.SaveTagUseCase
 import com.sapcework.memo.testutil.MainDispatcherRule
+import com.sapcework.memo.ui.component.TagInputError
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -77,7 +78,8 @@ class TagViewModelTest {
     fun `保存に成功すればエラーを出さない`() = runTest {
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.Success(ID))
 
-        viewModel.onSave(id = null, name = "仕事")
+        viewModel.onCreateClick()
+        viewModel.onSave("仕事")
         runCurrent()
 
         assertNull(viewModel.inputError.value)
@@ -88,7 +90,8 @@ class TagViewModelTest {
     fun `空の名前はBLANKエラーとして通知する`() = runTest {
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.BlankName)
 
-        viewModel.onSave(id = null, name = "")
+        viewModel.onCreateClick()
+        viewModel.onSave("")
         runCurrent()
 
         assertEquals(TagInputError.BLANK, viewModel.inputError.value)
@@ -98,7 +101,8 @@ class TagViewModelTest {
     fun `長すぎる名前はTOO_LONGエラーとして通知する`() = runTest {
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.TooLong)
 
-        viewModel.onSave(id = null, name = "あ".repeat(100))
+        viewModel.onCreateClick()
+        viewModel.onSave("あ".repeat(100))
         runCurrent()
 
         assertEquals(TagInputError.TOO_LONG, viewModel.inputError.value)
@@ -107,36 +111,80 @@ class TagViewModelTest {
     @Test
     fun `保存に成功すると直前のエラーは消える`() = runTest {
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.BlankName)
-        viewModel.onSave(id = null, name = "")
+        viewModel.onCreateClick()
+        viewModel.onSave("")
         runCurrent()
         assertEquals(TagInputError.BLANK, viewModel.inputError.value)
 
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.Success(ID))
-        viewModel.onSave(id = null, name = "仕事")
+        viewModel.onCreateClick()
+        viewModel.onSave("仕事")
         runCurrent()
 
         assertNull(viewModel.inputError.value)
     }
 
     @Test
-    fun `onErrorShownでエラーを消す`() = runTest {
+    fun `onEditDismissでエラーを消して閉じる`() = runTest {
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.BlankName)
-        viewModel.onSave(id = null, name = "")
+        viewModel.onCreateClick()
+        viewModel.onSave("")
         runCurrent()
 
-        viewModel.onErrorShown()
+        viewModel.onEditDismiss()
 
         assertNull(viewModel.inputError.value)
+        assertNull(viewModel.editTarget.value)
     }
 
     @Test
     fun `既存idを渡した保存はそのままUseCaseへ委譲する`() = runTest {
         whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.Success(ID))
 
-        viewModel.onSave(id = ID, name = "業務")
+        viewModel.onEditClick(tag(ID, "仕事"))
+        viewModel.onSave("業務")
         runCurrent()
 
         verify(saveTag).invoke(ID, "業務")
+    }
+
+    @Test
+    fun `保存に成功すると入力を畳む`() = runTest {
+        whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.Success(ID))
+        viewModel.onCreateClick()
+
+        viewModel.onSave("仕事")
+        runCurrent()
+
+        assertNull(viewModel.editTarget.value)
+    }
+
+    @Test
+    fun `検証で弾かれた間は入力を開いたままにする`() = runTest {
+        whenever(saveTag(anyOrNull(), any())).thenReturn(TagSaveResult.BlankName)
+        viewModel.onCreateClick()
+
+        viewModel.onSave("")
+        runCurrent()
+
+        // 閉じてしまうと入力をやり直せない
+        assertEquals(TagEditTarget(tag = null), viewModel.editTarget.value)
+    }
+
+    @Test
+    fun `onCreateClickは新規作成として開く`() = runTest {
+        viewModel.onCreateClick()
+
+        assertEquals(TagEditTarget(tag = null), viewModel.editTarget.value)
+    }
+
+    @Test
+    fun `onEditClickは対象を持って開く`() = runTest {
+        val target = tag(ID, "仕事")
+
+        viewModel.onEditClick(target)
+
+        assertEquals(TagEditTarget(tag = target), viewModel.editTarget.value)
     }
 
     @Test

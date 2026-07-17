@@ -1,7 +1,6 @@
 package com.sapcework.memo.ui.screen.tag
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +21,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,8 +39,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sapcework.memo.R
 import com.sapcework.memo.domain.model.Tag
-import com.sapcework.memo.domain.model.TagPolicy
 import com.sapcework.memo.ui.component.EmptyState
+import com.sapcework.memo.ui.component.TagInputDialog
 import com.sapcework.memo.ui.theme.Spacing
 
 private val LIST_MAX_WIDTH = 840.dp
@@ -52,9 +50,8 @@ private val LIST_MAX_WIDTH = 840.dp
 fun TagScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: TagViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val inputError by viewModel.inputError.collectAsStateWithLifecycle()
+    val editTarget by viewModel.editTarget.collectAsStateWithLifecycle()
 
-    /** 編集対象。nullなら未編集、Tagがnullの Editing は新規作成。 */
-    var editing by remember { mutableStateOf<Editing?>(null) }
     var confirmDelete by remember { mutableStateOf<Tag?>(null) }
 
     Scaffold(
@@ -73,7 +70,7 @@ fun TagScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: TagV
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { editing = Editing(tag = null) }) {
+            FloatingActionButton(onClick = viewModel::onCreateClick) {
                 Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.tag_create))
             }
         },
@@ -96,7 +93,7 @@ fun TagScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: TagV
                 items(items = uiState.tags, key = { it.id }) { tag ->
                     TagItem(
                         tag = tag,
-                        onEdit = { editing = Editing(tag = tag) },
+                        onEdit = { viewModel.onEditClick(tag) },
                         onDelete = { confirmDelete = tag },
                     )
                 }
@@ -104,15 +101,13 @@ fun TagScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: TagV
         }
     }
 
-    editing?.let { target ->
-        TagEditDialog(
+    editTarget?.let { target ->
+        TagInputDialog(
+            title = stringResource(if (target.tag == null) R.string.tag_create else R.string.tag_edit),
             initialName = target.tag?.name.orEmpty(),
-            errorMessage = inputError?.let { stringResource(it.messageRes(), TagPolicy.MAX_NAME_LENGTH) },
-            onConfirm = { name -> viewModel.onSave(id = target.tag?.id, name = name) },
-            onDismiss = {
-                editing = null
-                viewModel.onErrorShown()
-            },
+            error = inputError,
+            onConfirm = viewModel::onSave,
+            onDismiss = viewModel::onEditDismiss,
         )
     }
 
@@ -169,56 +164,4 @@ private fun TagItem(tag: Tag, onEdit: () -> Unit, onDelete: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun TagEditDialog(
-    initialName: String,
-    errorMessage: String?,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var name by remember { mutableStateOf(initialName) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                stringResource(
-                    if (initialName.isEmpty()) R.string.tag_create else R.string.tag_edit,
-                ),
-            )
-        },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    placeholder = { Text(stringResource(R.string.edit_tag_input_placeholder)) },
-                    singleLine = true,
-                    isError = errorMessage != null,
-                    supportingText = errorMessage?.let { { Text(it) } },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(name) }) {
-                Text(stringResource(R.string.action_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.action_cancel))
-            }
-        },
-    )
-}
-
-/** 編集対象。tagがnullなら新規作成。 */
-private data class Editing(val tag: Tag?)
-
-private fun TagInputError.messageRes(): Int = when (this) {
-    TagInputError.BLANK -> R.string.tag_error_blank
-    TagInputError.TOO_LONG -> R.string.tag_error_too_long
 }

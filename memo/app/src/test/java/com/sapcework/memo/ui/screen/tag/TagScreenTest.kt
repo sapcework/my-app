@@ -95,6 +95,19 @@ class TagScreenTest {
     }
 
     @Test
+    fun `保存に成功するとダイアログを閉じる`() {
+        tagsFlow.tryEmit(emptyList())
+        stubSaveResult(TagSaveResult.Success(ID))
+        setContent()
+        composeTestRule.onNodeWithContentDescription("タグを作成").performClick()
+
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("仕事")
+        composeTestRule.onNodeWithText("保存").performClick()
+
+        composeTestRule.onNodeWithText("保存").assertDoesNotExist()
+    }
+
+    @Test
     fun `編集ボタンは既存の名前を入れたダイアログを開く`() {
         tagsFlow.tryEmit(listOf(tag(ID, "仕事")))
         setContent()

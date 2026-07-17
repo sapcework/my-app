@@ -7,6 +7,7 @@ import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
 import com.sapcework.memo.domain.usecase.SaveMemoUseCase
+import com.sapcework.memo.domain.usecase.SaveTagUseCase
 import com.sapcework.memo.domain.usecase.SetMemoTagsUseCase
 import com.sapcework.memo.testutil.FakeTimeProvider
 import com.sapcework.memo.testutil.MainDispatcherRule
@@ -48,6 +49,7 @@ class MemoEditViewModelTest {
     }
     private val saveMemo = mock<SaveMemoUseCase>()
     private val setMemoTags = mock<SetMemoTagsUseCase>()
+    private val saveTag = mock<SaveTagUseCase>()
     private val deleteMemo = mock<DeleteMemoUseCase>()
     private val time = FakeTimeProvider(now = SAVED_AT)
 
@@ -341,6 +343,7 @@ class MemoEditViewModelTest {
         tagRepository = tagRepository,
         saveMemo = saveMemo,
         setMemoTags = setMemoTags,
+        saveTag = saveTag,
         deleteMemo = deleteMemo,
         timeProvider = time,
         savedStateHandle = savedStateHandle,

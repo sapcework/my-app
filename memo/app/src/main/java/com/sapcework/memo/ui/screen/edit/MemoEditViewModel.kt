@@ -3,11 +3,14 @@ package com.sapcework.memo.ui.screen.edit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sapcework.memo.domain.model.TagSaveResult
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
 import com.sapcework.memo.domain.usecase.SaveMemoUseCase
+import com.sapcework.memo.domain.usecase.SaveTagUseCase
 import com.sapcework.memo.domain.usecase.SetMemoTagsUseCase
+import com.sapcework.memo.ui.component.TagInputError
 import com.sapcework.memo.util.EditHistory
 import com.sapcework.memo.util.EditSnapshot
 import com.sapcework.memo.util.TimeProvider
@@ -36,6 +39,10 @@ import javax.inject.Inject
  *
  * 入力内容の情報源は [_uiState] ただ1つとする。別に控えを持つと
  * Undo直後の入力で古い値が復活するなど、同期ずれの不具合を生むため。
+ *
+ * TODO: 読み込み・自動保存・Undo/Redo・タグ・削除を1クラスで抱えており依存が多い。
+ *  タグ操作も [ensureSaved] によるID確定に依存するため綺麗に切り出せず、現状は分割していない。
+ *  これ以上責務が増えるなら分割を検討すること。
  */
 @HiltViewModel
 class MemoEditViewModel @Inject constructor(
@@ -43,6 +50,7 @@ class MemoEditViewModel @Inject constructor(
     private val tagRepository: TagRepository,
     private val saveMemo: SaveMemoUseCase,
     private val setMemoTags: SetMemoTagsUseCase,
+    private val saveTag: SaveTagUseCase,
     private val deleteMemo: DeleteMemoUseCase,
     private val timeProvider: TimeProvider,
     savedStateHandle: SavedStateHandle,
@@ -59,6 +67,14 @@ class MemoEditViewModel @Inject constructor(
     /** 削除が完了したか。画面はこれを見て閉じる。 */
     private val _isDeleted = MutableStateFlow(false)
     val isDeleted: StateFlow<Boolean> = _isDeleted.asStateFlow()
+
+    /** タグ追加の入力中か。検証を通るまで開いたままにするため、開閉はここが持つ。 */
+    private val _isAddingTag = MutableStateFlow(false)
+    val isAddingTag: StateFlow<Boolean> = _isAddingTag.asStateFlow()
+
+    /** タグ追加時の入力エラー。nullなら問題なし。 */
+    private val _tagInputError = MutableStateFlow<TagInputError?>(null)
+    val tagInputError: StateFlow<TagInputError?> = _tagInputError.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -191,11 +207,45 @@ class MemoEditViewModel @Inject constructor(
     fun onTagsChange(tagNames: List<String>) {
         viewModelScope.launch {
             val id = ensureSaved() ?: return@launch
-            runCatching { setMemoTags(memoId = id, tagNames = tagNames) }
-                .onFailure { Timber.w(it, "タグの更新に失敗しました") }
-            memoRepository.findById(id)?.let { memo ->
-                _uiState.update { it.copy(tags = memo.tags) }
+            applyTags(memoId = id, tagNames = tagNames)
+        }
+    }
+
+    /**
+     * 新しい名前のタグを作って、このメモへ付ける。
+     *
+     * 名前の検証は[SaveTagUseCase]へ委ねる。タグ画面と別に検証を書くと
+     * 片方だけ緩いといった食い違いが起きるため、経路を一本にする。
+     */
+    fun onTagAdd(name: String) {
+        viewModelScope.launch {
+            when (saveTag(id = null, name = name)) {
+                is TagSaveResult.Success -> {
+                    _tagInputError.update { null }
+                    _isAddingTag.update { false } // 通ったときだけ畳む
+                    val id = ensureSaved() ?: return@launch
+                    applyTags(memoId = id, tagNames = _uiState.value.tags.map { it.name } + name.trim())
+                }
+
+                // 弾いた場合は開いたままにし、入力をやり直せるようにする
+                TagSaveResult.BlankName -> _tagInputError.update { TagInputError.BLANK }
+                TagSaveResult.TooLong -> _tagInputError.update { TagInputError.TOO_LONG }
             }
+        }
+    }
+
+    fun onTagAddClick() = _isAddingTag.update { true }
+
+    fun onTagAddDismiss() {
+        _isAddingTag.update { false }
+        _tagInputError.update { null }
+    }
+
+    private suspend fun applyTags(memoId: Long, tagNames: List<String>) {
+        runCatching { setMemoTags(memoId = memoId, tagNames = tagNames) }
+            .onFailure { Timber.w(it, "タグの更新に失敗しました") }
+        memoRepository.findById(memoId)?.let { memo ->
+            _uiState.update { it.copy(tags = memo.tags) }
         }
     }
 

@@ -12,10 +12,12 @@ import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.SavedStateHandle
 import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.model.Tag
+import com.sapcework.memo.domain.model.TagSaveResult
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
 import com.sapcework.memo.domain.usecase.SaveMemoUseCase
+import com.sapcework.memo.domain.usecase.SaveTagUseCase
 import com.sapcework.memo.domain.usecase.SetMemoTagsUseCase
 import com.sapcework.memo.testutil.FakeTimeProvider
 import com.sapcework.memo.ui.theme.MemoTheme
@@ -29,7 +31,9 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.stub
+import org.mockito.kotlin.verifyBlocking
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import java.time.Duration
@@ -53,6 +57,7 @@ class MemoEditScreenTest {
     }
     private val saveMemo = mock<SaveMemoUseCase>()
     private val setMemoTags = mock<SetMemoTagsUseCase>()
+    private val saveTag = mock<SaveTagUseCase>()
     private val deleteMemo = mock<DeleteMemoUseCase>()
     private val time = FakeTimeProvider(now = SAVED_AT)
 
@@ -178,6 +183,89 @@ class MemoEditScreenTest {
         composeTestRule.onNodeWithContentDescription("ピン留めを解除").assertIsDisplayed()
     }
 
+    @Test
+    fun `タグが1件も無くても追加の導線を出す`() {
+        setContent()
+
+        // ここが唯一の入口になる利用者がいるため、行ごと消してはいけない
+        composeTestRule.onNodeWithText("タグを追加").assertIsDisplayed()
+    }
+
+    @Test
+    fun `タグを追加すると名前で作成しメモへ付ける`() {
+        stubSaveResult(NEW_ID)
+        stubTagSaveResult(TagSaveResult.Success(TAG_ID))
+        memoRepository.stub { on { findById(NEW_ID) } doReturn memoWithTag() }
+        setContent()
+
+        composeTestRule.onNodeWithText("タグを追加").performClick()
+        composeTestRule.onNodeWithText("タグ名").performTextInput("仕事")
+        composeTestRule.onNodeWithText("保存").performClick()
+        composeTestRule.waitForIdle()
+
+        verifyBlocking(setMemoTags) { invoke(NEW_ID, listOf("仕事")) }
+    }
+
+    @Test
+    fun `タグ追加が通るとダイアログを閉じる`() {
+        stubSaveResult(NEW_ID)
+        stubTagSaveResult(TagSaveResult.Success(TAG_ID))
+        memoRepository.stub { on { findById(NEW_ID) } doReturn memoWithTag() }
+        setContent()
+        composeTestRule.onNodeWithText("タグを追加").performClick()
+
+        composeTestRule.onNodeWithText("タグ名").performTextInput("仕事")
+        composeTestRule.onNodeWithText("保存").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("保存").assertDoesNotExist()
+    }
+
+    @Test
+    fun `長すぎるタグ名はタグ画面と同じ文言で弾く`() {
+        stubTagSaveResult(TagSaveResult.TooLong)
+        setContent()
+        composeTestRule.onNodeWithText("タグを追加").performClick()
+
+        composeTestRule.onNodeWithText("タグ名").performTextInput("あ".repeat(60))
+        composeTestRule.onNodeWithText("保存").performClick()
+        composeTestRule.waitForIdle()
+
+        // 検証はSaveTagUseCaseへ集約したため、タグ画面と食い違わない
+        composeTestRule.onNodeWithText("タグ名は 50 文字以内で入力してください").assertIsDisplayed()
+        verifyBlocking(setMemoTags, never()) { invoke(any(), any()) }
+    }
+
+    @Test
+    fun `弾かれた間はダイアログを開いたままにする`() {
+        stubTagSaveResult(TagSaveResult.BlankName)
+        setContent()
+        composeTestRule.onNodeWithText("タグを追加").performClick()
+
+        composeTestRule.onNodeWithText("保存").performClick()
+        composeTestRule.waitForIdle()
+
+        // 閉じてしまうと入力をやり直せない
+        composeTestRule.onNodeWithText("タグ名を入力してください").assertIsDisplayed()
+        composeTestRule.onNodeWithText("保存").assertIsDisplayed()
+    }
+
+    private fun stubTagSaveResult(result: TagSaveResult) {
+        saveTag.stub { on { invoke(anyOrNull(), any()) } doReturn result }
+    }
+
+    private fun memoWithTag() = Memo(
+        id = NEW_ID,
+        title = "",
+        content = "",
+        createdAt = CREATED_AT,
+        updatedAt = UPDATED_AT,
+        isPinned = false,
+        isFavorite = false,
+        deletedAt = null,
+        tags = listOf(Tag(id = TAG_ID, name = "仕事", createdAt = CREATED_AT)),
+    )
+
     private fun stubExistingMemo(isPinned: Boolean = false) {
         memoRepository.stub {
             on { findById(EXISTING_ID) } doReturn Memo(
@@ -216,6 +304,7 @@ class MemoEditScreenTest {
             tagRepository = tagRepository,
             saveMemo = saveMemo,
             setMemoTags = setMemoTags,
+            saveTag = saveTag,
             deleteMemo = deleteMemo,
             timeProvider = time,
             savedStateHandle = savedStateHandle,
@@ -230,6 +319,7 @@ class MemoEditScreenTest {
     private companion object {
         const val EXISTING_ID = 7L
         const val NEW_ID = 42L
+        const val TAG_ID = 1L
         const val CREATED_AT = 1_600_000_000_000L
         const val UPDATED_AT = 1_600_000_000_000L
         const val SAVED_AT = 1_600_000_060_000L // UPDATED_ATより後。保存で時刻が変わることを見る

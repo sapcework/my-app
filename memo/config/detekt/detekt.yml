@@ -13,6 +13,11 @@ complexity:
     functionThreshold: 8
     constructorThreshold: 8
     ignoreDefaultParameters: true
+    # DIコンストラクタは人が手で呼ばないため、このルールが守ろうとしている
+    # 「呼び出し側が引数を追えなくなる」コストが発生しない。
+    # 閾値に合わせて依存を人工的なholderへ束ねる方が見通しを損なう。
+    # 依存の多さが責務の多さを示す点は別途レビューで見る。
+    ignoreAnnotated: ['Inject']
   TooManyFunctions:
     thresholdInFiles: 30
     thresholdInClasses: 20
