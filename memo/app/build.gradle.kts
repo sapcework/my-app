@@ -75,6 +75,18 @@ kover {
                     "*.BuildConfig",
                     "*.ComposableSingletons*", // Compose がラムダごとに生成する入れ物
                 )
+                // 分岐を持たない宣言だけの層。テストを書いてもHiltやNavigationの動作確認にしかならず、
+                // 自作ロジックがどれだけ守られているかという指標を薄めるため対象から外す。
+                packages(
+                    "com.sapcework.memo.di",
+                    "com.sapcework.memo.ui.navigation",
+                )
+            }
+        }
+        verify {
+            rule {
+                // CLAUDE.mdのカバレッジ目標。以後の低下をビルドで検出する
+                minBound(80)
             }
         }
     }
