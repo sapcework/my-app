@@ -5,6 +5,7 @@ import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
 import com.sapcework.memo.testutil.MainDispatcherRule
+import com.sapcework.memo.testutil.testMemo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -101,22 +102,12 @@ class TrashViewModelTest {
         }
     }
 
-    private fun memo(id: Long, title: String) = Memo(
-        id = id,
-        title = title,
-        content = "本文",
-        createdAt = CREATED_AT,
-        updatedAt = CREATED_AT,
-        isPinned = false,
-        isFavorite = false,
-        deletedAt = DELETED_AT,
-        tags = emptyList(),
-    )
+    /** ゴミ箱の中身のため、必ず削除済みで作る。 */
+    private fun memo(id: Long, title: String) = testMemo(id = id, title = title, deletedAt = DELETED_AT)
 
     private companion object {
         const val ID = 7L
         const val OTHER_ID = 8L
-        const val CREATED_AT = 1_000L
         const val DELETED_AT = 2_000L
     }
 }

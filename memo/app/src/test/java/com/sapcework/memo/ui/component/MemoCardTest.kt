@@ -8,6 +8,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.model.Tag
+import com.sapcework.memo.testutil.TEST_TIME
+import com.sapcework.memo.testutil.testMemo
+import com.sapcework.memo.testutil.testTag
 import com.sapcework.memo.util.DateFormat
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -79,7 +82,7 @@ class MemoCardTest {
 
     @Test
     fun `タグを付けても読み上げは見出しと日付に絞る`() {
-        setContent(memo(title = "買い物", tags = listOf(Tag(id = 1L, name = "仕事", createdAt = CREATED_AT))))
+        setContent(memo(title = "買い物", tags = listOf(testTag(name = "仕事"))))
 
         // タグまで読み上げると一覧を追う速度が落ちるため、説明には含めない
         composeTestRule.onNodeWithContentDescription("買い物、更新 $updatedText").assertIsDisplayed()
@@ -109,21 +112,17 @@ class MemoCardTest {
         isPinned: Boolean = false,
         isFavorite: Boolean = false,
         tags: List<Tag> = emptyList(),
-    ) = Memo(
+    ) = testMemo(
         id = ID,
         title = title,
         content = content,
-        createdAt = CREATED_AT,
-        updatedAt = UPDATED_AT,
         isPinned = isPinned,
         isFavorite = isFavorite,
-        deletedAt = null,
         tags = tags,
     )
 
     private companion object {
         const val ID = 7L
-        const val CREATED_AT = 1_600_000_000_000L
-        const val UPDATED_AT = 1_600_000_000_000L // 2020年の固定日時。DateFormatの当日判定に左右されない
+        const val UPDATED_AT = TEST_TIME
     }
 }

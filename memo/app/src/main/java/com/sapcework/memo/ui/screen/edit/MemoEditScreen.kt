@@ -41,17 +41,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sapcework.memo.R
 import com.sapcework.memo.ui.component.SelectableTagChip
 import com.sapcework.memo.ui.component.TagInputDialog
+import com.sapcework.memo.ui.theme.ContentWidth
 import com.sapcework.memo.ui.theme.Spacing
 import com.sapcework.memo.util.DateFormat
-
-/** 本文が横に伸びすぎると読みづらいため、タブレットでは幅を制限する。 */
-private val EDIT_MAX_WIDTH = 720.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,7 +87,7 @@ fun MemoEditScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .widthIn(max = EDIT_MAX_WIDTH)
+                .widthIn(max = ContentWidth.edit)
                 .verticalScroll(rememberScrollState()),
         ) {
             TextField(

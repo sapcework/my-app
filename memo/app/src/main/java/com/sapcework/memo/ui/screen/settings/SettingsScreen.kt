@@ -1,6 +1,7 @@
 package com.sapcework.memo.ui.screen.settings
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,16 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sapcework.memo.R
 import com.sapcework.memo.domain.model.FontSize
 import com.sapcework.memo.domain.model.ListStyle
 import com.sapcework.memo.domain.model.ThemeMode
+import com.sapcework.memo.ui.theme.ContentWidth
 import com.sapcework.memo.ui.theme.Spacing
-
-private val CONTENT_MAX_WIDTH = 640.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +61,7 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel:
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .widthIn(max = CONTENT_MAX_WIDTH)
+                .widthIn(max = ContentWidth.form)
                 .verticalScroll(rememberScrollState()),
         ) {
             SettingGroup(
@@ -118,7 +117,7 @@ private fun <T> SettingGroup(
         )
         options.forEach { option ->
             val isSelected = option == selected
-            androidx.compose.foundation.layout.Row(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .selectable(

@@ -14,6 +14,8 @@ import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.SettingsRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.PurgeExpiredTrashUseCase
+import com.sapcework.memo.testutil.TEST_TIME
+import com.sapcework.memo.testutil.testMemo
 import com.sapcework.memo.ui.theme.MemoTheme
 import com.sapcework.memo.util.DateFormat
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -219,22 +221,12 @@ class MemoListScreenTest {
         }
     }
 
-    private fun memo(id: Long, title: String) = Memo(
-        id = id,
-        title = title,
-        content = "本文",
-        createdAt = UPDATED_AT,
-        updatedAt = UPDATED_AT,
-        isPinned = false,
-        isFavorite = false,
-        deletedAt = null,
-        tags = emptyList(),
-    )
+    private fun memo(id: Long, title: String) = testMemo(id = id, title = title)
 
     private companion object {
         const val ID = 7L
         const val TAG_ID = 1L
-        const val UPDATED_AT = 1_600_000_000_000L // 2020年の固定日時
+        const val UPDATED_AT = TEST_TIME
         const val SEARCH_DEBOUNCE_MS = 250L // ViewModelが持つ検索デバウンスと同じ値
     }
 }

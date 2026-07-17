@@ -6,8 +6,8 @@ import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.model.TrashPolicy
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
+import com.sapcework.memo.ui.whileScreenSubscribed
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -29,7 +29,7 @@ class TrashViewModel @Inject constructor(
         .map { TrashUiState(memos = it, isLoading = false) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = whileScreenSubscribed,
             initialValue = TrashUiState(),
         )
 
@@ -46,9 +46,5 @@ class TrashViewModel @Inject constructor(
         viewModelScope.launch {
             uiState.value.memos.forEach { memoRepository.deletePermanently(it.id) }
         }
-    }
-
-    private companion object {
-        const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
     }
 }

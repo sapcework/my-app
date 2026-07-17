@@ -7,9 +7,9 @@ import com.sapcework.memo.domain.model.TagSaveResult
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.SaveTagUseCase
 import com.sapcework.memo.ui.component.TagInputError
+import com.sapcework.memo.ui.whileScreenSubscribed
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
@@ -31,7 +31,7 @@ class TagViewModel @Inject constructor(private val tagRepository: TagRepository,
         .map { TagListUiState(tags = it, isLoading = false) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = whileScreenSubscribed,
             initialValue = TagListUiState(),
         )
 
@@ -69,9 +69,5 @@ class TagViewModel @Inject constructor(private val tagRepository: TagRepository,
 
     fun onDelete(id: Long) {
         viewModelScope.launch { tagRepository.delete(id) }
-    }
-
-    private companion object {
-        const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
     }
 }

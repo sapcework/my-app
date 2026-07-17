@@ -1,7 +1,7 @@
 package com.sapcework.memo.domain.usecase
 
-import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.repository.MemoRepository
+import com.sapcework.memo.testutil.testMemo
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -63,21 +63,10 @@ class DeleteMemoUseCaseTest {
         verify(memoRepository).findById(ID)
     }
 
-    private fun memo(deletedAt: Long?) = Memo(
-        id = ID,
-        title = "タイトル",
-        content = "本文",
-        createdAt = CREATED_AT,
-        updatedAt = CREATED_AT,
-        isPinned = false,
-        isFavorite = false,
-        deletedAt = deletedAt,
-        tags = emptyList(),
-    )
+    private fun memo(deletedAt: Long?) = testMemo(id = ID, deletedAt = deletedAt)
 
     private companion object {
         const val ID = 7L
-        const val CREATED_AT = 1_000L
         const val DELETED_AT = 2_000L
     }
 }

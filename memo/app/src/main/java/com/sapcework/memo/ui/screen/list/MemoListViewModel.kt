@@ -9,10 +9,10 @@ import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.SettingsRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.PurgeExpiredTrashUseCase
+import com.sapcework.memo.ui.whileScreenSubscribed
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -91,8 +91,7 @@ class MemoListViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
-        // 画面回転などの短い購読断で購読を切らないため猶予を置く
-        started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+        started = whileScreenSubscribed,
         initialValue = MemoListUiState(),
     )
 
@@ -154,6 +153,5 @@ class MemoListViewModel @Inject constructor(
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 250L
-        const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
     }
 }

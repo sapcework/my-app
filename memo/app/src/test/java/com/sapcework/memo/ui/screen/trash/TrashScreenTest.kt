@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import com.sapcework.memo.domain.model.Memo
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.usecase.DeleteMemoUseCase
+import com.sapcework.memo.testutil.testMemo
 import com.sapcework.memo.ui.theme.MemoTheme
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.junit.Rule
@@ -182,22 +183,13 @@ class TrashScreenTest {
         }
     }
 
-    private fun memo(id: Long, title: String, content: String = "本文") = Memo(
-        id = id,
-        title = title,
-        content = content,
-        createdAt = CREATED_AT,
-        updatedAt = CREATED_AT,
-        isPinned = false,
-        isFavorite = false,
-        deletedAt = DELETED_AT,
-        tags = emptyList(),
-    )
+    /** ゴミ箱の中身のため、必ず削除済みで作る。 */
+    private fun memo(id: Long, title: String, content: String = "本文") =
+        testMemo(id = id, title = title, content = content, deletedAt = DELETED_AT)
 
     private companion object {
         const val ID = 7L
         const val OTHER_ID = 8L
-        const val CREATED_AT = 1_600_000_000_000L
         const val DELETED_AT = 1_600_000_000_000L
     }
 }

@@ -53,10 +53,8 @@ import com.sapcework.memo.domain.model.MemoSortOrder
 import com.sapcework.memo.ui.component.EmptyState
 import com.sapcework.memo.ui.component.MemoCard
 import com.sapcework.memo.ui.component.SelectableTagChip
+import com.sapcework.memo.ui.theme.ContentWidth
 import com.sapcework.memo.ui.theme.Spacing
-
-/** 一覧が横に伸びすぎると読みづらいため、タブレットでは中央に寄せて幅を制限する。 */
-private val LIST_MAX_WIDTH = 840.dp
 
 /** タイル表示の最小幅。画面幅に応じて列数が自動で決まる。 */
 private val GRID_MIN_WIDTH = 168.dp
@@ -138,7 +136,7 @@ private fun MemoItems(uiState: MemoListUiState, onMemoClick: (Long) -> Unit) {
         ListStyle.LIST -> LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = LIST_MAX_WIDTH),
+                .widthIn(max = ContentWidth.list),
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {

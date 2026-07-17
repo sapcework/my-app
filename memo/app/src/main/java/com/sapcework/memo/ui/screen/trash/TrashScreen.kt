@@ -33,14 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sapcework.memo.R
+import com.sapcework.memo.ui.component.EmptyState
+import com.sapcework.memo.ui.theme.ContentWidth
 import com.sapcework.memo.ui.theme.Spacing
 import com.sapcework.memo.util.DateFormat
-
-private val LIST_MAX_WIDTH = 840.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,14 +83,14 @@ fun TrashScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: Tr
 
             when {
                 uiState.isLoading -> Unit
-                uiState.memos.isEmpty() -> com.sapcework.memo.ui.component.EmptyState(
+                uiState.memos.isEmpty() -> EmptyState(
                     message = stringResource(R.string.trash_empty),
                 )
 
                 else -> LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .widthIn(max = LIST_MAX_WIDTH),
+                        .widthIn(max = ContentWidth.list),
                     contentPadding = PaddingValues(Spacing.md),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {

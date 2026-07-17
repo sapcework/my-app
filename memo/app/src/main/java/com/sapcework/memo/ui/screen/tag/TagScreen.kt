@@ -34,16 +34,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sapcework.memo.R
 import com.sapcework.memo.domain.model.Tag
 import com.sapcework.memo.ui.component.EmptyState
 import com.sapcework.memo.ui.component.TagInputDialog
+import com.sapcework.memo.ui.theme.ContentWidth
 import com.sapcework.memo.ui.theme.Spacing
-
-private val LIST_MAX_WIDTH = 840.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +84,7 @@ fun TagScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: TagV
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize()
-                    .widthIn(max = LIST_MAX_WIDTH),
+                    .widthIn(max = ContentWidth.list),
                 contentPadding = PaddingValues(Spacing.md),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {

@@ -11,6 +11,8 @@ import com.sapcework.memo.domain.repository.SettingsRepository
 import com.sapcework.memo.domain.repository.TagRepository
 import com.sapcework.memo.domain.usecase.PurgeExpiredTrashUseCase
 import com.sapcework.memo.testutil.MainDispatcherRule
+import com.sapcework.memo.testutil.testMemo
+import com.sapcework.memo.testutil.testTag
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -267,25 +269,14 @@ class MemoListViewModelTest {
         return captor.lastValue
     }
 
-    private fun memo(id: Long, title: String) = Memo(
-        id = id,
-        title = title,
-        content = "本文",
-        createdAt = CREATED_AT,
-        updatedAt = CREATED_AT,
-        isPinned = false,
-        isFavorite = false,
-        deletedAt = null,
-        tags = emptyList(),
-    )
+    private fun memo(id: Long, title: String) = testMemo(id = id, title = title)
 
-    private fun tag(id: Long, name: String) = Tag(id = id, name = name, createdAt = CREATED_AT)
+    private fun tag(id: Long, name: String) = testTag(id = id, name = name)
 
     private companion object {
         const val ID = 7L
         const val TAG_ID = 1L
         const val OTHER_TAG_ID = 2L
-        const val CREATED_AT = 1_000L
 
         /** ViewModelが持つ検索デバウンスと同じ値。性能要件のため意図的に固定する。 */
         const val SEARCH_DEBOUNCE_MS = 250L
