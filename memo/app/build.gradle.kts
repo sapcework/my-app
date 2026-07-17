@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -54,6 +55,29 @@ ksp {
 detekt {
     buildUponDefaultConfig = true
     config.setFrom(rootProject.files("config/detekt/detekt.yml"))
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                // 自作コードのみを対象にする。生成コードはRoom/Hiltの責任範囲であり、
+                // 測っても我々のテストの過不足を表さない。
+                classes(
+                    "*_Impl", // Room が生成する DAO/Database 実装
+                    "*_Factory", // Hilt/Dagger の生成物
+                    "*_MembersInjector",
+                    "*_HiltModules*",
+                    "*_GeneratedInjector",
+                    "*Hilt_*",
+                    "hilt_aggregated_deps.*",
+                    "dagger.hilt.*",
+                    "*.BuildConfig",
+                    "*.ComposableSingletons*", // Compose がラムダごとに生成する入れ物
+                )
+            }
+        }
+    }
 }
 
 ktlint {
