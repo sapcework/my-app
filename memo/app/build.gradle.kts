@@ -101,8 +101,10 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.androidx.room.testing)
-    testImplementation(libs.robolectric) // DAOテストを実機無しでJVM実行する
+    testImplementation(libs.robolectric) // DAO・Compose UIテストを実機無しでJVM実行する
     testImplementation(libs.androidx.test.ext.junit) // ApplicationProviderの取得元
+    testImplementation(platform(libs.androidx.compose.bom)) // Composeテスト成果物のバージョン解決
+    testImplementation(libs.androidx.compose.ui.test.junit4) // Compose UIテストもRobolectricで動かす
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
