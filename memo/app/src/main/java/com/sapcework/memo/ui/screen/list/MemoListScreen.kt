@@ -17,12 +17,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -101,6 +103,7 @@ fun MemoListScreen(
                 onOnlyFavoriteChange = viewModel::onOnlyFavoriteChange,
                 onTitleOnlyChange = viewModel::onTitleOnlyChange,
                 onTagToggle = viewModel::onTagToggle,
+                onClearFilters = viewModel::onClearFilters,
             )
 
             when {
@@ -165,6 +168,7 @@ private fun SearchArea(
     onOnlyFavoriteChange: (Boolean) -> Unit,
     onTitleOnlyChange: (Boolean) -> Unit,
     onTagToggle: (Long) -> Unit,
+    onClearFilters: () -> Unit,
 ) {
     Column {
         OutlinedTextField(
@@ -183,6 +187,17 @@ private fun SearchArea(
             contentPadding = PaddingValues(horizontal = Spacing.md),
             modifier = Modifier.padding(bottom = Spacing.sm),
         ) {
+            if (uiState.isSearching) {
+                item {
+                    // 絞り込み中だけ出す。条件が無いときに押せると何が起きるか伝わらない。
+                    // トグルではなく一度きりの操作のため、FilterChipと見分けが付く形にする。
+                    AssistChip(
+                        onClick = onClearFilters,
+                        label = { Text(stringResource(R.string.list_clear_filters)) },
+                        leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                    )
+                }
+            }
             item {
                 FilterChip(
                     selected = uiState.onlyFavorite,

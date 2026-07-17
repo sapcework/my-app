@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.sapcework.memo.domain.model.AppSettings
 import com.sapcework.memo.domain.model.Memo
+import com.sapcework.memo.domain.model.MemoFilter
 import com.sapcework.memo.domain.model.Tag
 import com.sapcework.memo.domain.repository.MemoRepository
 import com.sapcework.memo.domain.repository.SettingsRepository
@@ -22,8 +23,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.atLeastOnce
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import java.time.Duration
@@ -119,6 +123,53 @@ class MemoListScreenTest {
     }
 
     @Test
+    fun `絞り込んでいなければ 条件をクリア を出さない`() {
+        memosFlow.tryEmit(emptyList())
+
+        setContent()
+
+        // 条件が無いときに押せても、何が起きるか伝わらない
+        composeTestRule.onNodeWithText("条件をクリア").assertDoesNotExist()
+    }
+
+    @Test
+    fun `お気に入りで絞り込むと 条件をクリア を出す`() {
+        memosFlow.tryEmit(emptyList())
+
+        setContent { viewModel -> viewModel.onOnlyFavoriteChange(true) }
+
+        composeTestRule.onNodeWithText("条件をクリア").assertIsDisplayed()
+    }
+
+    @Test
+    fun `検索語を入れると 条件をクリア を出す`() {
+        memosFlow.tryEmit(emptyList())
+
+        setContent { viewModel -> viewModel.onQueryChange("会議") }
+        advancePastSearchDebounce()
+
+        composeTestRule.onNodeWithText("条件をクリア").assertIsDisplayed()
+    }
+
+    @Test
+    fun `条件をクリアを押すと全ての絞り込みが外れる`() {
+        memosFlow.tryEmit(listOf(memo(ID, "買い物")))
+        setContent { viewModel ->
+            viewModel.onQueryChange("会議")
+            viewModel.onOnlyFavoriteChange(true)
+            viewModel.onTagToggle(TAG_ID)
+        }
+        advancePastSearchDebounce()
+
+        composeTestRule.onNodeWithText("条件をクリア").performClick()
+        advancePastSearchDebounce()
+
+        // 一度の操作で全条件が戻り、クリア自体も消えること
+        assertEquals(MemoFilter(), lastFilter())
+        composeTestRule.onNodeWithText("条件をクリア").assertDoesNotExist()
+    }
+
+    @Test
     fun `作成ボタンを押すと通知する`() {
         memosFlow.tryEmit(emptyList())
         var created = 0
@@ -136,6 +187,13 @@ class MemoListScreenTest {
     private fun advancePastSearchDebounce() {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SEARCH_DEBOUNCE_MS + 1))
         composeTestRule.waitForIdle()
+    }
+
+    /** ViewModelが最後に組み立てた検索条件。UIの操作が条件へ届いたかを見る。 */
+    private fun lastFilter(): MemoFilter {
+        val captor = argumentCaptor<MemoFilter>()
+        verify(memoRepository, atLeastOnce()).observeMemos(captor.capture())
+        return captor.lastValue
     }
 
     private fun descriptionOf(title: String) = "$title、更新 ${DateFormat.format(UPDATED_AT)}"
@@ -175,6 +233,7 @@ class MemoListScreenTest {
 
     private companion object {
         const val ID = 7L
+        const val TAG_ID = 1L
         const val UPDATED_AT = 1_600_000_000_000L // 2020年の固定日時
         const val SEARCH_DEBOUNCE_MS = 250L // ViewModelが持つ検索デバウンスと同じ値
     }
