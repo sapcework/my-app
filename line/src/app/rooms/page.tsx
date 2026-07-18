@@ -13,11 +13,13 @@ import { User } from '@/lib/types';
 export default function RoomsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
-  const { rooms, memberRoomIds, unreadCounts, loading: roomsLoading, createRoom } = useRooms(profile?.id ?? null);
+  const { rooms, memberRoomIds, unreadCounts, dmPartners, loading: roomsLoading, createRoom, createDm } = useRooms(profile?.id ?? null);
   const [showCreate, setShowCreate] = useState(false);
+  const [createMode, setCreateMode] = useState<'dm' | 'group'>('dm'); // モーダルの種別（1対1 / グループ）
   const [roomName, setRoomName] = useState('');
   const [inviteUsers, setInviteUsers] = useState<User[]>([]);
   const [creating, setCreating] = useState(false);
+  const [startingDm, setStartingDm] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !profile) router.push('/login');
@@ -38,6 +40,25 @@ export default function RoomsPage() {
       setShowCreate(false);
       router.push(`/rooms/${room.id}`);
     }
+  };
+
+  // 1対1トーク：ユーザーを選んだ瞬間にDMを開く（既存があれば再利用）
+  const handleStartDm = async (u: User) => {
+    if (startingDm) return;
+    setStartingDm(true);
+    const room = await createDm(u.id);
+    setStartingDm(false);
+    if (room) {
+      setShowCreate(false);
+      router.push(`/rooms/${room.id}`);
+    }
+  };
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    setRoomName('');
+    setInviteUsers([]);
+    setCreateMode('dm');
   };
 
   return (
@@ -85,6 +106,7 @@ export default function RoomsPage() {
               isMember={memberRoomIds.has(room.id)}
               onJoin={(id) => router.push(`/rooms/${id}`)}
               unreadCount={unreadCounts[room.id] ?? 0}
+              dmPartner={room.is_dm ? dmPartners[room.id] : undefined}
             />
           ))
         )}
@@ -92,43 +114,84 @@ export default function RoomsPage() {
 
       <BottomNav />
 
-      {/* ルーム作成モーダル */}
+      {/* トーク作成モーダル（1対1 / グループ 切替） */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowCreate(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={closeCreate}>
           <div className="bg-white dark:bg-[#1e1e1e] w-full max-w-lg mx-auto rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-10 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-5" />
-            <h2 className="text-[17px] font-bold mb-4 dark:text-gray-100">新しいトークを作成</h2>
-            <input
-              type="text"
-              placeholder="トーク名"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              autoFocus
-              className="w-full border border-gray-200 dark:border-gray-700 dark:bg-[#2a2a2a] dark:text-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] mb-4"
-            />
-            <p className="text-xs text-gray-400 mb-2">メンバーを招待（任意）</p>
-            <UserSearchInput
-              selectedUsers={inviteUsers}
-              onAdd={(u) => setInviteUsers((prev) => [...prev, u])}
-              onRemove={(id) => setInviteUsers((prev) => prev.filter((u) => u.id !== id))}
-              excludeIds={[profile.id]}
-            />
-            <div className="flex gap-3 mt-5">
+
+            {/* 種別切替 */}
+            <div className="flex bg-gray-100 dark:bg-[#2a2a2a] rounded-xl p-1 mb-5">
               <button
-                onClick={() => { setShowCreate(false); setRoomName(''); setInviteUsers([]); }}
-                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm"
+                onClick={() => setCreateMode('dm')}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${createMode === 'dm' ? 'bg-white dark:bg-[#3a3a3a] text-[#4CAF50] shadow-sm' : 'text-gray-500'}`}
               >
-                キャンセル
+                1対1トーク
               </button>
               <button
-                onClick={handleCreate}
-                disabled={!roomName.trim() || creating}
-                className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold text-sm disabled:opacity-50"
+                onClick={() => setCreateMode('group')}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${createMode === 'group' ? 'bg-white dark:bg-[#3a3a3a] text-[#4CAF50] shadow-sm' : 'text-gray-500'}`}
               >
-                {creating ? '作成中...' : '作成'}
+                グループ
               </button>
             </div>
+
+            {createMode === 'dm' ? (
+              /* 1対1: ユーザーを検索してタップで即トーク開始 */
+              <>
+                <h2 className="text-[17px] font-bold mb-2 dark:text-gray-100">ユーザーを検索してトーク</h2>
+                <p className="text-xs text-gray-400 mb-3">メールアドレスで相手を探して、1対1トークを始めます</p>
+                <UserSearchInput
+                  selectedUsers={[]}
+                  onAdd={handleStartDm}
+                  onRemove={() => {}}
+                  excludeIds={[profile.id]}
+                  actionLabel={startingDm ? '...' : 'トーク'}
+                />
+                <button
+                  onClick={closeCreate}
+                  className="w-full mt-5 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm"
+                >
+                  キャンセル
+                </button>
+              </>
+            ) : (
+              /* グループ: 名前＋メンバーを指定して作成 */
+              <>
+                <h2 className="text-[17px] font-bold mb-4 dark:text-gray-100">新しいグループを作成</h2>
+                <input
+                  type="text"
+                  placeholder="グループ名"
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  autoFocus
+                  className="w-full border border-gray-200 dark:border-gray-700 dark:bg-[#2a2a2a] dark:text-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#4CAF50] mb-4"
+                />
+                <p className="text-xs text-gray-400 mb-2">メンバーを招待（任意）</p>
+                <UserSearchInput
+                  selectedUsers={inviteUsers}
+                  onAdd={(u) => setInviteUsers((prev) => [...prev, u])}
+                  onRemove={(id) => setInviteUsers((prev) => prev.filter((u) => u.id !== id))}
+                  excludeIds={[profile.id]}
+                />
+                <div className="flex gap-3 mt-5">
+                  <button
+                    onClick={closeCreate}
+                    className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={handleCreate}
+                    disabled={!roomName.trim() || creating}
+                    className="flex-1 py-3 rounded-xl bg-[#4CAF50] text-white font-bold text-sm disabled:opacity-50"
+                  >
+                    {creating ? '作成中...' : '作成'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

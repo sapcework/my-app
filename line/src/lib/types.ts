@@ -18,6 +18,7 @@ export interface Room {
   last_message_at: string;
   created_at: string;
   last_message_preview?: string;
+  is_dm?: boolean; // 1対1トーク（DM）なら true。表示名は相手ユーザーから動的解決する
 }
 
 export type MemberRole = 'owner' | 'admin' | 'member';

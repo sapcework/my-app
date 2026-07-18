@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/withTimeout';
 import { getCachedRooms, setCachedRooms } from '@/lib/roomsCache';
-import { Room } from '@/lib/types';
+import { Room, User } from '@/lib/types';
 
 export function useRooms(userId: string | null) {
   // 前回のトーク一覧がキャッシュにあれば、サーバー応答を待たずに即座に表示する
@@ -15,6 +15,10 @@ export function useRooms(userId: string | null) {
   );
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(
     () => (userId ? getCachedRooms(userId)?.unreadCounts ?? {} : {})
+  );
+  // DMルームの相手ユーザー（表示名・アバター解決用）。プロフィール同様キャッシュから即表示
+  const [dmPartners, setDmPartners] = useState<Record<string, User>>(
+    () => (userId ? getCachedRooms(userId)?.dmPartners ?? {} : {})
   );
   const [loading, setLoading] = useState(() => !(userId && getCachedRooms(userId)));
   const supabase = createClient();
@@ -45,11 +49,27 @@ export function useRooms(userId: string | null) {
       counts[row.room_id] = Number(row.unread_count);
     }
 
+    // DMルームの相手ユーザーを1クエリで解決（is_room_member RLSで同室メンバーを参照可）
+    const dmRoomIds = nextRooms.filter((r) => r.is_dm).map((r) => r.id);
+    const partners: Record<string, User> = {};
+    if (dmRoomIds.length > 0) {
+      const { data: dmMembers } = await supabase
+        .from('room_members')
+        .select('room_id, users(id, display_name, avatar_url, email, last_seen, created_at)')
+        .in('room_id', dmRoomIds);
+
+      const rows = (dmMembers ?? []) as unknown as { room_id: string; users: User }[];
+      for (const { room_id, users } of rows) {
+        if (users && users.id !== userId) partners[room_id] = users; // 自分以外＝相手
+      }
+    }
+
     setRooms(nextRooms);
     setMemberRoomIds(new Set(nextMemberIds));
     setUnreadCounts(counts);
+    setDmPartners(partners);
     setLoading(false);
-    setCachedRooms(userId, { rooms: nextRooms, memberRoomIds: nextMemberIds, unreadCounts: counts });
+    setCachedRooms(userId, { rooms: nextRooms, memberRoomIds: nextMemberIds, unreadCounts: counts, dmPartners: partners });
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -144,6 +164,21 @@ export function useRooms(userId: string | null) {
     return room;
   };
 
+  // 相手ユーザーとのDMを開く（既存があれば再利用、無ければ新規作成）
+  const createDm = async (otherUserId: string): Promise<Room | null> => {
+    if (!userId) return null;
+    const res = await fetch('/api/dm/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otherUserId }),
+    });
+    if (!res.ok) { console.error('createDm failed:', await res.text()); return null; }
+
+    const { room } = await res.json() as { room: Room };
+    await fetchRooms();
+    return room;
+  };
+
   const joinRoom = async (roomId: string): Promise<boolean> => {
     if (!userId) return false;
     const res = await fetch(`/api/rooms/${roomId}/rejoin`, { method: 'POST' }); // 作成者再参加API（owner ロールを復元）
@@ -166,5 +201,5 @@ export function useRooms(userId: string | null) {
     return true;
   };
 
-  return { rooms, memberRoomIds, unreadCounts, loading, createRoom, joinRoom, leaveRoom, updateRoomName, refetch: fetchRooms };
+  return { rooms, memberRoomIds, unreadCounts, dmPartners, loading, createRoom, createDm, joinRoom, leaveRoom, updateRoomName, refetch: fetchRooms };
 }

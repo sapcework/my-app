@@ -10,9 +10,10 @@ interface Props {
   onAdd: (user: User) => void;
   onRemove: (userId: string) => void;
   excludeIds: string[]; // すでにメンバーのユーザーID
+  actionLabel?: string; // 各候補のアクションボタン文言（既定: 追加）
 }
 
-export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds }: Props) {
+export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds, actionLabel = '追加' }: Props) {
   const [email, setEmail] = useState('');
   const [results, setResults] = useState<User[]>([]);
   const [searched, setSearched] = useState(false); // 一度でも検索したか（該当なし表示の制御）
@@ -88,7 +89,7 @@ export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds }: 
                   onClick={() => handleAdd(u)}
                   className="text-xs bg-[#4CAF50] text-white px-3 py-1 rounded-full flex-shrink-0"
                 >
-                  追加
+                  {actionLabel}
                 </button>
               )}
             </div>

@@ -1,9 +1,10 @@
-import { Room } from '@/lib/types';
+import { Room, User } from '@/lib/types';
 
 interface RoomsCacheData {
   rooms: Room[];
   memberRoomIds: string[];
   unreadCounts: Record<string, number>;
+  dmPartners?: Record<string, User>; // DMルームID → 相手ユーザー（表示名/アバター用）
 }
 
 const keyFor = (userId: string) => `rooms-cached-${userId}`;

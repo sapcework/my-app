@@ -65,9 +65,16 @@ export default function ChatPage({ params }: Props) {
   useEffect(() => {
     const supabase = createClient();
     supabase.from('rooms').select('*').eq('id', roomId).single().then(({ data }) => {
-      if (data) { setRoom(data as Room); setBaseTitle(`${(data as Room).name} | LINE Chat`); }
+      if (data) { setRoom(data as Room); setBaseTitle(`${(data as Room).name || 'トーク'} | LINE Chat`); }
     });
   }, [roomId, setBaseTitle]);
+
+  // DMはメンバー確定後に相手名をタブタイトルへ反映
+  useEffect(() => {
+    if (!room?.is_dm || !profile) return;
+    const partner = members.find((m) => m.id !== profile.id);
+    if (partner) setBaseTitle(`${partner.display_name} | LINE Chat`);
+  }, [room?.is_dm, members, profile, setBaseTitle]);
 
   // 他ユーザーのメッセージ到着時にタブ通知
   useEffect(() => {
@@ -161,6 +168,11 @@ export default function ChatPage({ params }: Props) {
   const otherOnlineEntry = Object.entries(onlineMap).find(([uid]) => uid !== profile.id);
   const isOtherOnline = otherOnlineEntry?.[1] ?? false;
 
+  // DMの場合は相手（自分以外のメンバー）の名前をタイトルに使う
+  const isDm = room?.is_dm ?? false;
+  const dmPartner = isDm ? members.find((m) => m.id !== profile.id) : undefined;
+  const headerTitle = dmPartner ? dmPartner.display_name : (room?.name ?? '...');
+
   return (
     <div className="flex flex-col h-screen bg-[#b2d8ea] dark:bg-[#0e1c24] max-w-lg mx-auto">
       {/* ヘッダー */}
@@ -171,7 +183,7 @@ export default function ChatPage({ params }: Props) {
           </svg>
         </button>
         <div className="flex flex-col flex-1 min-w-0 ml-1">
-          <span className="font-bold text-[15px] truncate">{room?.name ?? '...'}</span>
+          <span className="font-bold text-[15px] truncate">{headerTitle}</span>
           {isOtherOnline && (
             <span className="text-[11px] text-green-200 flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-green-300 rounded-full inline-block" />
@@ -254,11 +266,11 @@ export default function ChatPage({ params }: Props) {
           <div className="flex-1" />
           <div className="w-64 bg-white dark:bg-[#1e1e1e] h-full shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="bg-[#4CAF50] text-white px-4 py-4">
-              <p className="font-bold text-lg truncate">{room?.name ?? '...'}</p>
+              <p className="font-bold text-lg truncate">{headerTitle}</p>
             </div>
             <div className="flex-1 p-4">
-              {/* owner/admin のみ */}
-              {(myRole === 'owner' || myRole === 'admin') && (
+              {/* owner/admin のみ（DMではグループ管理を非表示） */}
+              {!isDm && (myRole === 'owner' || myRole === 'admin') && (
                 <>
                   <button
                     onClick={() => { setShowMenu(false); setShowMembers(true); if (!inviteUrl) handleFetchInvite(); }}
