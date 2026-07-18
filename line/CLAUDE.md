@@ -52,7 +52,8 @@ src/
 ├── hooks/
 │   ├── useAuth.ts           # 認証＋last_seen更新（60秒ごと）
 │   ├── useMessages.ts       # メッセージ取得＋Realtime購読＋楽観的更新
-│   ├── useRooms.ts          # ルーム一覧取得・作成
+│   ├── useRooms.ts          # ルーム一覧取得・作成・DM開始（dmPartners解決）
+│   ├── useBlocks.ts         # ブロックの取得・追加・解除
 │   ├── useReadStatus.ts     # 既読管理（last_read_message_id方式）
 │   └── useOnline.ts         # オンライン状態（60秒閾値）
 └── components/
@@ -64,6 +65,17 @@ src/
 ### 既読判定方式
 
 `room_reads.last_read_message_id` で管理。O(1)判定。
+
+### DM（1対1トーク）の表現
+
+- 専用テーブルは無く、`rooms.is_dm=true` の2人メンバールームで表現。`name` は空文字で保存し、表示名は相手ユーザーから動的解決する
+- `rooms.dm_key`（参加者UUID昇順`:`連結）＋部分ユニークインデックスで二重作成をDB防止。作成は `/api/dm/create`（find-or-create・service role）経由のみ
+- DMに「退出」は無い（membership削除は重複DMの原因になるため）
+
+### ブロック・通報
+
+- `user_blocks` は本人行のみRLS。DMへの送信は `guard_dm_block` トリガーが双方向でDB拒否（クライアント側チェックに依存しない）
+- `reports` は一般ユーザーINSERTのみ。閲覧・対応は `/api/admin/reports`（service role + is_admin検証）経由
 
 ### Realtimeの購読スコープ
 
