@@ -22,17 +22,27 @@ export function RoomListItem({ room, isMember, onJoin, unreadCount = 0, dmPartne
 
   const inner = (
     <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 dark:active:bg-white/5 transition-colors">
-      {/* アバター（DMは相手アバター、グループはルーム名から色分け） */}
-      {dmPartner ? (
-        <Avatar user={dmPartner} size="lg" className="!w-[52px] !h-[52px] !text-xl shadow-sm" />
-      ) : (
-        <div
-          style={{ backgroundColor: colorFromString(room.name) }}
-          className="w-[52px] h-[52px] rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xl shadow-sm"
-        >
-          {room.name[0]?.toUpperCase() ?? '#'}
-        </div>
-      )}
+      {/* アバター（DMは相手アバター、グループはルーム名から色分け＋人型バッジ） */}
+      <div className="relative flex-shrink-0">
+        {dmPartner ? (
+          <Avatar user={dmPartner} size="lg" className="!w-[52px] !h-[52px] !text-xl shadow-sm" />
+        ) : (
+          <div
+            style={{ backgroundColor: colorFromString(room.name) }}
+            className="w-[52px] h-[52px] rounded-full flex items-center justify-center text-white font-bold text-xl shadow-sm"
+          >
+            {room.name[0]?.toUpperCase() ?? '#'}
+          </div>
+        )}
+        {/* グループ識別バッジ（DMと区別するための人型アイコン） */}
+        {!room.is_dm && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-[19px] h-[19px] rounded-full bg-white dark:bg-[#121212] flex items-center justify-center shadow-sm ring-1 ring-black/5" aria-label="グループ">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#4CAF50" aria-hidden="true">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+            </svg>
+          </span>
+        )}
+      </div>
 
       {/* 本文 */}
       <div className="flex-1 min-w-0 border-b border-gray-100 dark:border-gray-800 pb-3 pt-0.5">
