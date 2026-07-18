@@ -13,6 +13,7 @@ interface Props {
   onDelete?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
   onReply?: (message: MessageWithStatus) => void;
+  onReport?: (message: MessageWithStatus) => void;
   reactions?: ReactionMap;
   onReact?: (messageId: string, emoji: string) => void;
   searchQuery?: string;
@@ -39,7 +40,7 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, onReply, reactions, onReact, searchQuery }: Props) {
+export function MessageList({ messages, currentUserId, otherLastReadMessageId, onDelete, onRetry, onReply, onReport, reactions, onReact, searchQuery }: Props) {
   const byId = new Map(messages.map((m) => [m.id, m])); // 返信先解決用
   const imagePaths = messages.filter((m) => m.type === 'image').map((m) => m.content);
   const imageUrls = useSignedUrls(imagePaths); // 画像の署名URLを画面単位でまとめて取得
@@ -131,6 +132,7 @@ export function MessageList({ messages, currentUserId, otherLastReadMessageId, o
               onDelete={onDelete}
               onRetry={onRetry}
               onReply={onReply}
+              onReport={onReport}
               replyPreview={replyPreview}
               reactions={reactions?.[msg.id]}
               myUserId={currentUserId}

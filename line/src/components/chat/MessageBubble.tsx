@@ -15,6 +15,7 @@ interface Props {
   onDelete?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
   onReply?: (message: MessageWithStatus) => void;
+  onReport?: (message: MessageWithStatus) => void;
   replyPreview?: { senderName: string; snippet: string } | null;
   reactions?: MessageReaction[];
   myUserId?: string;
@@ -33,7 +34,7 @@ function highlightText(text: string, query: string) {
   );
 }
 
-export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, onReply, replyPreview, reactions = [], myUserId, onReact, searchQuery, imageUrl }: Props) {
+export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetry, onReply, onReport, replyPreview, reactions = [], myUserId, onReact, searchQuery, imageUrl }: Props) {
   const isStamp = message.type === 'stamp';
   const isImage = message.type === 'image';
   const isFailed = message.status === 'failed';
@@ -43,7 +44,8 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const [copied, setCopied] = useState(false);
   const canDelete = isOwn && !!onDelete && !isFailed; // 送信失敗中は削除でなく再送
   const canCopy = !isFailed && !isImage; // 画像はパスをコピーしても意味が無いため対象外
-  const canInteract = !isFailed && (canDelete || !!onReact || !!onReply || canCopy); // メニューを出せるか
+  const canReport = !isOwn && !!onReport && !isFailed; // 通報は他人のメッセージのみ
+  const canInteract = !isFailed && (canDelete || !!onReact || !!onReply || canCopy || canReport); // メニューを出せるか
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false); // 長押し直後のclick(画像オープン等)を抑制
   const bubbleWrapRef = useRef<HTMLDivElement>(null);
@@ -92,6 +94,10 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
   const handleReply = () => {
     setShowMenu(false);
     onReply?.(message);
+  };
+  const handleReport = () => {
+    setShowMenu(false);
+    onReport?.(message);
   };
   const handleCopy = async () => {
     setShowMenu(false);
@@ -189,6 +195,14 @@ export function MessageBubble({ message, isOwn, isRead, sender, onDelete, onRetr
                     className="w-full px-4 py-2 text-sm text-gray-700 font-medium whitespace-nowrap hover:bg-gray-50 text-left"
                   >
                     返信
+                  </button>
+                )}
+                {canReport && (
+                  <button
+                    onClick={handleReport}
+                    className="w-full px-4 py-2 text-sm text-orange-500 font-medium whitespace-nowrap hover:bg-gray-50 text-left"
+                  >
+                    通報
                   </button>
                 )}
                 {canDelete && (

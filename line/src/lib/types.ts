@@ -81,3 +81,20 @@ export interface MessageReaction {
   user_id: string;
   emoji: string;
 }
+
+// 通報（一般ユーザーはINSERTのみ。管理者は service role API 経由で参照・処理）
+export type ReportStatus = 'open' | 'resolved';
+
+export interface Report {
+  id: string;
+  reporter_id: string;
+  reported_user_id: string;
+  room_id: string | null;
+  message_id: string | null;
+  message_content: string;
+  reason: string;
+  status: ReportStatus;
+  created_at: string;
+  reporter?: User; // joinで取得する場合
+  reported_user?: User; // joinで取得する場合
+}

@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMessages } from '@/hooks/useMessages';
 import { useReactions } from '@/hooks/useReactions';
 import { useRoomMute } from '@/hooks/useRoomMute';
+import { useBlocks } from '@/hooks/useBlocks';
 import { useReadStatus } from '@/hooks/useReadStatus';
 import { useOnlineUsers } from '@/hooks/useOnline';
 import { useRooms } from '@/hooks/useRooms';
@@ -28,6 +29,7 @@ export default function ChatPage({ params }: Props) {
   const { messages, loading: msgLoading, sendMessage, sendImage, deleteMessage, retryMessage } = useMessages(roomId, profile?.id ?? null);
   const { reactions, toggleReaction } = useReactions(roomId, profile?.id ?? null);
   const { muted, toggleMute } = useRoomMute(roomId, profile?.id ?? null);
+  const { blockedIds, block, unblock } = useBlocks(profile?.id ?? null);
   const { leaveRoom, updateRoomName } = useRooms(profile?.id ?? null);
   const { members, myRole, loading: membersLoading, kickMember, changeRole, addMember, refetch: refetchMembers } = useRoomMembers(roomId, profile?.id ?? null);
   const [rejoining, setRejoining] = useState(false);
@@ -172,6 +174,32 @@ export default function ChatPage({ params }: Props) {
   const isDm = room?.is_dm ?? false;
   const dmPartner = isDm ? members.find((m) => m.id !== profile.id) : undefined;
   const headerTitle = dmPartner ? dmPartner.display_name : (room?.name ?? '...');
+  const isPartnerBlocked = !!dmPartner && blockedIds.has(dmPartner.id);
+
+  // DM相手のブロック/解除（ブロック中は双方向で送信がDBに拒否される）
+  const handleToggleBlock = async () => {
+    if (!dmPartner) return;
+    setShowMenu(false);
+    if (isPartnerBlocked) {
+      await unblock(dmPartner.id);
+    } else if (confirm(`${dmPartner.display_name} をブロックしますか？\nお互いにメッセージを送れなくなります。`)) {
+      await block(dmPartner.id);
+    }
+  };
+
+  // メッセージの通報（内容を保全して管理者へ）
+  const handleReport = async (m: MessageWithStatus) => {
+    if (!confirm('このメッセージを通報しますか？')) return;
+    const supabase = createClient();
+    const { error } = await supabase.from('reports').insert({
+      reporter_id: profile.id,
+      reported_user_id: m.sender_id,
+      room_id: roomId,
+      message_id: m.id,
+      message_content: m.type === 'image' ? '画像' : m.type === 'stamp' ? `スタンプ: ${m.content}` : m.content.slice(0, 500),
+    });
+    alert(error ? '通報に失敗しました' : '通報しました。管理者が内容を確認します。');
+  };
 
   return (
     <div className="flex flex-col h-screen bg-[#b2d8ea] dark:bg-[#0e1c24] max-w-lg mx-auto">
@@ -244,10 +272,18 @@ export default function ChatPage({ params }: Props) {
           onDelete={deleteMessage}
           onRetry={retryMessage}
           onReply={setReplyingTo}
+          onReport={handleReport}
           reactions={reactions}
           onReact={toggleReaction}
           searchQuery={showSearch ? searchQuery : undefined}
         />
+      )}
+
+      {/* ブロック中バナー（DMのみ・送信はDBで拒否されるため理由を明示） */}
+      {isDm && isPartnerBlocked && (
+        <div className="flex-shrink-0 bg-red-50 dark:bg-red-900/20 text-red-500 text-xs text-center px-4 py-2">
+          ブロック中のためメッセージを送受信できません（メニューから解除できます）
+        </div>
       )}
 
       {/* 入力バー */}
@@ -293,6 +329,15 @@ export default function ChatPage({ params }: Props) {
                 <span>通知をミュート</span>
                 <span className={`text-xs ${muted ? 'text-[#4CAF50]' : 'text-gray-400'}`}>{muted ? 'ON' : 'OFF'}</span>
               </button>
+              {/* DMのみ：相手のブロック/解除 */}
+              {isDm && dmPartner && (
+                <button
+                  onClick={handleToggleBlock}
+                  className={`w-full text-left font-medium py-3 border-b border-gray-100 dark:border-gray-800 ${isPartnerBlocked ? 'text-[#4CAF50]' : 'text-red-500'}`}
+                >
+                  {isPartnerBlocked ? 'ブロック解除' : 'ブロックする'}
+                </button>
+              )}
               {/* DMは退出＝membership削除で重複DMが生じるため無効化（グループのみ退出可） */}
               {!isDm && (
                 <button

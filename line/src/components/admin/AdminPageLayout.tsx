@@ -7,6 +7,7 @@ const TABS = [
   { label: 'ダッシュボード', href: '/admin' },
   { label: 'ユーザー', href: '/admin/users' },
   { label: 'ルーム', href: '/admin/rooms' },
+  { label: '通報', href: '/admin/reports' },
 ];
 
 interface Props {

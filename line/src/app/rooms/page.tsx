@@ -51,6 +51,8 @@ export default function RoomsPage() {
     if (room) {
       setShowCreate(false);
       router.push(`/rooms/${room.id}`);
+    } else {
+      alert('このユーザーとはトークを開始できません'); // ブロック関係・通信エラー等
     }
   };
 

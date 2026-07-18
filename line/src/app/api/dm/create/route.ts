@@ -38,6 +38,16 @@ export async function POST(req: NextRequest) {
     .single();
   if (!target) return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
 
+  // ブロック関係（双方向）があればDM開始不可
+  const { data: blocks } = await admin
+    .from('user_blocks')
+    .select('blocker_id')
+    .or(`and(blocker_id.eq.${user.id},blocked_id.eq.${otherUserId}),and(blocker_id.eq.${otherUserId},blocked_id.eq.${user.id})`)
+    .limit(1);
+  if (blocks && blocks.length > 0) {
+    return NextResponse.json({ error: 'blocked' }, { status: 403 });
+  }
+
   // 参加者2人を昇順連結した正規化キー（rooms.dm_key の部分ユニークインデックスと一致）
   const dmKey = [user.id, otherUserId].sort().join(':');
 
