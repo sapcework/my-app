@@ -293,12 +293,15 @@ export default function ChatPage({ params }: Props) {
                 <span>通知をミュート</span>
                 <span className={`text-xs ${muted ? 'text-[#4CAF50]' : 'text-gray-400'}`}>{muted ? 'ON' : 'OFF'}</span>
               </button>
-              <button
-                onClick={() => { setShowMenu(false); setShowLeaveConfirm(true); }}
-                className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
-              >
-                トークを退出
-              </button>
+              {/* DMは退出＝membership削除で重複DMが生じるため無効化（グループのみ退出可） */}
+              {!isDm && (
+                <button
+                  onClick={() => { setShowMenu(false); setShowLeaveConfirm(true); }}
+                  className="w-full text-left text-red-500 font-medium py-3 border-b border-gray-100"
+                >
+                  トークを退出
+                </button>
+              )}
             </div>
           </div>
         </div>

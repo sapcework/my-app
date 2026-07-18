@@ -24,13 +24,28 @@ export function GlobalNotificationProvider() {
 
     Promise.all([
       supabase.from('room_members').select('room_id').eq('user_id', profile.id),
-      supabase.from('rooms').select('id, name'),
+      supabase.from('rooms').select('id, name, is_dm'),
       supabase.from('room_mutes').select('room_id').eq('user_id', profile.id),
-    ]).then(([{ data: memberships }, { data: rooms }, { data: mutes }]) => {
+    ]).then(async ([{ data: memberships }, { data: rooms }, { data: mutes }]) => {
       setMemberRoomIds(new Set((memberships ?? []).map((m) => m.room_id)));
       setMutedRoomIds(new Set((mutes ?? []).map((m) => m.room_id)));
+
+      const roomList = (rooms ?? []) as { id: string; name: string; is_dm: boolean }[];
+
+      // DMルームは name が空なので相手ユーザー名を解決してタイトルに使う
+      const dmIds = roomList.filter((r) => r.is_dm).map((r) => r.id);
+      const partnerNames: Record<string, string> = {};
+      if (dmIds.length) {
+        const { data: dmMembers } = await supabase
+          .from('room_members').select('room_id, users(id, display_name)').in('room_id', dmIds);
+        const rows = (dmMembers ?? []) as unknown as { room_id: string; users: { id: string; display_name: string } | null }[];
+        for (const { room_id, users } of rows) {
+          if (users && users.id !== profile.id) partnerNames[room_id] = users.display_name;
+        }
+      }
+
       const names: Record<string, string> = {};
-      for (const r of (rooms ?? []) as { id: string; name: string }[]) names[r.id] = r.name;
+      for (const r of roomList) names[r.id] = r.is_dm ? (partnerNames[r.id] ?? 'メッセージ') : r.name;
       setRoomNames(names);
     });
 

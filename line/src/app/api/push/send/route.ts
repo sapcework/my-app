@@ -62,10 +62,19 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // ルーム名取得
+  // ルーム名取得（DMは name が空のため送信者名をタイトルにする）
   const { data: room } = await supabase
-    .from('rooms').select('name').eq('id', msg.room_id).single();
-  const title = (room as { name: string } | null)?.name ?? '新着メッセージ';
+    .from('rooms').select('name, is_dm').eq('id', msg.room_id).single();
+  const r = room as { name: string; is_dm: boolean } | null;
+
+  let title: string;
+  if (r?.is_dm) {
+    const { data: sender } = await supabase
+      .from('users').select('display_name').eq('id', msg.sender_id).single();
+    title = (sender as { display_name: string } | null)?.display_name || '新着メッセージ';
+  } else {
+    title = r?.name || '新着メッセージ'; // 空文字も確実にフォールバック
+  }
 
   // 本文プレビュー
   const body =
