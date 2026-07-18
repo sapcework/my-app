@@ -1,11 +1,15 @@
 -- ユーザーテーブル
+-- ⚠️ is_admin / is_suspended は本番ではダッシュボード手動追加だったため、
+--    新環境構築時の抜け漏れ防止としてここに含める（2026-07-19 実DB照会で実在確認済み）
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   display_name TEXT NOT NULL,
   avatar_url TEXT,
   last_seen TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  is_admin BOOLEAN NOT NULL DEFAULT FALSE,     -- 管理者フラグ（service_roleのみ変更可＝schema_security.sql）
+  is_suspended BOOLEAN NOT NULL DEFAULT FALSE  -- 停止フラグ（同上）
 );
 
 -- ルームテーブル
@@ -31,7 +35,7 @@ CREATE TABLE messages (
   room_id UUID REFERENCES rooms(id) ON DELETE CASCADE NOT NULL,
   sender_id UUID REFERENCES users(id) NOT NULL,
   content TEXT NOT NULL,
-  type TEXT DEFAULT 'text' CHECK (type IN ('text', 'stamp')),
+  type TEXT DEFAULT 'text' CHECK (type IN ('text', 'stamp', 'image')), -- 本番は手動でimage許可済み（2026-07-19 実DB照会で確認）
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

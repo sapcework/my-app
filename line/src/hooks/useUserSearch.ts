@@ -8,18 +8,20 @@ export function useUserSearch() {
   const supabase = createClient();
   const [searching, setSearching] = useState(false);
 
-  // メールアドレスの部分一致で候補を返す（大文字小文字無視・ブロック相手は除外）
-  const searchUsersByEmail = async (query: string): Promise<User[]> => {
-    const q = query.trim().toLowerCase();
+  // 表示名またはメールアドレスの部分一致で候補を返す（大文字小文字無視・ブロック相手は除外）
+  const searchUsers = async (query: string): Promise<User[]> => {
+    const q = query.trim();
     if (!q) return [];
     setSearching(true);
-    const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`); // LIKE ワイルドカードをエスケープ
+    // LIKEワイルドカードをエスケープし、PostgRESTのor()構文を壊す区切り文字は除去
+    const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`).replace(/[,()]/g, '');
+    if (!escaped) { setSearching(false); return []; }
     const [{ data }, { data: blocks }] = await Promise.all([
       supabase
         .from('users')
         .select('*')
-        .ilike('email', `%${escaped}%`)
-        .order('email', { ascending: true })
+        .or(`display_name.ilike.%${escaped}%,email.ilike.%${escaped}%`)
+        .order('display_name', { ascending: true })
         .limit(10),
       supabase.from('user_blocks').select('blocked_id'), // RLSにより自分のブロック行のみ返る
     ]);
@@ -28,5 +30,5 @@ export function useUserSearch() {
     return ((data ?? []) as User[]).filter((u) => !blockedIds.has(u.id));
   };
 
-  return { searchUsersByEmail, searching };
+  return { searchUsers, searching };
 }

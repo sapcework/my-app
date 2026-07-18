@@ -17,14 +17,14 @@ export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds, ac
   const [email, setEmail] = useState('');
   const [results, setResults] = useState<User[]>([]);
   const [searched, setSearched] = useState(false); // 一度でも検索したか（該当なし表示の制御）
-  const { searchUsersByEmail, searching } = useUserSearch();
+  const { searchUsers, searching } = useUserSearch();
 
-  // 入力に応じてデバウンス検索（部分一致）
+  // 入力に応じてデバウンス検索（名前・メールの部分一致）
   useEffect(() => {
     const q = email.trim();
     if (!q) { setResults([]); setSearched(false); return; }
     const timer = setTimeout(async () => {
-      const users = await searchUsersByEmail(q);
+      const users = await searchUsers(q);
       setResults(users);
       setSearched(true);
     }, 300);
@@ -56,8 +56,7 @@ export function UserSearchInput({ selectedUsers, onAdd, onRemove, excludeIds, ac
       <div className="relative">
         <input
           type="text"
-          inputMode="email"
-          placeholder="メールアドレスの一部で検索"
+          placeholder="名前またはメールアドレスで検索"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#4CAF50]"

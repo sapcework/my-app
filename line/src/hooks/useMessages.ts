@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/withTimeout';
 import { getCachedMessages, setCachedMessages } from '@/lib/messagesCache';
-import { Message, MessageWithStatus } from '@/lib/types';
+import { Message, MessageWithStatus, User } from '@/lib/types';
 
 export function useMessages(roomId: string, userId: string | null) {
   const toWithStatus = (msg: Message): MessageWithStatus => ({
@@ -21,6 +21,7 @@ export function useMessages(roomId: string, userId: string | null) {
   const supabase = createClient();
   const latestIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sendersRef = useRef<Map<string, User>>(new Map()); // 既知の送信者キャッシュ（新着時のN+1クエリ回避）
 
   const fetchMessages = useCallback(async () => {
     // ⚠️ タイムアウトを付けないと、起動直後・スリープ復帰直後で回線が不安定な時に
@@ -36,6 +37,9 @@ export function useMessages(roomId: string, userId: string | null) {
     );
 
     const fetched = (data ?? []) as Message[];
+    for (const m of fetched) {
+      if (m.sender) sendersRef.current.set(m.sender_id, m.sender); // 送信者をキャッシュ
+    }
     setMessages(fetched.map(toWithStatus));
     if (fetched.length > 0) {
       latestIdRef.current = fetched[fetched.length - 1].id;
@@ -79,15 +83,22 @@ export function useMessages(roomId: string, userId: string | null) {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
         async (payload) => {
           const newMsg = payload.new as Message;
-          const { data: sender } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', newMsg.sender_id)
-            .single();
+
+          // 既知の送信者はキャッシュから解決し、初見のみクエリ（新着ごとのN+1回避）
+          let sender = sendersRef.current.get(newMsg.sender_id);
+          if (!sender) {
+            const { data } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', newMsg.sender_id)
+              .single();
+            sender = (data as User | null) ?? undefined;
+            if (sender) sendersRef.current.set(newMsg.sender_id, sender);
+          }
 
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev; // 既存なら追加しない
-            return [...prev, toWithStatus({ ...newMsg, sender: sender ?? undefined })];
+            return [...prev, toWithStatus({ ...newMsg, sender })];
           });
           latestIdRef.current = newMsg.id;
         }

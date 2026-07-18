@@ -39,6 +39,8 @@ export default function RoomsPage() {
       setInviteUsers([]);
       setShowCreate(false);
       router.push(`/rooms/${room.id}`);
+    } else {
+      alert('グループの作成に失敗しました。通信環境を確認して再度お試しください。'); // 失敗を無言にしない
     }
   };
 
@@ -142,7 +144,7 @@ export default function RoomsPage() {
               /* 1対1: ユーザーを検索してタップで即トーク開始 */
               <>
                 <h2 className="text-[17px] font-bold mb-2 dark:text-gray-100">ユーザーを検索してトーク</h2>
-                <p className="text-xs text-gray-400 mb-3">メールアドレスで相手を探して、1対1トークを始めます</p>
+                <p className="text-xs text-gray-400 mb-3">名前やメールアドレスで相手を探して、1対1トークを始めます</p>
                 <UserSearchInput
                   selectedUsers={[]}
                   onAdd={handleStartDm}
