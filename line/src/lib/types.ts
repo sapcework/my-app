@@ -19,6 +19,7 @@ export interface Room {
   created_at: string;
   last_message_preview?: string;
   is_dm?: boolean; // 1対1トーク（DM）なら true。表示名は相手ユーザーから動的解決する
+  dm_key?: string | null; // DMの参加者2人を昇順連結した正規化キー（二重作成防止の一意制約用）
 }
 
 export type MemberRole = 'owner' | 'admin' | 'member';

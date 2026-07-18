@@ -38,37 +38,34 @@ export async function POST(req: NextRequest) {
     .single();
   if (!target) return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
 
-  // 既存DMの検索：自分が属する is_dm ルームのうち、相手も属するものを探す
-  const { data: myDmRooms } = await admin
-    .from('room_members')
-    .select('room_id, rooms!inner(is_dm)')
-    .eq('user_id', user.id)
-    .eq('rooms.is_dm', true);
+  // 参加者2人を昇順連結した正規化キー（rooms.dm_key の部分ユニークインデックスと一致）
+  const dmKey = [user.id, otherUserId].sort().join(':');
 
-  const myDmIds = (myDmRooms ?? []).map((r) => (r as { room_id: string }).room_id);
-  if (myDmIds.length > 0) {
-    const { data: shared } = await admin
-      .from('room_members')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .in('room_id', myDmIds)
-      .limit(1);
-
-    if (shared && shared.length > 0) {
-      const roomId = (shared[0] as { room_id: string }).room_id;
-      const { data: room } = await admin.from('rooms').select('*').eq('id', roomId).single();
-      return NextResponse.json({ room, existing: true }); // 既存トークを再利用
-    }
+  // 既存DMの検索：dm_key で一意に特定
+  const { data: existingRoom } = await admin
+    .from('rooms')
+    .select('*')
+    .eq('is_dm', true)
+    .eq('dm_key', dmKey)
+    .maybeSingle();
+  if (existingRoom) {
+    return NextResponse.json({ room: existingRoom, existing: true }); // 既存トークを再利用
   }
 
   // 新規DMルーム作成（name は空文字。表示名は相手から動的解決する）
   const { data: room, error: roomError } = await admin
     .from('rooms')
-    .insert({ name: '', created_by: user.id, is_dm: true })
+    .insert({ name: '', created_by: user.id, is_dm: true, dm_key: dmKey })
     .select()
     .single();
 
   if (roomError || !room) {
+    // 23505 = unique_violation（同時作成の競合）→ 相手プロセスが作成済みのはずなので取り直す
+    if ((roomError as { code?: string } | null)?.code === '23505') {
+      const { data: raced } = await admin
+        .from('rooms').select('*').eq('is_dm', true).eq('dm_key', dmKey).single();
+      if (raced) return NextResponse.json({ room: raced, existing: true });
+    }
     return NextResponse.json({ error: roomError?.message ?? 'failed' }, { status: 500 });
   }
 
