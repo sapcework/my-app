@@ -286,15 +286,17 @@ export default function ChatPage({ params }: Props) {
         </div>
       )}
 
-      {/* 入力バー */}
-      <div className="flex-shrink-0">
-        <MessageInput
-          onSend={handleSendText}
-          onSendImage={sendImage}
-          replyingTo={replyingTo ? { senderName: replyingTo.sender?.display_name ?? '', snippet: replySnippet(replyingTo) } : null}
-          onCancelReply={() => setReplyingTo(null)}
-        />
-      </div>
+      {/* 入力バー（自分がブロック中は非表示。送信はDBでも拒否されるため二重ガード） */}
+      {!(isDm && isPartnerBlocked) && (
+        <div className="flex-shrink-0">
+          <MessageInput
+            onSend={handleSendText}
+            onSendImage={sendImage}
+            replyingTo={replyingTo ? { senderName: replyingTo.sender?.display_name ?? '', snippet: replySnippet(replyingTo) } : null}
+            onCancelReply={() => setReplyingTo(null)}
+          />
+        </div>
+      )}
 
       {/* サイドメニュー */}
       {showMenu && (

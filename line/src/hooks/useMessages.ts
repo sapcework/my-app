@@ -166,14 +166,12 @@ export function useMessages(roomId: string, userId: string | null) {
   };
 
   // 送信失敗メッセージの再送
+  // ⚠️ setMessagesの更新関数内で対象を拾う実装は不可（Reactは更新関数の同期実行を保証せず、
+  //    target未設定でinsertがスキップされ「sending」のまま固まる＝送信済みに見える不具合になる）
   const retryMessage = async (messageId: string) => {
-    let target: MessageWithStatus | undefined;
-    setMessages((prev) => {
-      target = prev.find((m) => m.id === messageId && m.status === 'failed');
-      if (!target) return prev;
-      return prev.map((m) => (m.id === messageId ? { ...m, status: 'sending' as const } : m));
-    });
+    const target = messages.find((m) => m.id === messageId && m.status === 'failed');
     if (!target) return;
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, status: 'sending' as const } : m)));
     await insertMessage(messageId, target.content, target.type as 'text' | 'stamp' | 'image', target.reply_to ?? null);
   };
 
