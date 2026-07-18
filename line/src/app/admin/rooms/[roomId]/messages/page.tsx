@@ -17,9 +17,10 @@ function formatDateTime(iso: string) {
 export default function AdminMessagesPage({ params }: Props) {
   const { roomId } = use(params);
   const router = useRouter();
-  const { getMessages, deleteMessage } = useAdmin();
+  const { getMessages, deleteMessage, getRoomMemberNames } = useAdmin();
   const [messages, setMessages] = useState<Message[]>([]);
   const [room, setRoom] = useState<Room | null>(null);
+  const [dmNames, setDmNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [opError, setOpError] = useState('');
@@ -29,12 +30,23 @@ export default function AdminMessagesPage({ params }: Props) {
     Promise.all([
       getMessages(roomId),
       supabase.from('rooms').select('*').eq('id', roomId).single(),
-    ]).then(([msgs, { data }]) => {
+    ]).then(async ([msgs, { data }]) => {
       setMessages(msgs);
-      if (data) setRoom(data as Room);
+      if (data) {
+        setRoom(data as Room);
+        if ((data as Room).is_dm) { // DMは参加者名をヘッダーに出す
+          const names = await getRoomMemberNames([roomId]);
+          setDmNames(names[roomId] ?? []);
+        }
+      }
       setLoading(false);
     });
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ヘッダー表示名：DMは name が空のため参加者名で示す
+  const headerTitle = room?.is_dm
+    ? (dmNames.length ? dmNames.join(' ⇄ ') : '（DM）')
+    : (room?.name ?? '...');
 
   const handleDelete = async (messageId: string) => {
     setDeleting(messageId);
@@ -53,8 +65,8 @@ export default function AdminMessagesPage({ params }: Props) {
       <header className="bg-[#4CAF50] text-white flex items-center gap-3 px-4 py-3 pt-safe shadow-sm flex-shrink-0">
         <button onClick={() => router.back()} className="text-white text-xl">‹</button>
         <div className="flex-1 min-w-0">
-          <p className="font-bold truncate">{room?.name ?? '...'}</p>
-          <p className="text-xs text-green-200">メッセージ監視</p>
+          <p className="font-bold truncate">{headerTitle}</p>
+          <p className="text-xs text-green-200">{room?.is_dm ? 'DM・メッセージ監視' : 'メッセージ監視'}</p>
         </div>
         <span className="text-xs text-green-200">{messages.length}件</span>
       </header>

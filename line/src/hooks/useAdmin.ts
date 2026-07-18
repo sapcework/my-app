@@ -65,6 +65,21 @@ export function useAdmin() {
     return counts;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 指定ルームの参加者表示名を取得（DMルームの「誰と誰か」表示用）
+  const getRoomMemberNames = useCallback(async (roomIds: string[]): Promise<Record<string, string[]>> => {
+    if (!roomIds.length) return {};
+    const { data } = await supabase
+      .from('room_members')
+      .select('room_id, users(display_name)')
+      .in('room_id', roomIds);
+    const rows = (data ?? []) as unknown as { room_id: string; users: { display_name: string } | null }[];
+    const names: Record<string, string[]> = {};
+    for (const { room_id, users } of rows) {
+      if (users) (names[room_id] ??= []).push(users.display_name);
+    }
+    return names;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deleteRoom = useCallback(async (roomId: string): Promise<boolean> => {
     const { error } = await supabase.from('rooms').delete().eq('id', roomId);
     return !error;
@@ -85,5 +100,5 @@ export function useAdmin() {
     return !error;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { getStats, getUsers, suspendUser, getRooms, getMemberCounts, deleteRoom, getMessages, deleteMessage };
+  return { getStats, getUsers, suspendUser, getRooms, getMemberCounts, getRoomMemberNames, deleteRoom, getMessages, deleteMessage };
 }

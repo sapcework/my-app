@@ -12,13 +12,21 @@ function formatDate(iso: string) {
 
 export default function AdminRoomsPage() {
   const router = useRouter();
-  const { getRooms, getMemberCounts, deleteRoom } = useAdmin();
+  const { getRooms, getMemberCounts, getRoomMemberNames, deleteRoom } = useAdmin();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [dmMemberNames, setDmMemberNames] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [opError, setOpError] = useState('');
+
+  // ルーム表示名：DMは name が空なので参加者名で「誰と誰か」を示す
+  const roomTitle = (room: Room): string => {
+    if (!room.is_dm) return room.name;
+    const names = dmMemberNames[room.id];
+    return names && names.length ? names.join(' ⇄ ') : '（DM）';
+  };
 
   useEffect(() => {
     getRooms().then(async (data) => {
@@ -26,6 +34,8 @@ export default function AdminRoomsPage() {
       if (data.length) {
         const counts = await getMemberCounts(data.map((r) => r.id));
         setMemberCounts(counts);
+        const dmIds = data.filter((r) => r.is_dm).map((r) => r.id); // DMルームのみ参加者名を取得
+        if (dmIds.length) setDmMemberNames(await getRoomMemberNames(dmIds));
       }
       setLoading(false);
     });
@@ -59,11 +69,16 @@ export default function AdminRoomsPage() {
           {rooms.map((room) => (
             <div key={room.id} className="bg-white rounded-xl shadow-sm p-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 font-bold text-lg flex-shrink-0">
-                  #
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${room.is_dm ? 'bg-[#4CAF50]/10 text-[#4CAF50] text-[10px]' : 'bg-gray-100 text-gray-400 text-lg'}`}>
+                  {room.is_dm ? 'DM' : '#'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{room.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    {room.is_dm && (
+                      <span className="text-[10px] font-bold text-[#4CAF50] bg-[#4CAF50]/10 px-1.5 py-0.5 rounded flex-shrink-0">DM</span>
+                    )}
+                    <p className="font-medium text-sm truncate">{roomTitle(room)}</p>
+                  </div>
                   <p className="text-xs text-gray-400 mt-0.5">メンバー: {memberCounts[room.id] ?? 0}人</p>
                   <p className="text-xs text-gray-300 mt-0.5">
                     最終更新: {formatDate(room.last_message_at ?? room.created_at)}
@@ -95,7 +110,7 @@ export default function AdminRoomsPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-lg font-bold mb-2">ルームを削除</h2>
             <p className="text-gray-500 text-sm mb-1">
-              <span className="font-medium text-gray-700">「{confirmRoom?.name}」</span> を削除します。
+              <span className="font-medium text-gray-700">「{confirmRoom ? roomTitle(confirmRoom) : ''}」</span> を削除します。
             </p>
             <p className="text-gray-400 text-xs mb-6">すべてのメッセージも削除されます。この操作は取り消せません。</p>
             <div className="flex gap-3">
