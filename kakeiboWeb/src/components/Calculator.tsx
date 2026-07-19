@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Delete } from 'lucide-react'
 import { useModalA11y } from '../hooks/useModalA11y'
 
@@ -73,6 +73,22 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
     setDisplay(d => d.length <= 1 ? '0' : d.slice(0, -1))
   }
 
+  // 物理キーボード対応（数字・演算子・Enter=確定・Backspace・Escapeは useModalA11y が処理）
+  useEffect(() => { // 依存配列なし＝毎レンダー登録し直し、常に最新stateを参照するクロージャを使う
+    const onKey = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key) || e.key === '.') { e.preventDefault(); pressDigit(e.key); return }
+      if (e.key === '+') { e.preventDefault(); pressOp('+'); return }
+      if (e.key === '-') { e.preventDefault(); pressOp('-'); return }
+      if (e.key === '*') { e.preventDefault(); pressOp('×'); return }
+      if (e.key === '/') { e.preventDefault(); pressOp('÷'); return }
+      if (e.key === 'Enter' || e.key === '=') { e.preventDefault(); pressEq(); return }
+      if (e.key === 'Backspace') { e.preventDefault(); pressBack(); return }
+      if (e.key === 'Delete') { e.preventDefault(); pressAC() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const numBtn = 'h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-lg font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all'
   const fnBtn = 'h-14 rounded-2xl bg-slate-200 dark:bg-slate-700 text-base font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 active:scale-95 transition-all'
   const eqBtn = 'h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-lg font-semibold text-white active:scale-95 transition-all shadow-sm shadow-indigo-600/30'
@@ -97,7 +113,7 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
         {/* ボタングリッド */}
         <div className="grid grid-cols-4 gap-2">
           <button className={fnBtn} onClick={pressAC}>AC</button>
-          <button className={fnBtn} onClick={pressBack}>
+          <button className={fnBtn} onClick={pressBack} aria-label="1文字削除">
             <Delete size={18} className="mx-auto" />
           </button>
           <div />

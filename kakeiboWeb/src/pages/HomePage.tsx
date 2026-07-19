@@ -5,7 +5,7 @@ import { useExpenseStore } from '../store/expenseStore'
 import { useBudgetStore } from '../store/budgetStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { useUIStore } from '../store/uiStore'
-import { formatDateWithDay } from '../utils/date'
+import { formatDateWithDay, prevMonth } from '../utils/date'
 import { formatWan } from '../utils/format'
 import { activatable } from '../utils/interactive'
 
@@ -18,6 +18,8 @@ export const HomePage = () => {
 
   const expenses = getMonthlyExpenses(selectedMonth)
   const total = expenses.reduce((sum, e) => sum + e.amount, 0)
+  const prevTotal = getMonthlyExpenses(prevMonth(selectedMonth)).reduce((sum, e) => sum + e.amount, 0)
+  const diff = total - prevTotal // 前月比（プラスなら増加）
   const budget = getBudget(selectedMonth)
   const remaining = budget - total
   const usageRate = budget > 0 ? Math.min((total / budget) * 100, 100) : 0
@@ -53,7 +55,14 @@ export const HomePage = () => {
               <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 tracking-tight tabular-nums">
                 {formatWan(total)}
               </p>
-              <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">{expenses.length}件の取引</p>
+              <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
+                {expenses.length}件の取引
+                {prevTotal > 0 && (
+                  <span className={`ml-2 font-medium ${diff > 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    前月{diff > 0 ? '+' : diff < 0 ? '−' : '±'}¥{Math.abs(diff).toLocaleString()}
+                  </span>
+                )}
+              </p>
             </div>
             {budget > 0 && (
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
@@ -81,9 +90,8 @@ export const HomePage = () => {
                     key={seg.id}
                     className="h-2 transition-all duration-500 first:rounded-l-full last:rounded-r-full"
                     style={{
-                      width: `${Math.min((seg.amount / budget) * 100, 100)}%`,
-                      backgroundColor: isOver ? undefined : seg.color,
-                      background: isOver ? 'rgb(239 68 68)' : undefined,
+                      width: `${(seg.amount / Math.max(total, budget)) * 100}%`, // 超過時も合計が100%を超えないよう正規化
+                      backgroundColor: isOver ? 'rgb(239 68 68)' : seg.color,
                     }}
                   />
                 ))}

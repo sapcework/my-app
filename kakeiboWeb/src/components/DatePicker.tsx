@@ -68,6 +68,7 @@ export const DatePicker = ({ value, onChange }: Props) => {
               <button
                 type="button"
                 onClick={prevMonth}
+                aria-label="前の月"
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <ChevronLeft size={16} />
@@ -78,6 +79,7 @@ export const DatePicker = ({ value, onChange }: Props) => {
               <button
                 type="button"
                 onClick={nextMonth}
+                aria-label="次の月"
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <ChevronRight size={16} />

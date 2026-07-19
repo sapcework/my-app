@@ -14,16 +14,8 @@ import { usePasscodeStore } from '../store/passcodeStore'
 import { PinPad } from '../components/PinPad'
 import { useAuthStore } from '../store/authStore'
 import { useModalA11y } from '../hooks/useModalA11y'
-import type { Expense, Category, Budget, RecurringExpense } from '../types/index'
-
-type BackupData = {
-  version: string
-  exportedAt: string
-  expenses: Expense[]
-  categories: Category[]
-  budgets: Budget[]
-  recurring: RecurringExpense[]
-}
+import { parseBackup, type BackupData } from '../utils/backup'
+import { APP_NAME, APP_VERSION, APP_BUILD, BACKUP_VERSION } from '../constants/app'
 
 export const SettingsPage = () => {
   const navigate = useNavigate()
@@ -68,7 +60,7 @@ export const SettingsPage = () => {
     })
     if (!ok) return // 書き出し前の確認
     const data: BackupData = {
-      version: '1',
+      version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
       expenses,
       categories,
@@ -91,14 +83,15 @@ export const SettingsPage = () => {
     const reader = new FileReader()
     reader.onload = async (ev) => {
       try {
-        const data = JSON.parse(ev.target?.result as string) as BackupData
-        if (!Array.isArray(data.expenses) || !Array.isArray(data.categories)) {
-          showToast({ message: '無効なバックアップファイルです' })
+        const result = parseBackup(ev.target?.result as string) // 全行を型検証（不正データによるDB破壊を防ぐ）
+        if (!result.ok) {
+          showToast({ message: `復元できません：${result.error}` })
           return
         }
+        const data = result.data
         const ok = await confirmDialog({
           title: 'バックアップから復元',
-          message: `${file.name} で復元してもよろしいですか？\n現在のデータはすべて上書きされます。`,
+          message: `${file.name} で復元してもよろしいですか？\n（支出${data.expenses.length}件・カテゴリ${data.categories.length}件）\n現在のデータはすべて上書きされます。`,
           confirmLabel: '復元する',
           danger: true, // 上書きは破壊的操作
         })
@@ -107,8 +100,8 @@ export const SettingsPage = () => {
         const { error } = await dbRestoreAll({
           expenses: data.expenses,
           categories: data.categories,
-          budgets: data.budgets ?? [],
-          recurring: data.recurring ?? [],
+          budgets: data.budgets,
+          recurring: data.recurring,
         })
         if (error) {
           console.error('dbRestoreAll failed', error)
@@ -117,8 +110,8 @@ export const SettingsPage = () => {
         }
         restoreExpenses(data.expenses)
         restoreCategories(data.categories)
-        restoreBudgets(data.budgets ?? [])
-        restoreRecurring(data.recurring ?? [])
+        restoreBudgets(data.budgets)
+        restoreRecurring(data.recurring)
         showToast({ message: '復元が完了しました' })
       } catch {
         showToast({ message: 'バックアップファイルの読み込みに失敗しました' })
@@ -398,14 +391,14 @@ export const SettingsPage = () => {
               <span className="text-2xl">📒</span>
             </div>
             <div>
-              <p className="text-base font-bold text-slate-900 dark:text-slate-50">家計簿</p>
+              <p className="text-base font-bold text-slate-900 dark:text-slate-50">{APP_NAME}</p>
               <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">シンプルな支出管理アプリ</p>
             </div>
           </div>
           <div className="space-y-2.5">
             {[
-              { label: 'バージョン', value: '1.0.0' },
-              { label: 'ビルド', value: '2025.05' },
+              { label: 'バージョン', value: APP_VERSION },
+              { label: 'ビルド', value: APP_BUILD },
               { label: 'プラットフォーム', value: 'Web (PWA対応)' },
               { label: 'データ保存', value: 'Supabase（クラウド）' },
             ].map(({ label, value }) => (
@@ -416,7 +409,7 @@ export const SettingsPage = () => {
             ))}
           </div>
           <p className="text-xs text-slate-300 dark:text-slate-500 text-center mt-4">
-            © 2025 Kakeibo App. All rights reserved.
+            © {new Date().getFullYear()} Kakeibo App. All rights reserved.
           </p>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { DatePicker } from '../components/DatePicker'
 import { useExpenseStore } from '../store/expenseStore'
 import { useCategoryStore } from '../store/categoryStore'
 import { confirmDialog } from '../store/dialogStore'
+import { showToast } from '../store/toastStore'
 
 export const ExpenseFormPage = () => {
   const navigate = useNavigate()
@@ -51,8 +52,10 @@ export const ExpenseFormPage = () => {
     if (!amount || !categoryId) return
     if (existing) {
       updateExpense(existing.id, { amount, categoryId, itemName, note, date })
+      showToast({ message: '更新しました' })
     } else {
       addExpense({ amount, categoryId, itemName, note, date })
+      showToast({ message: '追加しました' })
     }
     navigate(-1)
   }
@@ -67,8 +70,37 @@ export const ExpenseFormPage = () => {
     })
     if (ok) {
       deleteExpense(existing.id)
+      showToast({ message: '削除しました' })
       navigate(-1)
     }
+  }
+
+  // 編集URLの支出が存在しない（削除済み・不正なid）場合は案内を出す
+  if (id && !existing) {
+    return (
+      <div className="pt-5 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate('/expenses')}
+            aria-label="戻る"
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">支出を編集</h1>
+        </div>
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">この支出は見つかりませんでした</p>
+          <p className="text-xs text-slate-400 dark:text-slate-400">削除済みか、リンクが無効になっている可能性があります</p>
+          <button
+            onClick={() => navigate('/expenses')}
+            className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1"
+          >
+            支出一覧に戻る
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const inputClass = "w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"

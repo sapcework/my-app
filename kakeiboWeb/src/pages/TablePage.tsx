@@ -6,6 +6,7 @@ import { useCategoryStore } from '../store/categoryStore'
 import { useBudgetStore } from '../store/budgetStore'
 import { toYearMonth, formatTableMonth, formatDateWithDay, formatYearMonth } from '../utils/date'
 import { useModalA11y } from '../hooks/useModalA11y'
+import { activatable } from '../utils/interactive'
 import type { Category } from '../types'
 
 type CellDetail = {
@@ -144,9 +145,12 @@ export const TablePage = () => {
                       <td
                         key={m}
                         onClick={() => amt > 0 && openDetail(cat, m)}
+                        onKeyDown={(e) => { if (amt > 0 && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetail(cat, m) } }}
+                        tabIndex={amt > 0 ? 0 : undefined}
+                        aria-label={amt > 0 ? `${cat.name} ${formatYearMonth(m)} の明細を表示` : undefined}
                         className={`px-2 py-2.5 text-right border-b border-slate-100 dark:border-slate-800 tabular-nums ${
                           amt > 0
-                            ? 'text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+                            ? 'text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30 focus-visible:bg-indigo-50 dark:focus-visible:bg-indigo-950/30'
                             : 'text-slate-300 dark:text-slate-500'
                         }`}
                       >
@@ -176,6 +180,9 @@ export const TablePage = () => {
                   <td
                     key={m}
                     onClick={() => total > 0 && openDetail(null, m)}
+                    onKeyDown={(e) => { if (total > 0 && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetail(null, m) } }}
+                    tabIndex={total > 0 ? 0 : undefined}
+                    aria-label={total > 0 ? `${formatYearMonth(m)} の合計明細を表示` : undefined}
                     className={`px-2 py-3 text-right border-t-2 border-slate-200 dark:border-slate-700 tabular-nums ${
                       total > 0
                         ? `cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30 ${
@@ -236,6 +243,7 @@ export const TablePage = () => {
               </div>
               <button
                 onClick={() => setDetail(null)}
+                aria-label="閉じる"
                 className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X size={16} />
@@ -248,7 +256,7 @@ export const TablePage = () => {
                 return (
                   <li
                     key={e.id}
-                    onClick={() => { setDetail(null); navigate(`/expenses/${e.id}/edit`) }}
+                    {...activatable(() => { setDetail(null); navigate(`/expenses/${e.id}/edit`) }, `${title} を編集`)}
                     className="flex items-center justify-between py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl px-2 transition-colors"
                   >
                     <div className="flex items-center gap-3">

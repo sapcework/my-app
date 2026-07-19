@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Tag } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Tag, Pencil } from 'lucide-react'
 import { useCategoryStore } from '../store/categoryStore'
 import { useExpenseStore } from '../store/expenseStore'
 import { confirmDialog } from '../store/dialogStore'
 import { showToast } from '../store/toastStore'
+import { activatable } from '../utils/interactive'
 
 const COLORS = [
   '#FF9800', '#2196F3', '#4CAF50', '#9C27B0',
@@ -15,21 +16,44 @@ const ICONS = ['🍽️', '🚗', '🛒', '🎮', '🏥', '🏠', '💼', '🎓'
 
 export const CategoryPage = () => {
   const navigate = useNavigate()
-  const { categories, addCategory, deleteCategory } = useCategoryStore()
+  const { categories, addCategory, updateCategory, deleteCategory } = useCategoryStore()
   const { expenses } = useExpenseStore()
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null) // 編集中カテゴリのid（nullなら新規追加）
   const [name, setName] = useState('')
   const [color, setColor] = useState(COLORS[0])
   const [icon, setIcon] = useState(ICONS[0])
 
-  const handleAdd = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    addCategory({ name: name.trim(), color, icon })
+  const resetForm = () => {
+    setEditingId(null)
     setName('')
     setColor(COLORS[0])
     setIcon(ICONS[0])
     setShowForm(false)
+  }
+
+  const openEdit = (id: string) => {
+    const c = categories.find((cat) => cat.id === id)
+    if (!c) return
+    setEditingId(c.id)
+    setName(c.name)
+    setColor(c.color)
+    setIcon(c.icon)
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' }) // フォームは画面上部にあるため
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    if (editingId) {
+      updateCategory(editingId, { name: name.trim(), color, icon })
+      showToast({ message: `「${name.trim()}」を更新しました` })
+    } else {
+      addCategory({ name: name.trim(), color, icon })
+      showToast({ message: `「${name.trim()}」を追加しました` })
+    }
+    resetForm()
   }
 
   const labelClass = "block text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2"
@@ -49,7 +73,7 @@ export const CategoryPage = () => {
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">カテゴリ</h1>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-colors ${
             showForm
               ? 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
@@ -61,10 +85,10 @@ export const CategoryPage = () => {
         </button>
       </div>
 
-      {/* 追加フォーム */}
+      {/* 追加・編集フォーム */}
       {showForm && (
         <form
-          onSubmit={handleAdd}
+          onSubmit={handleSubmit}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 space-y-4"
         >
           {/* 名前入力 */}
@@ -134,7 +158,7 @@ export const CategoryPage = () => {
             type="submit"
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-indigo-600/20"
           >
-            追加する
+            {editingId ? '更新する' : '追加する'}
           </button>
         </form>
       )}
@@ -154,14 +178,18 @@ export const CategoryPage = () => {
               key={c.id}
               className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-4 flex items-center justify-between"
             >
-              <div className="flex items-center gap-3">
+              <div
+                {...activatable(() => openEdit(c.id), `${c.name} を編集`)}
+                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer rounded-xl -m-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+              >
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
                   style={{ backgroundColor: c.color + '20' }}
                 >
                   {c.icon}
                 </div>
-                <span className="text-sm font-bold" style={{ color: c.color }}>{c.name}</span>
+                <span className="text-sm font-bold truncate" style={{ color: c.color }}>{c.name}</span>
+                <Pencil size={13} className="text-slate-300 dark:text-slate-500 flex-shrink-0" />
               </div>
               <button
                 onClick={async () => {
@@ -170,7 +198,11 @@ export const CategoryPage = () => {
                     ? `「${c.name}」を削除しますか？\nこのカテゴリを使用している支出が${usedCount}件あります（削除後も支出データ自体は残り、カテゴリ表示が「不明」になります）。`
                     : `「${c.name}」を削除しますか？`
                   const ok = await confirmDialog({ title: 'カテゴリを削除', message, confirmLabel: '削除', danger: true })
-                  if (ok) { deleteCategory(c.id); showToast({ message: `「${c.name}」を削除しました` }) }
+                  if (ok) {
+                    deleteCategory(c.id)
+                    if (editingId === c.id) resetForm() // 編集中のカテゴリを消したらフォームも閉じる
+                    showToast({ message: `「${c.name}」を削除しました` })
+                  }
                 }}
                 aria-label={`${c.name} を削除`}
                 className="text-slate-300 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors p-1"

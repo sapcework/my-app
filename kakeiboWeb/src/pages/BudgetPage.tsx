@@ -7,6 +7,7 @@ import { useBudgetStore } from '../store/budgetStore'
 import { useExpenseStore } from '../store/expenseStore'
 import { useUIStore } from '../store/uiStore'
 import { formatYearMonth } from '../utils/date'
+import { showToast } from '../store/toastStore'
 
 export const BudgetPage = () => {
   const navigate = useNavigate()
@@ -28,6 +29,7 @@ export const BudgetPage = () => {
     e.preventDefault()
     if (!amount) return
     setBudget(selectedMonth, amount)
+    showToast({ message: `${formatYearMonth(selectedMonth)}の予算を保存しました` })
   }
 
   const handleMonthChange = (m: string) => {

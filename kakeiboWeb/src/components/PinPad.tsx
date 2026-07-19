@@ -27,6 +27,16 @@ export const PinPad = ({ title, onComplete, error, onErrorReset, compact }: Prop
     if (next.length === 4) setTimeout(() => onComplete(next), 80)
   }
 
+  // 物理キーボード対応（数字入力・Backspaceで1桁削除）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) { e.preventDefault(); append(e.key); return }
+      if (e.key === 'Backspace') { e.preventDefault(); setPin((p) => p.slice(0, -1)) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const btnH = compact ? 'h-12' : 'h-16'
   const outerGap = compact ? 'gap-5' : 'gap-8'
   const dotGap = compact ? 'gap-4' : 'gap-5'
@@ -62,6 +72,7 @@ export const PinPad = ({ title, onComplete, error, onErrorReset, compact }: Prop
             <button
               key={i}
               onClick={() => setPin((p) => p.slice(0, -1))}
+              aria-label="1桁削除"
               className={`${btnH} flex items-center justify-center rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all`}
             >
               <Delete size={compact ? 18 : 20} />
