@@ -35,6 +35,21 @@ body {
   font-size: 1.25em;
 }
 
+/* キーボード操作時のみフォーカスリングを表示（マウスクリックでは出さない） */
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* OS設定で「視差効果を減らす」を選んだユーザーにはアニメーションを抑制する */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* パスコード誤入力時のシェイク */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }

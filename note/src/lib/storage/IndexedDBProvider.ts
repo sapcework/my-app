@@ -61,6 +61,13 @@ export class IndexedDBProvider implements StorageProvider {
     this.channel.postMessage('updated')
   }
 
+  async clear(): Promise<void> {
+    const db = await getDB()
+    await db.clear(STORE_NAME)
+    this.notify()
+    this.channel.postMessage('updated')
+  }
+
   async search(query: string): Promise<Note[]> {
     const notes = await this.getNotes()
     const q = query.toLowerCase()

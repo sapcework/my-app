@@ -8,6 +8,7 @@ type Props = {
   error?: boolean
   onErrorReset?: () => void
   compact?: boolean
+  disabled?: boolean // ロックアウト中などの入力禁止
 }
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del']
@@ -19,7 +20,7 @@ const DeleteIcon = ({ size }: { size: number }) => (
   </svg>
 )
 
-export function PinPad({ title, onComplete, error, onErrorReset, compact }: Props) {
+export function PinPad({ title, onComplete, error, onErrorReset, compact, disabled }: Props) {
   const [pin, setPin] = useState('')
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export function PinPad({ title, onComplete, error, onErrorReset, compact }: Prop
   }, [error, onErrorReset])
 
   const append = (d: string) => {
+    if (disabled) return
     setPin((p) => {
       if (p.length >= 4) return p
       const next = p + d
@@ -36,6 +38,16 @@ export function PinPad({ title, onComplete, error, onErrorReset, compact }: Prop
       return next
     })
   }
+
+  // 物理キーボードでも入力できるようにする（デスクトップ / アクセシビリティ）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) append(e.key)
+      else if (e.key === 'Backspace') setPin((p) => p.slice(0, -1))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [disabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const btnH = compact ? 'h-12' : 'h-16'
   const outerGap = compact ? 'gap-5' : 'gap-8'
@@ -70,8 +82,9 @@ export function PinPad({ title, onComplete, error, onErrorReset, compact }: Prop
             <button
               key={i}
               onClick={() => setPin((p) => p.slice(0, -1))}
-              className={`${btnH} flex items-center justify-center rounded-2xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all`}
-              aria-label="削除"
+              disabled={disabled}
+              className={`${btnH} flex items-center justify-center rounded-2xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 disabled:opacity-40 transition-all`}
+              aria-label="1文字削除"
             >
               <DeleteIcon size={compact ? 18 : 20} />
             </button>
@@ -80,7 +93,8 @@ export function PinPad({ title, onComplete, error, onErrorReset, compact }: Prop
             <button
               key={i}
               onClick={() => append(k)}
-              className={`${btnH} ${numSize} font-semibold text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all`}
+              disabled={disabled}
+              className={`${btnH} ${numSize} font-semibold text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 disabled:opacity-40 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all`}
             >
               {k}
             </button>

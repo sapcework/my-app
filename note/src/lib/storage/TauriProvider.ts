@@ -77,6 +77,13 @@ export class TauriProvider implements StorageProvider {
     this.notify()
   }
 
+  async clear(): Promise<void> {
+    await serialize(async () => {
+      await writeStore({})
+    })
+    this.notify()
+  }
+
   async search(query: string): Promise<Note[]> {
     const notes = await this.getNotes()
     const q = query.toLowerCase()

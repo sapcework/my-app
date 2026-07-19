@@ -18,4 +18,5 @@ export interface StorageProvider {
   deleteNote(id: string): Promise<void>
   search(query: string): Promise<Note[]>
   subscribe(cb: () => void): () => void
+  clear(): Promise<void> // 端末上のローカルコピーを消去する（クラウドへは伝播させない）
 }

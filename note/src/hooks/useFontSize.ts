@@ -23,15 +23,6 @@ export const FONT_SIZE_CLASS: Record<FontSize, string> = {
   xl:   'text-xl',
 }
 
-// タイトル用（本文より3段階大きく、同じ割合でスケールさせる）
-export const FONT_SIZE_TITLE_CLASS: Record<FontSize, string> = {
-  xs:   'text-lg',
-  sm:   'text-xl',
-  base: 'text-2xl',
-  lg:   'text-3xl',
-  xl:   'text-4xl',
-}
-
 export function useFontSize() {
   const [fontSize, setFontSizeState] = useState<FontSize>('base')
 

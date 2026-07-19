@@ -1,9 +1,9 @@
 // ノート本文のローカル暗号化（AES-256-GCM）。鍵はパスコードから PBKDF2 で導出する。
 // 保存ファイル（IndexedDB / notes.json）のみ暗号化し、同期前に復号するためクラウドは平文。
 
-const PBKDF2_ITERATIONS = 200_000
+import { PASSCODE_STORAGE_KEY, PBKDF2_ITERATIONS } from '@/lib/passcode'
+
 const PREFIX = 'enc:1:' // 暗号文の識別子（無い場合は平文として扱う）
-const PASSCODE_KEY = 'simplenote-passcode'
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()
@@ -20,7 +20,9 @@ function fromB64(b64: string): Uint8Array<ArrayBuffer> {
   return bytes
 }
 
-// パスコードから AES-GCM 鍵を導出する
+// パスコードから AES-GCM 鍵を導出する。
+// salt をそのまま使う（既存暗号文との互換のため変更不可）。検証ハッシュ側（passcode.ts）は
+// salt にドメインサフィックスを付けて導出するため、この鍵とビット列が一致することはない。
 export async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
@@ -44,7 +46,7 @@ function ensureConfigured() {
   if (configured || typeof window === 'undefined') return
   configured = true
   try {
-    const raw = localStorage.getItem(PASSCODE_KEY)
+    const raw = localStorage.getItem(PASSCODE_STORAGE_KEY)
     if (raw) enabled = !!JSON.parse(raw).enabled
   } catch { /* 失敗時は無効扱い */ }
 }

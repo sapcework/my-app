@@ -9,6 +9,7 @@ import { IndexedDBProvider } from '@/lib/storage/IndexedDBProvider'
 import { TauriProvider } from '@/lib/storage/TauriProvider'
 import { SupabaseRemoteProvider } from '@/lib/supabase/SupabaseRemoteProvider'
 import { supabase } from '@/lib/supabase/client'
+import { isTauri } from '@/lib/platform'
 
 type ContextValue = {
   storage: StorageProvider
@@ -16,10 +17,6 @@ type ContextValue = {
 }
 
 export const StorageContext = createContext<ContextValue | null>(null)
-
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-}
 
 export function StorageProviderComponent({ children }: { children: React.ReactNode }) {
   const [value, setValue] = useState<ContextValue | null>(null)

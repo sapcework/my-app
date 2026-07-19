@@ -13,6 +13,8 @@ import { PinPad } from '@/components/PinPad'
 import { confirmDialog } from '@/lib/dialog'
 import { showToast } from '@/lib/toast'
 import { downloadCsv } from '@/utils/csv'
+import { clearPasscode } from '@/lib/passcode'
+import { TrashIcon } from '@/components/icons'
 import type { Note } from '@/lib/types'
 
 export type ListView = 'notes' | 'trash'
@@ -35,12 +37,7 @@ const IconAllNotes = () => (
     <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
   </svg>
 )
-const IconTrash = () => (
-  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="3 6 5 6 21 6"/>
-    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-  </svg>
-)
+const IconTrash = () => <TrashIcon className="w-4 h-4 shrink-0" />
 const IconSettings = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="3"/>
@@ -120,12 +117,18 @@ function SortModal({ current, onSelect, onClose }: {
   current: SortOrder; onSelect: (v: SortOrder) => void; onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex flex-col justify-end">
+    <div
+      className="fixed inset-0 z-40 flex flex-col justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label="並べ替え"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white dark:bg-gray-900 rounded-t-2xl shadow-xl">
         <div className="flex items-center justify-between px-5 pt-4 pb-2 border-b border-gray-100 dark:border-gray-800">
           <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">並べ替え</span>
-          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none">✕</button>
+          <button onClick={onClose} aria-label="閉じる" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none">✕</button>
         </div>
         <div className="py-2">
           {SORT_OPTIONS.map(({ value, label }) => (
@@ -292,17 +295,21 @@ export function SideMenu({ open, onClose, sortOrder, onSortChange, view, onViewC
   }
 
   // ---- ログアウト ----
+  // 同一端末を別アカウントで使い回すケースでの混入・漏洩を防ぐため、
+  // ログアウト時は端末上のローカルコピー（ノート・パスコード設定）を消去する。
+  // クラウド上のデータは削除しない。Context を作り直すためフルリロードする。
   async function handleSignOut() {
     const ok = await confirmDialog({
       title: 'ログアウト',
-      message: 'ログアウトしますか？',
+      message: 'ログアウトしますか？\n\nこの端末に保存されているノートは削除されます（クラウド上のデータは保持されます）。',
       confirmLabel: 'ログアウト',
       danger: true,
     })
     if (!ok) return
     await signOut()
-    onClose()
-    showToast('ログアウトしました')
+    await storage.clear()
+    clearPasscode()
+    window.location.href = '/'
   }
 
   return (
@@ -320,6 +327,11 @@ export function SideMenu({ open, onClose, sortOrder, onSortChange, view, onViewC
         className={`fixed top-0 left-0 h-full w-56 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 z-30 flex flex-col shadow-xl transform transition-transform duration-200 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
+        role="dialog"
+        aria-modal={open}
+        aria-label="メニュー"
+        aria-hidden={!open}
+        onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
       >
         {/* ヘッダー */}
         <div className="px-4 pt-5 pb-3 shrink-0">
@@ -514,7 +526,13 @@ export function SideMenu({ open, onClose, sortOrder, onSortChange, view, onViewC
 
       {/* パスコード設定モーダル */}
       {pinSheet && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="パスコード設定"
+          onKeyDown={(e) => { if (e.key === 'Escape') closePinSheet() }}
+        >
           <div className="absolute inset-0 bg-black/50" onClick={closePinSheet} />
           <div className="relative bg-white dark:bg-gray-900 rounded-3xl px-8 pt-8 pb-10 w-full max-w-sm shadow-xl">
             <button

@@ -22,4 +22,10 @@ export class SyncedStorageProvider implements StorageProvider {
     await this.base.deleteNote(id)
     this.sync.enqueue(id, 'delete')
   }
+
+  // ローカルコピーの消去のみ。クラウドへは伝播させないため sync キューも破棄する。
+  async clear(): Promise<void> {
+    await this.base.clear()
+    this.sync.reset()
+  }
 }

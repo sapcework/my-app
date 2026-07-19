@@ -36,6 +36,10 @@ export class EncryptedStorageProvider implements StorageProvider {
     await this.base.deleteNote(id)
   }
 
+  async clear(): Promise<void> {
+    await this.base.clear()
+  }
+
   // 暗号文のままでは検索できないため、復号済みノートに対して検索する
   async search(query: string): Promise<Note[]> {
     const notes = await this.getNotes()

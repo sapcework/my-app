@@ -6,6 +6,7 @@ import { PasscodeProvider } from '@/context/PasscodeContext'
 import { ConfirmDialogHost } from '@/components/ConfirmDialogHost'
 import { ToastHost } from '@/components/ToastHost'
 import { PWARegister } from '@/components/PWARegister'
+import { InstallPrompt } from '@/components/InstallPrompt'
 import './globals.css'
 
 const geistSans = Geist({
@@ -19,16 +20,30 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://myluminote.vercel.app'),
   title: 'LumiNote',
-  description: 'Offline-first note app',
+  applicationName: 'LumiNote',
+  description: 'オフラインでも使えるシンプルなメモアプリ。クラウド同期・パスコード暗号化対応。',
   manifest: '/manifest.webmanifest', // PWA マニフェスト（public配下の静的ファイル）
   // PWA: iOS でもホーム画面追加時に全画面アプリ化
   appleWebApp: { capable: true, title: 'LumiNote', statusBarStyle: 'default' },
   icons: { apple: '/icon-192.png' },
+  openGraph: {
+    title: 'LumiNote',
+    description: 'オフラインでも使えるシンプルなメモアプリ',
+    url: '/',
+    siteName: 'LumiNote',
+    locale: 'ja_JP',
+    type: 'website',
+  },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#3b82f6', // ステータスバー等の配色（blue-500）
+  // ステータスバー等をアプリ背景と揃える（ライト/ダークで切替）
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b0f17' },
+  ],
 }
 
 export default function RootLayout({
@@ -55,6 +70,7 @@ export default function RootLayout({
             <ConfirmDialogHost />
             <ToastHost />
             <PWARegister />
+            <InstallPrompt />
           </AuthProvider>
         </PasscodeProvider>
       </body>

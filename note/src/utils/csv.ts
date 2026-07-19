@@ -1,5 +1,5 @@
 // CSVセルを安全な文字列に変換する（CSVインジェクション対策 + Excelの文字化け対策）
-const escapeCell = (value: string): string => {
+export const escapeCell = (value: string): string => {
   let v = value ?? ''
   if (/^[=+\-@\t\r]/.test(v)) v = "'" + v // 先頭が数式記号なら ' を前置
   return `"${v.replace(/"/g, '""')}"` // " を "" にエスケープして全体を引用符で囲む

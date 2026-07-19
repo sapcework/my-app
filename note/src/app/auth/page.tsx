@@ -18,7 +18,13 @@ export default function AuthPage() {
     setLoading(true)
     const err = await signIn(email, password)
     setLoading(false)
-    if (err) { setError('メールアドレスまたはパスワードが正しくありません'); return }
+    if (err) {
+      // 通信起因の失敗は認証エラーと区別して案内する（次に取るべき行動が変わるため）
+      setError(/fetch|network|timeout|abort/i.test(err)
+        ? '通信に失敗しました。ネットワーク接続を確認してもう一度お試しください'
+        : 'メールアドレスまたはパスワードが正しくありません')
+      return
+    }
     router.push('/')
   }
 
@@ -55,7 +61,7 @@ export default function AuthPage() {
             className="px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-md outline-none focus:ring-1 focus:ring-blue-300 placeholder:text-gray-400 dark:placeholder:text-gray-500"
           />
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
 
           <button
             type="submit"

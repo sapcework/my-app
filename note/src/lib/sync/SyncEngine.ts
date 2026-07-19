@@ -64,6 +64,17 @@ export class SyncEngine {
     this.scheduleFlush()
   }
 
+  // 保留中の変更を破棄して初期状態に戻す（クラウドへは何も送らない）。
+  // ローカルデータを丸ごと消去する操作（ログアウト等）に合わせて呼ぶ想定。
+  reset() {
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    this.queue.clear()
+    this.backoff = 0
+    this.syncing = false
+    this.setStatus(this.userId ? 'idle' : 'offline')
+  }
+
   // エラー時にユーザーが手動で再同期するための入口
   async manualSync(): Promise<void> {
     this.backoff = 0

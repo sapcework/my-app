@@ -31,7 +31,8 @@ UI → SyncedStorageProvider → EncryptedStorageProvider（暗号層）→ Inde
 
 - 開発サーバー: `npm run dev`
 - ビルド: `npm run build`
-- 型チェック: `npx tsc --noEmit`
+- 型チェック: `npm run typecheck`（= `tsc --noEmit`）
+- テスト: `npm test`（Vitest。監視モードは `npm run test:watch`）
 - Tauri 開発: `npm run tauri dev`
 - Tauri ビルド: `npm run tauri build`
 
@@ -53,6 +54,27 @@ type Note = {
 ```
 
 注意: localStorage / IndexedDB のキー（`simplenote-*`, DB名 `simplenote-db`）は互換のため変更しないこと（変えると既存データが消える）。
+
+## パスコード / 暗号化（重要な互換ルール）
+
+- 保存形式は v2（`{ v: 2, enabled, hash, salt }`）。検証ハッシュは `salt + '|verify'` でドメイン分離した PBKDF2。
+  v1（`v` 無し）は検証ハッシュ＝AES鍵と同一ビット列だった旧形式で、解錠成功時に v2 へ自動移行される。
+- **暗号鍵の導出（`deriveAesKey`: salt をそのまま使用）は変更禁止**。変えると既存の暗号化済みノートが復号不能になる。
+- PIN 連続5回失敗で 30秒〜最大5分のロックアウト（`simplenote-passcode-attempts`）。成功でリセット。
+
+## UI/UX の既定パターン
+
+- ノート削除（ゴミ箱へ）は確認ダイアログを出さず、「元に戻す」付きトーストで Undo 可能にする。
+  確認ダイアログは不可逆操作（完全削除・ゴミ箱を空にする・ログアウト）のみ。
+- エディタは 500ms デバウンス保存＋「戻る / ノート切替 / visibilitychange / pagehide」で即時 flush（入力消失防止）。
+- 共有アイコンは `components/icons.tsx`、環境判定（`isTauri`）は `lib/platform.ts` に集約。重複定義しない。
+- ショートカット: Ctrl/Cmd+K・`/` = 検索フォーカス、Ctrl/Cmd+Alt+N = 新規ノート。
+
+## テスト
+
+- Vitest（`vitest.config.ts`、setup: `src/test/setup.ts` が localStorage スタブを提供）。
+- テストは対象と同じディレクトリに `*.test.ts` で配置（noteText / csv / sortOrder / crypto / passcode / SyncEngine）。
+- 暗号・同期・パスコードなど重要ロジックを変更したら対応するテストも更新すること。
 
 ## StorageProvider インターフェース
 
@@ -86,4 +108,5 @@ interface StorageProvider {
 
 - Web は Vercel（GitHub push で自動デプロイ）。
 - PWA: `public/manifest.webmanifest` + `public/sw.js`（network-first）。SWは本番Webのみ登録（Tauri/開発は無効）。
+- ホーム画面追加の案内バナー: `components/InstallPrompt.tsx`。Android/PC は beforeinstallprompt→ネイティブ起動、iOS は手順案内。閉じたら `simplenote-install-prompt-dismissed` に記録し再表示しない（standalone/Tauri では非表示）。
 - SWのアセットfetch失敗時はHTMLを返さない（モジュール破損防止）。キャッシュ名を上げると旧キャッシュ一掃。
