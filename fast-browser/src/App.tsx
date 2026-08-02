@@ -1,419 +1,369 @@
-import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import './App.css';
 
-// ── 定数 ──────────────────────────────────────────────────────────
+import type { Tab, TabsState, Bookmark, HistoryEntry } from './types';
+import { HOME, type EngineId, normalizeUrl, shortUrl, sameUrl } from './lib/url';
+import { useToasts, FAILED } from './hooks/useToasts';
+import { TabBar } from './components/TabBar';
+import { NavBar } from './components/NavBar';
+import { BookmarkBar } from './components/BookmarkBar';
+import { HistoryPanel } from './components/HistoryPanel';
+import { Toasts } from './components/Toasts';
 
-const HOME = 'https://www.google.com';
-const BASE_HEIGHT = 86;         // タブバー + ナビバー
-const BM_BAR_HEIGHT = 32;       // ブックマークバー
-const HISTORY_PANEL_HEIGHT = 320; // 履歴パネル
+// chrome（ツールバー）領域の各段の高さ。
+// コンテンツ WebView は OS ネイティブの子ビューとして下に並ぶため、
+// パネルを開くぶんだけ chrome を高くし、WebView を押し下げる必要がある。
+const BASE_HEIGHT = 88;
+const BM_BAR_HEIGHT = 34;
+const HISTORY_PANEL_HEIGHT = 360;
+// 通知はコンテンツ WebView（OS ネイティブの子ビュー）に隠れてしまうため、
+// 重ねて表示することができない。表示中はその分だけ chrome の高さを確保する。
+const TOAST_ROW_HEIGHT = 46;
+const MAX_VISIBLE_TOASTS = 3;
 
-// ── 型定義 ────────────────────────────────────────────────────────
-
-interface Tab {
-  id: number;
-  url: string;
-  title: string;
-  is_loading: boolean;
-  favicon: string | null;
-}
-
-interface TabsState {
-  tabs: Tab[];
-  active_id: number;
-}
-
-interface Bookmark {
-  id: number;
-  url: string;
-  title: string;
-  created_at: number;
-}
-
-interface HistoryEntry {
-  id: number;
-  url: string;
-  title: string;
-  visited_at: number;
-  favicon: string | null;
-}
-
-const ENGINES = [
-  { id: 'google',     label: 'G',   name: 'Google',     searchUrl: 'https://www.google.com/search?q='  },
-  { id: 'ddg',        label: 'DDG', name: 'DuckDuckGo', searchUrl: 'https://duckduckgo.com/?q='        },
-  { id: 'bing',       label: 'B',   name: 'Bing',       searchUrl: 'https://www.bing.com/search?q='   },
-] as const;
-type EngineId = typeof ENGINES[number]['id'];
-
-// ── ユーティリティ ────────────────────────────────────────────────
-
-function normalizeUrl(raw: string, engineId: EngineId): string {
-  const s = raw.trim();
-  if (!s) return HOME;
-  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('file://')) return s;
-  if (!s.includes('.') || s.includes(' ')) {
-    const engine = ENGINES.find(e => e.id === engineId)!;
-    return engine.searchUrl + encodeURIComponent(s);
-  }
-  return `https://${s}`;
-}
-
-function shortUrl(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
-}
-
-function isSecure(url: string): boolean {
-  return url.startsWith('https://') || url.startsWith('file://');
-}
-
-function formatTime(epochSec: number): string {
-  const d = new Date(epochSec * 1000);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${mm}/${dd} ${hh}:${mi}`;
-}
-
-// ── コンポーネント ────────────────────────────────────────────────
+const INITIAL_TAB: Tab = { id: 1, url: HOME, title: '新しいタブ', is_loading: true, favicon: null };
 
 export default function App() {
-  const [tabs, setTabs]         = useState<Tab[]>([{ id: 1, url: HOME, title: 'New Tab', is_loading: true, favicon: null }]);
+  const [tabs, setTabs] = useState<Tab[]>([INITIAL_TAB]);
   const [activeId, setActiveId] = useState(1);
-  const [address, setAddress]   = useState(HOME);
-  const [focused, setFocused]   = useState(false);
-  const [engine, setEngine]     = useState<EngineId>('google');
+  const [address, setAddress] = useState(HOME);
+  const [focused, setFocused] = useState(false);
+  const [engine, setEngine] = useState<EngineId>('google');
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [showBmBar, setShowBmBar] = useState(false);
-  const [history, setHistory]     = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const isFocused      = useRef(false);
-  const addressBarRef  = useRef<HTMLInputElement>(null);
+  const [historyQuery, setHistoryQuery] = useState('');
 
-  const activeTab   = tabs.find(t => t.id === activeId);
-  const currentBm   = bookmarks.find(b => b.url === address);
-  const totalHeight = BASE_HEIGHT
-    + (showBmBar ? BM_BAR_HEIGHT : 0)
-    + (showHistory ? HISTORY_PANEL_HEIGHT : 0);
+  const { toasts, push, dismiss, run } = useToasts();
 
-  // ── 初期化 ────────────────────────────────────────────────────
+  // アドレスバー編集中はページ側の URL 更新で入力を上書きしない
+  const isEditing = useRef(false);
+  const addressBarRef = useRef<HTMLInputElement>(null);
+
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const currentBm = bookmarks.find((b) => sameUrl(b.url, address));
+  const visibleToasts = toasts.slice(-MAX_VISIBLE_TOASTS);
+  const totalHeight =
+    BASE_HEIGHT +
+    (showBmBar ? BM_BAR_HEIGHT : 0) +
+    (showHistory ? HISTORY_PANEL_HEIGHT : 0) +
+    visibleToasts.length * TOAST_ROW_HEIGHT;
+
+  // ── 初期ロード ──────────────────────────────────────────────
 
   useEffect(() => {
-    invoke<TabsState>('get_tabs').then(s => { setTabs(s.tabs); setActiveId(s.active_id); });
-    invoke<Bookmark[]>('get_bookmarks').then(setBookmarks);
-  }, []);
-
-  // ── イベントリスニング ─────────────────────────────────────────
-
-  useEffect(() => {
-    const u1 = listen<TabsState>('tabs-updated', e => {
-      setTabs(e.payload.tabs);
-      setActiveId(e.payload.active_id);
-      if (!isFocused.current) {
-        const active = e.payload.tabs.find(t => t.id === e.payload.active_id);
-        if (active) setAddress(active.url);
+    void (async () => {
+      const s = await run<TabsState>('get_tabs');
+      if (s !== FAILED) {
+        setTabs(s.tabs);
+        setActiveId(s.active_id);
       }
-    });
-    const u2 = listen<string>('url-changed', e => {
-      if (!isFocused.current) setAddress(e.payload);
-    });
-    return () => { u1.then(f => f()); u2.then(f => f()); };
-  }, []);
+      const bms = await run<Bookmark[]>('get_bookmarks');
+      if (bms !== FAILED) setBookmarks(bms);
+    })();
+  }, [run]);
 
-  // ── キーボードショートカット（Tauri イベント + ローカル） ─────────
+  // ── Rust からの状態同期 ─────────────────────────────────────
 
   useEffect(() => {
-    const handle = async (cmd: string) => {
+    const subs = [
+      listen<TabsState>('tabs-updated', (e) => {
+        setTabs(e.payload.tabs);
+        setActiveId(e.payload.active_id);
+        if (!isEditing.current) {
+          const active = e.payload.tabs.find((t) => t.id === e.payload.active_id);
+          if (active) setAddress(active.url);
+        }
+      }),
+      listen<string>('url-changed', (e) => {
+        if (!isEditing.current) setAddress(e.payload);
+      }),
+    ];
+    return () => {
+      subs.forEach((p) => void p.then((off) => off()));
+    };
+  }, []);
+
+  // ── 操作ハンドラ ────────────────────────────────────────────
+
+  const navigateTo = useCallback(
+    async (raw: string) => {
+      const url = normalizeUrl(raw, engine);
+      setAddress(url);
+      await run('navigate', { url });
+    },
+    [engine, run],
+  );
+
+  const focusAddressBar = useCallback(() => {
+    isEditing.current = true;
+    setFocused(true);
+  }, []);
+
+  // 表示モードから入力モードへ切り替わった直後に実フォーカスを移す
+  useLayoutEffect(() => {
+    if (focused) {
+      addressBarRef.current?.focus();
+      addressBarRef.current?.select();
+    }
+  }, [focused]);
+
+  const loadHistory = useCallback(async () => {
+    const h = await run<HistoryEntry[]>('get_history');
+    if (h !== FAILED) setHistory(h);
+  }, [run]);
+
+  const toggleHistory = useCallback(async () => {
+    if (!showHistory) await loadHistory();
+    else setHistoryQuery('');
+    setShowHistory((v) => !v);
+  }, [showHistory, loadHistory]);
+
+  const toggleBookmark = useCallback(async () => {
+    if (currentBm) {
+      const ok = await run<void>('remove_bookmark', { id: currentBm.id });
+      if (ok !== FAILED) {
+        setBookmarks((prev) => prev.filter((b) => b.id !== currentBm.id));
+        push('info', 'ブックマークを解除しました', {
+          label: '元に戻す',
+          run: () => {
+            void (async () => {
+              const bm = await run<Bookmark>('add_bookmark', {
+                url: currentBm.url,
+                title: currentBm.title,
+              });
+              if (bm !== FAILED) setBookmarks((prev) => [...prev, bm]);
+            })();
+          },
+        });
+      }
+    } else {
+      const title = activeTab?.title || shortUrl(address);
+      const bm = await run<Bookmark>('add_bookmark', { url: address, title });
+      if (bm !== FAILED) {
+        setBookmarks((prev) => [...prev, bm]);
+        push('success', `「${title}」をブックマークに追加しました`);
+      }
+    }
+  }, [currentBm, activeTab, address, run, push]);
+
+  const removeBookmark = useCallback(
+    async (bm: Bookmark) => {
+      const ok = await run<void>('remove_bookmark', { id: bm.id });
+      if (ok === FAILED) return;
+      setBookmarks((prev) => prev.filter((b) => b.id !== bm.id));
+      push('info', `「${bm.title || shortUrl(bm.url)}」を削除しました`, {
+        label: '元に戻す',
+        run: () => {
+          void (async () => {
+            const re = await run<Bookmark>('add_bookmark', { url: bm.url, title: bm.title });
+            if (re !== FAILED) setBookmarks((prev) => [...prev, re]);
+          })();
+        },
+      });
+    },
+    [run, push],
+  );
+
+  const removeHistoryEntry = useCallback(
+    async (entry: HistoryEntry) => {
+      const removed = await run<HistoryEntry | null>('remove_history_entry', { id: entry.id });
+      if (removed === FAILED) return;
+      setHistory((prev) => prev.filter((h) => h.id !== entry.id));
+      push('info', '履歴を1件削除しました', {
+        label: '元に戻す',
+        run: () => {
+          void (async () => {
+            await run('restore_history', { entries: [entry] });
+            await loadHistory();
+          })();
+        },
+      });
+    },
+    [run, push, loadHistory],
+  );
+
+  const clearHistory = useCallback(async () => {
+    // 確認ダイアログの代わりに取り消し可能にする（操作を止めずに誤操作を救う）
+    const removed = await run<HistoryEntry[]>('clear_history');
+    if (removed === FAILED) return;
+    setHistory([]);
+    push('info', `履歴 ${removed.length} 件をすべて削除しました`, {
+      label: '元に戻す',
+      run: () => {
+        void (async () => {
+          await run('restore_history', { entries: removed });
+          await loadHistory();
+        })();
+      },
+    });
+  }, [run, push, loadHistory]);
+
+  // ── キーボードショートカット ────────────────────────────────
+  //
+  // ハンドラを ref 経由で呼ぶことで、リスナーの購読は初回マウント時の 1 回だけにする。
+  // （以前は address などを依存配列に入れており、1 文字入力するたびに
+  //   Tauri イベントの購読と解除が走っていた）
+
+  const handleCommand = useCallback(
+    (cmd: string) => {
       switch (cmd) {
         case 'new-tab':
-          invoke('new_tab', { url: HOME }).catch(console.error);
+          void run('new_tab', { url: HOME });
           break;
         case 'close-tab':
-          invoke('close_tab', { id: activeId }).catch(console.error);
+          if (tabs.length <= 1) {
+            push('info', '最後のタブは閉じられません');
+            return;
+          }
+          void run('close_tab', { id: activeId });
           break;
         case 'focus-address':
-          isFocused.current = true;
-          setFocused(true);
-          addressBarRef.current?.focus();
-          addressBarRef.current?.select();
+          focusAddressBar();
           break;
         case 'reload':
-          invoke('reload').catch(console.error);
+          void run('reload');
           break;
-        case 'bookmark': {
-          const bm = bookmarks.find(b => b.url === address);
-          if (bm) {
-            invoke('remove_bookmark', { id: bm.id }).catch(console.error);
-            setBookmarks(prev => prev.filter(b => b.id !== bm.id));
-          } else {
-            const title = activeTab?.title || shortUrl(address);
-            const added = await invoke<Bookmark>('add_bookmark', { url: address, title }).catch(console.error);
-            if (added) setBookmarks(prev => [...prev, added]);
-          }
+        case 'bookmark':
+          void toggleBookmark();
           break;
-        }
         case 'toggle-history':
-          toggleHistory();
+          void toggleHistory();
           break;
       }
-    };
+    },
+    [tabs.length, activeId, run, push, focusAddressBar, toggleBookmark, toggleHistory],
+  );
 
-    // コンテンツ WebView からの fbcmd イベント
-    const tauriUnlisten = listen<string>('shortcut', e => handle(e.payload));
+  // 最新のハンドラを ref に保持する（購読側の依存配列を空に保つため）
+  const commandRef = useRef(handleCommand);
+  useEffect(() => {
+    commandRef.current = handleCommand;
+  }, [handleCommand]);
 
-    // ツールバーがフォーカスされているときのローカルショートカット
-    const localHandler = (e: KeyboardEvent) => {
+  useEffect(() => {
+    const dispatch = (cmd: string) => commandRef.current(cmd);
+
+    // コンテンツ WebView 側（fbcmd://）から届くショートカット
+    const unlisten = listen<string>('shortcut', (e) => dispatch(e.payload));
+
+    // chrome 側にフォーカスがあるときのショートカット
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && !e.altKey && !e.shiftKey) {
-        const k = e.key.toLowerCase();
-        if (k === 't')      { e.preventDefault(); handle('new-tab'); }
-        else if (k === 'w') { e.preventDefault(); handle('close-tab'); }
-        else if (k === 'l') { e.preventDefault(); handle('focus-address'); }
-        else if (k === 'r') { e.preventDefault(); handle('reload'); }
-        else if (k === 'd') { e.preventDefault(); handle('bookmark'); }
-        else if (k === 'h') { e.preventDefault(); handle('toggle-history'); }
+        const map: Record<string, string> = {
+          t: 'new-tab',
+          w: 'close-tab',
+          l: 'focus-address',
+          r: 'reload',
+          d: 'bookmark',
+          h: 'toggle-history',
+        };
+        const cmd = map[e.key.toLowerCase()];
+        if (cmd) {
+          e.preventDefault();
+          dispatch(cmd);
+          return;
+        }
       }
-      if (!e.ctrlKey && e.key === 'F5') { e.preventDefault(); handle('reload'); }
+      if (!e.ctrlKey && e.key === 'F5') {
+        e.preventDefault();
+        dispatch('reload');
+      }
+      // Escape で開いているパネルを閉じる（一般的な期待どおりの挙動）
+      if (e.key === 'Escape') {
+        setShowHistory((v) => (v ? false : v));
+      }
     };
-    document.addEventListener('keydown', localHandler);
+    document.addEventListener('keydown', onKeyDown);
 
     return () => {
-      tauriUnlisten.then(f => f());
-      document.removeEventListener('keydown', localHandler);
+      void unlisten.then((off) => off());
+      document.removeEventListener('keydown', onKeyDown);
     };
-  }, [activeId, address, activeTab, bookmarks, showHistory]);
+  }, []);
 
-  // ── ブックマークバー開閉で WebView を再配置 ────────────────────
+  // ── chrome の高さ変化を WebView 位置へ反映 ──────────────────
 
   useEffect(() => {
     document.body.style.height = `${totalHeight}px`;
-    invoke('set_webview_top', { y: totalHeight }).catch(console.error);
-  }, [totalHeight]);
+    void run('set_webview_top', { y: totalHeight });
+  }, [totalHeight, run]);
 
-  // ── ナビゲーション ────────────────────────────────────────────
-
-  async function navigateTo(raw: string) {
-    const url = normalizeUrl(raw, engine);
-    setAddress(url);
-    await invoke('navigate', { url }).catch(console.error);
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') {
-      isFocused.current = false; setFocused(false);
-      e.currentTarget.blur();
-      navigateTo(address);
-    } else if (e.key === 'Escape') {
-      e.currentTarget.blur();
-    }
-  }
-
-  // ── タブ操作 ──────────────────────────────────────────────────
-
-  async function handleCloseTab(id: number, e: React.MouseEvent) {
-    e.stopPropagation();
-    await invoke('close_tab', { id }).catch(console.error);
-  }
-
-  async function handleSwitchTab(id: number) {
-    if (id !== activeId) await invoke('switch_tab', { id }).catch(console.error);
-  }
-
-  // ── ブックマーク操作 ──────────────────────────────────────────
-
-  async function toggleBookmark() {
-    if (currentBm) {
-      await invoke('remove_bookmark', { id: currentBm.id }).catch(console.error);
-      setBookmarks(prev => prev.filter(b => b.id !== currentBm.id));
-    } else {
-      const title = activeTab?.title || shortUrl(address);
-      const bm = await invoke<Bookmark>('add_bookmark', { url: address, title }).catch(console.error);
-      if (bm) setBookmarks(prev => [...prev, bm]);
-    }
-  }
-
-  async function removeBookmark(id: number, e: React.MouseEvent) {
-    e.stopPropagation();
-    await invoke('remove_bookmark', { id }).catch(console.error);
-    setBookmarks(prev => prev.filter(b => b.id !== id));
-  }
-
-  // ── 履歴操作 ──────────────────────────────────────────────────
-
-  async function toggleHistory() {
-    if (!showHistory) {
-      const h = await invoke<HistoryEntry[]>('get_history').catch(() => []);
-      setHistory(h);
-    }
-    setShowHistory(v => !v);
-  }
-
-  async function removeHistoryEntry(id: number, e: React.MouseEvent) {
-    e.stopPropagation();
-    await invoke('remove_history_entry', { id }).catch(console.error);
-    setHistory(prev => prev.filter(h => h.id !== id));
-  }
-
-  async function clearHistory() {
-    await invoke('clear_history').catch(console.error);
-    setHistory([]);
-  }
-
-  // ── レンダリング ──────────────────────────────────────────────
+  // ── 描画 ────────────────────────────────────────────────────
 
   return (
-    <div id="browser-chrome" style={{ height: totalHeight }} data-tauri-drag-region>
+    <div id="browser-chrome" style={{ height: totalHeight }}>
+      <TabBar
+        tabs={tabs}
+        activeId={activeId}
+        onSwitch={(id) => {
+          if (id !== activeId) void run('switch_tab', { id });
+        }}
+        onClose={(id) => void run('close_tab', { id })}
+        onNew={() => void run('new_tab', { url: HOME })}
+      />
 
-      {/* ── タブバー ──────────────────────────────────── */}
-      <div id="tab-bar">
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            className={`tab${tab.id === activeId ? ' active' : ''}`}
-            onClick={() => handleSwitchTab(tab.id)}
-            title={tab.url}
-          >
-            {tab.is_loading
-              ? <span className="tab-spinner" />
-              : tab.favicon && (
-                  <img
-                    className="tab-favicon"
-                    src={tab.favicon}
-                    alt=""
-                    onError={e => { e.currentTarget.style.display = 'none'; }}
-                  />
-                )}
-            <span className="tab-title">{tab.title || 'New Tab'}</span>
-            {tabs.length > 1 && (
-              <button className="tab-close" onClick={e => handleCloseTab(tab.id, e)}>×</button>
-            )}
-          </div>
-        ))}
-        <button className="new-tab-btn" onClick={() => invoke('new_tab', { url: HOME }).catch(console.error)} title="新しいタブ">
-          +
-        </button>
-      </div>
+      <NavBar
+        ref={addressBarRef}
+        address={address}
+        focused={focused}
+        bookmarked={!!currentBm}
+        engine={engine}
+        showBmBar={showBmBar}
+        showHistory={showHistory}
+        canGoBack
+        onAddressChange={setAddress}
+        onSubmit={() => {
+          isEditing.current = false;
+          setFocused(false);
+          void navigateTo(address);
+        }}
+        onRequestFocus={focusAddressBar}
+        onBlur={() => {
+          isEditing.current = false;
+          setFocused(false);
+        }}
+        onBack={() => void run('go_back')}
+        onForward={() => void run('go_forward')}
+        onReload={() => void run('reload')}
+        onToggleBookmark={() => void toggleBookmark()}
+        onToggleBmBar={() => setShowBmBar((v) => !v)}
+        onToggleHistory={() => void toggleHistory()}
+        onEngineChange={setEngine}
+      />
 
-      {/* ── ナビゲーションバー ──────────────────────────── */}
-      <div id="nav-bar">
-        <button onClick={() => invoke('go_back').catch(console.error)}    title="戻る">&#8249;</button>
-        <button onClick={() => invoke('go_forward').catch(console.error)} title="進む">&#8250;</button>
-        <button onClick={() => invoke('reload').catch(console.error)}     title="更新">&#8635;</button>
-
-        <div id="address-wrapper" className={focused ? 'focused' : ''}>
-          <span id="secure-icon" title={isSecure(address) ? '安全な接続' : '安全でない接続'}>
-            {isSecure(address) ? '🔒' : '⚠️'}
-          </span>
-          <input
-            id="address-bar"
-            ref={addressBarRef}
-            type="text"
-            value={focused ? address : shortUrl(address)}
-            onChange={e => setAddress(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={e => { isFocused.current = true; setFocused(true); e.currentTarget.select(); }}
-            onBlur={() => { isFocused.current = false; setFocused(false); }}
-            spellCheck={false}
-            autoComplete="off"
-            placeholder="URL またはキーワードを入力"
-          />
-          {/* ★ ブックマーク追加/削除 */}
-          <button
-            id="bm-star"
-            className={currentBm ? 'active' : ''}
-            onClick={toggleBookmark}
-            title={currentBm ? 'ブックマークを削除' : 'ブックマークに追加'}
-          >
-            {currentBm ? '★' : '☆'}
-          </button>
-        </div>
-
-        {/* ブックマークバー トグル */}
-        <button
-          id="bm-toggle"
-          className={showBmBar ? 'active' : ''}
-          onClick={() => setShowBmBar(v => !v)}
-          title="ブックマークバー"
-        >
-          ⊞
-        </button>
-
-        {/* 履歴パネル トグル */}
-        <button
-          id="history-toggle"
-          className={showHistory ? 'active' : ''}
-          onClick={toggleHistory}
-          title="履歴"
-        >
-          🕘
-        </button>
-
-        <select
-          id="engine-select"
-          value={engine}
-          onChange={e => setEngine(e.target.value as EngineId)}
-          title="検索エンジン"
-        >
-          {ENGINES.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
-
-        <button onClick={() => navigateTo(address)} title="移動">&#10140;</button>
-      </div>
-
-      {/* ── ブックマークバー ──────────────────────────── */}
       {showBmBar && (
-        <div id="bm-bar">
-          {bookmarks.length === 0
-            ? <span className="bm-empty">ブックマークがありません — ☆ で追加できます</span>
-            : bookmarks.map(bm => (
-                <div key={bm.id} className="bm-chip" onClick={() => navigateTo(bm.url)} title={bm.url}>
-                  <span className="bm-chip-title">{bm.title || shortUrl(bm.url)}</span>
-                  <button className="bm-chip-del" onClick={e => removeBookmark(bm.id, e)} title="削除">×</button>
-                </div>
-              ))
-          }
-        </div>
+        <BookmarkBar
+          bookmarks={bookmarks}
+          onOpen={(url) => void navigateTo(url)}
+          onRemove={(bm) => void removeBookmark(bm)}
+        />
       )}
 
-      {/* ── 履歴パネル ──────────────────────────────── */}
       {showHistory && (
-        <div id="history-panel">
-          <div id="history-panel-header">
-            <span>履歴</span>
-            <button id="history-clear" onClick={clearHistory}>すべて削除</button>
-          </div>
-          <div id="history-list">
-            {history.length === 0
-              ? <div className="history-empty">履歴がありません</div>
-              : history.map(h => (
-                  <div
-                    key={h.id}
-                    className="history-item"
-                    onClick={() => { navigateTo(h.url); setShowHistory(false); }}
-                    title={h.url}
-                  >
-                    {h.favicon && (
-                      <img
-                        className="history-item-favicon"
-                        src={h.favicon}
-                        alt=""
-                        onError={e => { e.currentTarget.style.display = 'none'; }}
-                      />
-                    )}
-                    <span className="history-item-title">{h.title || shortUrl(h.url)}</span>
-                    <span className="history-item-time">{formatTime(h.visited_at)}</span>
-                    <button className="history-item-del" onClick={e => removeHistoryEntry(h.id, e)} title="削除">×</button>
-                  </div>
-                ))
-            }
-          </div>
-        </div>
+        <HistoryPanel
+          entries={history}
+          query={historyQuery}
+          onQueryChange={setHistoryQuery}
+          onOpen={(url) => {
+            void navigateTo(url);
+            setShowHistory(false);
+            setHistoryQuery('');
+          }}
+          onRemove={(e) => void removeHistoryEntry(e)}
+          onClearAll={() => void clearHistory()}
+          onClose={() => {
+            setShowHistory(false);
+            setHistoryQuery('');
+          }}
+        />
       )}
 
-      {/* ローディングバー */}
-      {activeTab?.is_loading && <div id="loading-bar" />}
+      {activeTab?.is_loading && <div id="loading-bar" role="progressbar" aria-label="ページを読み込み中" />}
 
+      <Toasts toasts={visibleToasts} onDismiss={dismiss} />
     </div>
   );
 }

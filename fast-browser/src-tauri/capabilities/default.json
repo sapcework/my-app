@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
-  "windows": [
+  "description": "ブラウザ UI（chrome）webview にのみ既定権限を付与する。コンテンツ webview（browser-content）は任意の Web ページを読み込むため、意図的に対象外とする。",
+  "webviews": [
     "main"
   ],
   "permissions": [

@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // ビルド生成物は lint 対象外（src-tauri/target には codegen された JS が含まれる）
+  globalIgnores(['dist', 'src-tauri/target', 'src-tauri/gen', 'coverage']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
