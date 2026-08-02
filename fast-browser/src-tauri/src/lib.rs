@@ -35,6 +35,29 @@ const SHORTCUT_INIT_SCRIPT: &str = r#"
 })();
 "#;
 
+// コンテンツ WebView の実ページタイトルを検出して Rust に通知するスクリプト
+// <title> 要素の変更を MutationObserver で監視し、fbtitle:// スキーム経由で送信
+const TITLE_WATCH_SCRIPT: &str = r#"
+(function () {
+    function sendTitle() {
+        if (document.title) {
+            location.href = 'fbtitle://update?t=' + encodeURIComponent(document.title);
+        }
+    }
+    function attach() {
+        sendTitle();
+        var t = document.querySelector('title');
+        var target = t || document.head || document.documentElement;
+        new MutationObserver(sendTitle).observe(target, { childList: true, subtree: !t });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attach);
+    } else {
+        attach();
+    }
+})();
+"#;
+
 // ─── タブ データモデル ─────────────────────────────────────────────
 
 #[derive(Clone, serde::Serialize)]
@@ -144,6 +167,12 @@ impl TabManager {
     fn on_load_finished(&mut self) {
         if let Some(t) = self.tabs.iter_mut().find(|t| t.id == self.active_id) {
             t.is_loading = false;
+        }
+    }
+
+    fn set_active_title(&mut self, title: String) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == self.active_id) {
+            t.title = title;
         }
     }
 }
@@ -310,6 +339,14 @@ impl HistoryStore {
 
     fn all(&self) -> Vec<HistoryEntry> {
         self.entries.clone()
+    }
+
+    // 直近訪問（先頭）エントリのタイトルを実ページタイトルで更新する
+    fn update_latest_title(&mut self, title: String) {
+        if let Some(last) = self.entries.first_mut() {
+            last.title = title;
+            self.save();
+        }
     }
 }
 
@@ -547,12 +584,36 @@ pub fn run() {
                 WebviewUrl::External(HOME_URL.parse().unwrap()),
             )
             .initialization_script(SHORTCUT_INIT_SCRIPT)
+            .initialization_script(TITLE_WATCH_SCRIPT)
             .on_navigation(move |url| {
                 // fbcmd:// はキーボードショートカットシグナル。キャンセルしてイベントを送信。
                 if url.scheme() == "fbcmd" {
                     let cmd = url.host_str().unwrap_or("").to_string();
                     let _ =
                         app_shortcuts.emit_to(EventTarget::webview_window("main"), "shortcut", cmd);
+                    return false; // ナビゲーションをキャンセル
+                }
+                // fbtitle:// は実ページタイトル通知。アクティブタブと履歴の最新エントリに反映。
+                if url.scheme() == "fbtitle" {
+                    let title = url
+                        .query_pairs()
+                        .find(|(k, _)| k == "t")
+                        .map(|(_, v)| v.into_owned())
+                        .unwrap_or_default();
+                    if !title.is_empty() {
+                        let snapshot = {
+                            let state = app_shortcuts.state::<Mutex<TabManager>>();
+                            let mut mgr = state.lock().unwrap();
+                            mgr.set_active_title(title.clone());
+                            mgr.snapshot()
+                        };
+                        emit_tabs(&app_shortcuts, &snapshot);
+                        app_shortcuts
+                            .state::<Mutex<HistoryStore>>()
+                            .lock()
+                            .unwrap()
+                            .update_latest_title(title);
+                    }
                     return false; // ナビゲーションをキャンセル
                 }
                 true
