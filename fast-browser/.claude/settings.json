@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json,subprocess; d=json.load(sys.stdin); f=(d.get('tool_input') or {}).get('file_path',''); f.endswith('.rs') and subprocess.run(['rustfmt', f])\" 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Rust ファイルをフォーマット中..."
+          },
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json,subprocess,os; d=json.load(sys.stdin); f=(d.get('tool_input') or {}).get('file_path',''); f.endswith(('.ts','.tsx')) and os.path.exists('package.json') and subprocess.run(['npm','run','lint'])\" 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "TypeScript lint 実行中..."
+          }
+        ]
+      }
+    ]
+  }
+}
