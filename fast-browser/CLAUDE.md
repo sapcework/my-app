@@ -63,6 +63,12 @@ OS が直接描画する。したがって:
 - ウィンドウサイズは `Layout` 状態にキャッシュし、コマンドからは問い合わせない。
 - ウィンドウを触るコマンドは `async fn` にする。
 
+### メニュー・パネルの高さ定数
+
+`src/App.tsx` の各高さ定数と `src/App.css` の対応する `height` は必ず一致させる
+（`MENU_HEIGHT` ↔ `#app-menu`、`HISTORY_PANEL_HEIGHT` ↔ `#history-panel` など）。
+ズレると WebView の押し下げ量が合わず、パネルの下端が隠れる／隙間が空く。
+
 ### ページ由来の入力は信頼しない
 
 `fbcmd://` `fbmeta://` は**任意の Web ページが `location.href` で自由に発火できる**。

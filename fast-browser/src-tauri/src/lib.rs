@@ -15,6 +15,7 @@ const HOME_URL: &str = "https://www.google.com";
 const MAX_TITLE_LEN: usize = 300; // タブ・履歴に表示するタイトルの最大文字数
 const MAX_FAVICON_URL_LEN: usize = 2048; // favicon URL の最大長（data: URI の暴走を防ぐ）
 const PAGE_CMD_MIN_INTERVAL: Duration = Duration::from_millis(250); // ページ由来コマンドの最小間隔
+const ZOOM_RANGE: std::ops::RangeInclusive<f64> = 0.25..=5.0; // ズーム倍率の許容範囲
 const HISTORY_SAVE_MIN_INTERVAL: Duration = Duration::from_millis(1500); // 履歴ファイル書き込みの最小間隔
 
 // ロック毒化からの回復。パニックが一度でも起きるとアプリ全体が
@@ -87,15 +88,27 @@ const SHORTCUT_INIT_SCRIPT: &str = r#"
             else if (key === 'r') cmd = 'reload';
             else if (key === 'd') cmd = 'bookmark';
             else if (key === 'h') cmd = 'toggle-history';
+            else if (key === 'f') cmd = 'find';
+            else if (key === '0') cmd = 'zoom-reset';
             if (cmd) { e.preventDefault(); e.stopPropagation(); location.href = 'fbcmd://' + cmd; }
         }
         if (e.altKey && !e.ctrlKey) {
             if (e.key === 'ArrowLeft')  { e.preventDefault(); history.back();    }
             if (e.key === 'ArrowRight') { e.preventDefault(); history.forward(); }
         }
+        if (e.ctrlKey && (e.key === '+' || e.key === ';' || e.key === '=')) {
+            e.preventDefault(); location.href = 'fbcmd://zoom-in';
+        }
+        if (e.ctrlKey && (e.key === '-' || e.key === '_')) {
+            e.preventDefault(); location.href = 'fbcmd://zoom-out';
+        }
         if (!e.ctrlKey && !e.altKey && e.key === 'F5') {
             e.preventDefault();
             location.href = 'fbcmd://reload';
+        }
+        // 検索バーが開いているときは Esc で閉じられるよう chrome へ通知
+        if (e.key === 'Escape') {
+            location.href = 'fbcmd://escape';
         }
     }, true);
 })();
@@ -143,6 +156,96 @@ const PAGE_META_SCRIPT: &str = r#"
 })();
 "#;
 
+// ページ内検索。chrome から eval で window.__fbFind を呼び、
+// 結果件数は fbfind:// スキームで返す（eval に戻り値が無いため）。
+const FIND_SCRIPT: &str = r#"
+(function () {
+    var marks = [];
+    var idx = -1;
+    var HI = 'background:#f9e2af;color:#11111b;';
+    var CUR = 'background:#fab387;color:#11111b;';
+    var MAX_MARKS = 2000; // 巨大ページで固まらないための上限
+
+    function report() {
+        location.href = 'fbfind://r?n=' + marks.length + '&i=' + (marks.length ? idx + 1 : 0);
+    }
+
+    function clearMarks() {
+        for (var i = 0; i < marks.length; i++) {
+            var m = marks[i], p = m.parentNode;
+            if (!p) continue;
+            p.replaceChild(document.createTextNode(m.textContent), m);
+            p.normalize();
+        }
+        marks = []; idx = -1;
+    }
+
+    function focusCurrent() {
+        for (var i = 0; i < marks.length; i++) {
+            marks[i].style.cssText = (i === idx) ? CUR : HI;
+        }
+        if (marks[idx]) marks[idx].scrollIntoView({ block: 'center', inline: 'nearest' });
+    }
+
+    function textNodes() {
+        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode: function (n) {
+                if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                var p = n.parentNode;
+                if (!p) return NodeFilter.FILTER_REJECT;
+                var t = p.nodeName;
+                // スクリプトや入力欄の中身は検索対象にしない
+                if (t === 'SCRIPT' || t === 'STYLE' || t === 'NOSCRIPT' || t === 'TEXTAREA')
+                    return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        });
+        var out = [], n;
+        while ((n = walker.nextNode())) out.push(n);
+        return out;
+    }
+
+    function highlight(q) {
+        clearMarks();
+        if (!q || !document.body) { report(); return; }
+        var needle = q.toLowerCase();
+        var nodes = textNodes();
+        for (var i = 0; i < nodes.length && marks.length < MAX_MARKS; i++) {
+            var cur = nodes[i];
+            var pos = cur.nodeValue.toLowerCase().indexOf(needle);
+            while (pos >= 0 && marks.length < MAX_MARKS) {
+                var hit = cur.splitText(pos);          // hit = 一致位置以降
+                var rest = hit.splitText(needle.length); // hit = 一致部分ちょうど
+                var mk = document.createElement('mark');
+                mk.style.cssText = HI;
+                hit.parentNode.replaceChild(mk, hit);
+                mk.appendChild(hit);
+                marks.push(mk);
+                cur = rest;
+                pos = cur.nodeValue.toLowerCase().indexOf(needle);
+            }
+        }
+        if (marks.length) { idx = 0; focusCurrent(); }
+        report();
+    }
+
+    function step(d) {
+        if (marks.length) {
+            idx = (idx + d + marks.length) % marks.length;
+            focusCurrent();
+        }
+        report();
+    }
+
+    window.__fbFind = {
+        search: highlight,
+        next: function () { step(1); },
+        prev: function () { step(-1); },
+        clear: function () { clearMarks(); report(); }
+    };
+})();
+"#;
+
 // ─── タブ データモデル ─────────────────────────────────────────────
 
 #[derive(Clone, serde::Serialize)]
@@ -181,6 +284,96 @@ pub struct HistoryEntry {
     #[serde(default)]
     pub favicon: Option<String>,
 }
+
+// ─── 設定 ─────────────────────────────────────────────────────────
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct Settings {
+    pub home_url: String,
+    pub engine_id: String,
+    pub zoom: f64,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            home_url: HOME_URL.to_string(),
+            engine_id: "google".to_string(),
+            zoom: 1.0,
+        }
+    }
+}
+
+pub struct SettingsStore {
+    settings: Settings,
+    data_path: Option<std::path::PathBuf>,
+}
+
+impl SettingsStore {
+    fn new() -> Self {
+        Self {
+            settings: Settings::default(),
+            data_path: None,
+        }
+    }
+
+    fn init(&mut self, data_dir: std::path::PathBuf) {
+        self.data_path = Some(data_dir.join("settings.json"));
+        if let Some(path) = &self.data_path {
+            if let Ok(data) = std::fs::read_to_string(path) {
+                if let Ok(s) = serde_json::from_str::<Settings>(&data) {
+                    self.settings = s;
+                }
+            }
+        }
+        self.settings.sanitize();
+    }
+
+    fn save(&self) {
+        let Some(path) = &self.data_path else { return };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(data) = serde_json::to_string_pretty(&self.settings) {
+            let _ = std::fs::write(path, data);
+        }
+    }
+
+    fn get(&self) -> Settings {
+        self.settings.clone()
+    }
+
+    fn replace(&mut self, mut next: Settings) -> Settings {
+        next.sanitize();
+        self.settings = next;
+        self.save();
+        self.settings.clone()
+    }
+
+    fn set_zoom(&mut self, zoom: f64) {
+        self.settings.zoom = zoom;
+        self.save();
+    }
+}
+
+impl Settings {
+    /// 保存ファイルは手で編集されうるので、読み込み時に必ず妥当な値へ丸める。
+    fn sanitize(&mut self) {
+        if !ZOOM_RANGE.contains(&self.zoom) || !self.zoom.is_finite() {
+            self.zoom = 1.0;
+        }
+        // ホームには http(s) のみ許可（javascript: などを起動時に開かせない）
+        let ok = url::Url::parse(&self.home_url)
+            .map(|u| matches!(u.scheme(), "http" | "https"))
+            .unwrap_or(false);
+        if !ok {
+            self.home_url = HOME_URL.to_string();
+        }
+    }
+}
+
+/// プライベートモード。オンの間は履歴を一切記録しない。
+pub struct PrivateMode(pub bool);
 
 // ─── タブマネージャー ─────────────────────────────────────────────
 
@@ -678,6 +871,72 @@ fn restore_history(entries: Vec<HistoryEntry>, store: State<'_, Mutex<HistorySto
     lock(&store).restore(entries);
 }
 
+// ─── 設定 コマンド ────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_settings(store: State<'_, Mutex<SettingsStore>>) -> Settings {
+    lock(&store).get()
+}
+
+/// 設定を保存し、丸めたあとの実際の値を返す（不正値はサーバー側で補正される）
+#[tauri::command]
+fn save_settings(settings: Settings, store: State<'_, Mutex<SettingsStore>>) -> Settings {
+    lock(&store).replace(settings)
+}
+
+// ─── プライベートモード コマンド ──────────────────────────────────
+
+#[tauri::command]
+fn set_private_mode(on: bool, state: State<'_, Mutex<PrivateMode>>) {
+    lock(&state).0 = on;
+    log::info!("private mode: {}", on);
+}
+
+// ─── ズーム コマンド ──────────────────────────────────────────────
+
+#[tauri::command]
+async fn set_zoom(
+    factor: f64,
+    app: AppHandle,
+    store: State<'_, Mutex<SettingsStore>>,
+) -> Result<f64, String> {
+    let f = if factor.is_finite() {
+        factor.clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end())
+    } else {
+        1.0
+    };
+    let webview = app.get_webview("browser-content").ok_or("not found")?;
+    webview.set_zoom(f).map_err(|e| e.to_string())?;
+    lock(&store).set_zoom(f);
+    Ok(f)
+}
+
+// ─── ページ内検索 コマンド ────────────────────────────────────────
+
+/// 検索語は JSON 文字列リテラルとして埋め込む。
+/// 文字列連結で JS を組み立てると、引用符を含む検索語でスクリプトが壊れる。
+fn eval_find(app: &AppHandle, js: &str) -> Result<(), String> {
+    let webview = app.get_webview("browser-content").ok_or("not found")?;
+    webview.eval(js).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn find_in_page(query: String, app: AppHandle) -> Result<(), String> {
+    let literal = serde_json::to_string(&query).map_err(|e| e.to_string())?;
+    eval_find(&app, &format!("window.__fbFind&&window.__fbFind.search({literal})"))
+}
+
+#[tauri::command]
+async fn find_step(forward: bool, app: AppHandle) -> Result<(), String> {
+    let fnname = if forward { "next" } else { "prev" };
+    eval_find(&app, &format!("window.__fbFind&&window.__fbFind.{fnname}()"))
+}
+
+#[tauri::command]
+async fn find_clear(app: AppHandle) -> Result<(), String> {
+    eval_find(&app, "window.__fbFind&&window.__fbFind.clear()")
+}
+
 // ─── WebView 位置調整 ─────────────────────────────────────────────
 
 /// chrome（ツールバー）の高さ変化に合わせてコンテンツ WebView を押し下げる。
@@ -723,6 +982,8 @@ pub fn run() {
             win_h: 0.0,
         }))
         .manage(Mutex::new(PageCmdGate::new()))
+        .manage(Mutex::new(SettingsStore::new()))
+        .manage(Mutex::new(PrivateMode(false)))
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -745,6 +1006,15 @@ pub fn run() {
                 let state = app.state::<Mutex<HistoryStore>>();
                 lock(&state).init(data_dir);
             }
+
+            // 設定を読み込む（ホーム・検索エンジン・ズームの永続化）
+            let settings = {
+                let data_dir = app.path().app_data_dir()?;
+                let state = app.state::<Mutex<SettingsStore>>();
+                let mut s = lock(&state);
+                s.init(data_dir);
+                s.get()
+            };
 
             // スロットリングで保留になった履歴を定期的に書き出す。
             // これが無いと「最後の1回」がディスクに届かず、異常終了時に失われる。
@@ -770,14 +1040,19 @@ pub fn run() {
                 l.win_h = lh;
             }
 
+            // 起動時は設定のホームページを開く（sanitize 済みなので http(s) のみ）
+            let start_url: url::Url = settings
+                .home_url
+                .parse()
+                .unwrap_or_else(|_| HOME_URL.parse().expect("HOME_URL は妥当な URL"));
+
             let app_shortcuts = app.handle().clone();
-            let content_builder = WebviewBuilder::new(
-                "browser-content",
-                WebviewUrl::External(HOME_URL.parse().unwrap()),
-            )
-            .initialization_script(SHORTCUT_INIT_SCRIPT)
-            .initialization_script(PAGE_META_SCRIPT)
-            .on_navigation(move |url| {
+            let content_builder =
+                WebviewBuilder::new("browser-content", WebviewUrl::External(start_url))
+                    .initialization_script(SHORTCUT_INIT_SCRIPT)
+                    .initialization_script(PAGE_META_SCRIPT)
+                    .initialization_script(FIND_SCRIPT)
+                    .on_navigation(move |url| {
                 // ページ内容は信頼できない入力。fbcmd:// / fbmeta:// はいずれも
                 // 任意の Web ページが location.href で自由に発火できる点に注意。
                 if url.scheme() == "fbcmd" {
@@ -815,9 +1090,30 @@ pub fn run() {
                             mgr.snapshot()
                         };
                         emit_tabs(&app_shortcuts, &snapshot);
-                        lock(&app_shortcuts.state::<Mutex<HistoryStore>>())
-                            .update_latest_meta(title, favicon_opt);
+                        // プライベートモード中は履歴へ書き戻さない
+                        if !lock(&app_shortcuts.state::<Mutex<PrivateMode>>()).0 {
+                            lock(&app_shortcuts.state::<Mutex<HistoryStore>>())
+                                .update_latest_meta(title, favicon_opt);
+                        }
                     }
+                    return false; // ナビゲーションをキャンセル
+                }
+                // fbfind:// はページ内検索の結果件数。chrome 側の検索バーへ転送する。
+                if url.scheme() == "fbfind" {
+                    let mut total = 0usize;
+                    let mut index = 0usize;
+                    for (k, v) in url.query_pairs() {
+                        match &*k {
+                            "n" => total = v.parse().unwrap_or(0),
+                            "i" => index = v.parse().unwrap_or(0),
+                            _ => {}
+                        }
+                    }
+                    let _ = app_shortcuts.emit_to(
+                        EventTarget::webview_window("main"),
+                        "find-result",
+                        (total, index),
+                    );
                     return false; // ナビゲーションをキャンセル
                 }
                 true
@@ -834,7 +1130,8 @@ pub fn run() {
                             mgr.snapshot()
                         };
                         emit_tabs(app, &snapshot);
-                        {
+                        // プライベートモード中は訪問を記録しない
+                        if !lock(&app.state::<Mutex<PrivateMode>>()).0 {
                             let state = app.state::<Mutex<HistoryStore>>();
                             lock(&state).visit(url.clone(), hostname_of(&url));
                         }
@@ -903,6 +1200,13 @@ pub fn run() {
             remove_history_entry,
             clear_history,
             restore_history,
+            get_settings,
+            save_settings,
+            set_private_mode,
+            set_zoom,
+            find_in_page,
+            find_step,
+            find_clear,
             set_webview_top
         ])
         .build(tauri::generate_context!())
@@ -1076,6 +1380,72 @@ mod tests {
         assert_eq!(reloaded.all().len(), 1);
         assert_eq!(reloaded.all()[0].url, "https://a.test/");
         assert_eq!(reloaded.next_id, 2, "id 採番が重複しないよう復元される");
+    }
+
+    // --- 設定 ---
+
+    #[test]
+    fn settings_sanitize_rejects_unsafe_home_url() {
+        let mut s = Settings {
+            home_url: "javascript:alert(1)".into(),
+            engine_id: "google".into(),
+            zoom: 1.0,
+        };
+        s.sanitize();
+        assert_eq!(s.home_url, HOME_URL, "危険なスキームは既定値へ戻す");
+
+        let mut s2 = Settings {
+            home_url: "file:///c:/secret.txt".into(),
+            ..Settings::default()
+        };
+        s2.sanitize();
+        assert_eq!(s2.home_url, HOME_URL);
+
+        let mut ok = Settings {
+            home_url: "https://example.test/start".into(),
+            ..Settings::default()
+        };
+        ok.sanitize();
+        assert_eq!(ok.home_url, "https://example.test/start", "http(s) は保持する");
+    }
+
+    #[test]
+    fn settings_sanitize_clamps_zoom() {
+        for bad in [0.0, -3.0, 99.0, f64::NAN, f64::INFINITY] {
+            let mut s = Settings {
+                zoom: bad,
+                ..Settings::default()
+            };
+            s.sanitize();
+            assert_eq!(s.zoom, 1.0, "範囲外の倍率 {bad} は 1.0 に戻す");
+        }
+        let mut ok = Settings {
+            zoom: 1.5,
+            ..Settings::default()
+        };
+        ok.sanitize();
+        assert_eq!(ok.zoom, 1.5);
+    }
+
+    #[test]
+    fn settings_roundtrip_through_disk() {
+        let tmp = std::env::temp_dir().join("fb_test_settings");
+        let _ = std::fs::remove_dir_all(&tmp);
+        {
+            let mut s = SettingsStore::new();
+            s.init(tmp.clone());
+            s.replace(Settings {
+                home_url: "https://a.test/".into(),
+                engine_id: "ddg".into(),
+                zoom: 1.25,
+            });
+        }
+        let mut reloaded = SettingsStore::new();
+        reloaded.init(tmp.clone());
+        let got = reloaded.get();
+        assert_eq!(got.home_url, "https://a.test/");
+        assert_eq!(got.engine_id, "ddg");
+        assert_eq!(got.zoom, 1.25);
     }
 
     // --- ブックマーク ---

@@ -6,9 +6,9 @@ interface Props {
   focused: boolean;
   bookmarked: boolean;
   engine: EngineId;
-  showBmBar: boolean;
+  showMenu: boolean;
   showHistory: boolean;
-  canGoBack: boolean;
+  privateMode: boolean;
   onAddressChange: (v: string) => void;
   onSubmit: () => void;
   onRequestFocus: () => void;
@@ -17,7 +17,7 @@ interface Props {
   onForward: () => void;
   onReload: () => void;
   onToggleBookmark: () => void;
-  onToggleBmBar: () => void;
+  onToggleMenu: () => void;
   onToggleHistory: () => void;
   onEngineChange: (e: EngineId) => void;
 }
@@ -36,8 +36,9 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
     focused,
     bookmarked,
     engine,
-    showBmBar,
+    showMenu,
     showHistory,
+    privateMode,
     onAddressChange,
     onSubmit,
     onRequestFocus,
@@ -46,7 +47,7 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
     onForward,
     onReload,
     onToggleBookmark,
-    onToggleBmBar,
+    onToggleMenu,
     onToggleHistory,
     onEngineChange,
   } = props;
@@ -125,15 +126,11 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
         </button>
       </div>
 
-      <button
-        id="bm-toggle"
-        className={`nav-btn ${showBmBar ? 'active' : ''}`}
-        onClick={onToggleBmBar}
-        aria-pressed={showBmBar}
-        aria-label="ブックマークバーの表示切り替え"
-      >
-        <span aria-hidden="true">☰</span>
-      </button>
+      {privateMode && (
+        <span id="private-badge" title="プライベートモード — 履歴を残していません">
+          <span aria-hidden="true">🕶</span> プライベート
+        </span>
+      )}
 
       <button
         id="history-toggle"
@@ -143,6 +140,17 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
         aria-label="履歴を開く (Ctrl+H)"
       >
         <span aria-hidden="true">🕘</span>
+      </button>
+
+      <button
+        id="menu-toggle"
+        className={`nav-btn ${showMenu ? 'active' : ''}`}
+        onClick={onToggleMenu}
+        aria-expanded={showMenu}
+        aria-haspopup="dialog"
+        aria-label="メニュー"
+      >
+        <span aria-hidden="true">☰</span>
       </button>
 
       <select

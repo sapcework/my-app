@@ -350,6 +350,218 @@ kbd {
   color: var(--text);
 }
 
+/* プライベートモードのバッジ */
+
+#private-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: rgba(203, 166, 247, 0.16);
+  color: #cba6f7;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── ページ内検索バー ─────────────────────────────────────── */
+
+#find-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 10px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--surface);
+}
+
+.find-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+#find-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+#find-input:focus {
+  border-color: var(--accent);
+}
+/* 一致ゼロを色だけでなく枠線でも示す（色覚多様性への配慮） */
+#find-input.no-hit {
+  border-color: var(--danger);
+  border-style: dashed;
+}
+
+.find-count {
+  flex-shrink: 0;
+  min-width: 92px;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+#find-bar button {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+#find-bar button:hover:not(:disabled) {
+  background: rgba(205, 214, 244, 0.12);
+  color: var(--text);
+}
+#find-bar button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── メニュー ─────────────────────────────────────────────── */
+
+#app-menu {
+  display: flex;
+  flex-direction: column;
+  /* src/App.tsx の MENU_HEIGHT と一致させること */
+  height: 348px;
+  overflow-y: auto;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--surface);
+  flex-shrink: 0;
+}
+
+.menu-section {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--surface);
+}
+.menu-section:last-child {
+  border-bottom: none;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 14px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+}
+.menu-item:hover {
+  background: var(--surface);
+}
+
+.menu-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.menu-check {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+}
+
+.menu-row-label {
+  display: block;
+  padding: 4px 14px 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.menu-row .menu-row-label {
+  flex: 1;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.zoom-controls button {
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1;
+}
+.zoom-controls button:hover {
+  background: var(--surface-hi);
+}
+.zoom-controls .zoom-value {
+  width: 56px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-row input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+.menu-row input:focus {
+  border-color: var(--accent);
+}
+
+.menu-save {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.menu-save:hover:not(:disabled) {
+  background: rgba(137, 180, 250, 0.26);
+}
+.menu-save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── ブックマークバー ─────────────────────────────────────── */
 
 #bm-bar {

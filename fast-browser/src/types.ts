@@ -30,6 +30,13 @@ export interface HistoryEntry {
   favicon: string | null;
 }
 
+/** 永続化される設定（Rust 側 Settings と対応）。 */
+export interface Settings {
+  home_url: string;
+  engine_id: string;
+  zoom: number;
+}
+
 /** 画面右下に出す通知。action があれば「元に戻す」等のボタンを表示する。 */
 export interface Toast {
   id: number;

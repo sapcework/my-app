@@ -2,13 +2,15 @@ import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react
 import { listen } from '@tauri-apps/api/event';
 import './App.css';
 
-import type { Tab, TabsState, Bookmark, HistoryEntry } from './types';
+import type { Tab, TabsState, Bookmark, HistoryEntry, Settings } from './types';
 import { HOME, type EngineId, normalizeUrl, shortUrl, sameUrl } from './lib/url';
 import { useToasts, FAILED } from './hooks/useToasts';
 import { TabBar } from './components/TabBar';
 import { NavBar } from './components/NavBar';
 import { BookmarkBar } from './components/BookmarkBar';
 import { HistoryPanel } from './components/HistoryPanel';
+import { AppMenu } from './components/AppMenu';
+import { FindBar } from './components/FindBar';
 import { Toasts } from './components/Toasts';
 
 // chrome（ツールバー）領域の各段の高さ。
@@ -21,6 +23,9 @@ const HISTORY_PANEL_HEIGHT = 360;
 // 重ねて表示することができない。表示中はその分だけ chrome の高さを確保する。
 const TOAST_ROW_HEIGHT = 46;
 const MAX_VISIBLE_TOASTS = 3;
+const MENU_HEIGHT = 348; // App.css の #app-menu の height と一致させること
+const FIND_BAR_HEIGHT = 40;
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
 const INITIAL_TAB: Tab = { id: 1, url: HOME, title: '新しいタブ', is_loading: true, favicon: null };
 
@@ -35,6 +40,13 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyQuery, setHistoryQuery] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
+  const [showFind, setShowFind] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findResult, setFindResult] = useState({ total: 0, index: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [privateMode, setPrivateMode] = useState(false);
+  const [homeUrl, setHomeUrl] = useState(HOME);
 
   const { toasts, push, dismiss, run } = useToasts();
 
@@ -48,6 +60,8 @@ export default function App() {
   const totalHeight =
     BASE_HEIGHT +
     (showBmBar ? BM_BAR_HEIGHT : 0) +
+    (showFind ? FIND_BAR_HEIGHT : 0) +
+    (showMenu ? MENU_HEIGHT : 0) +
     (showHistory ? HISTORY_PANEL_HEIGHT : 0) +
     visibleToasts.length * TOAST_ROW_HEIGHT;
 
@@ -62,6 +76,14 @@ export default function App() {
       }
       const bms = await run<Bookmark[]>('get_bookmarks');
       if (bms !== FAILED) setBookmarks(bms);
+      const cfg = await run<Settings>('get_settings');
+      if (cfg !== FAILED) {
+        setHomeUrl(cfg.home_url);
+        setEngine(cfg.engine_id as EngineId);
+        setZoom(cfg.zoom);
+        // 保存済みのズームを起動時のページへ適用する
+        if (cfg.zoom !== 1) void run('set_zoom', { factor: cfg.zoom });
+      }
     })();
   }, [run]);
 
@@ -201,6 +223,92 @@ export default function App() {
     });
   }, [run, push, loadHistory]);
 
+  // ── 設定・ズーム・プライベートモード ────────────────────────
+
+  const persistSettings = useCallback(
+    async (patch: Partial<Settings>) => {
+      const next: Settings = {
+        home_url: patch.home_url ?? homeUrl,
+        engine_id: patch.engine_id ?? engine,
+        zoom: patch.zoom ?? zoom,
+      };
+      const saved = await run<Settings>('save_settings', { settings: next });
+      if (saved === FAILED) return null;
+      // Rust 側で不正値が補正されるため、返ってきた値を正とする
+      setHomeUrl(saved.home_url);
+      setEngine(saved.engine_id as EngineId);
+      return saved;
+    },
+    [homeUrl, engine, zoom, run],
+  );
+
+  const applyZoom = useCallback(
+    async (factor: number) => {
+      const applied = await run<number>('set_zoom', { factor });
+      if (applied !== FAILED) setZoom(applied);
+    },
+    [run],
+  );
+
+  const stepZoom = useCallback(
+    (dir: 1 | -1) => {
+      const i = ZOOM_STEPS.findIndex((z) => Math.abs(z - zoom) < 0.001);
+      const base = i >= 0 ? i : ZOOM_STEPS.indexOf(1);
+      const next = ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, base + dir))];
+      void applyZoom(next);
+    },
+    [zoom, applyZoom],
+  );
+
+  const togglePrivate = useCallback(async () => {
+    const next = !privateMode;
+    const ok = await run<void>('set_private_mode', { on: next });
+    if (ok === FAILED) return;
+    setPrivateMode(next);
+    push(
+      'info',
+      next
+        ? 'プライベートモードをオンにしました。以降の閲覧は履歴に残りません。'
+        : 'プライベートモードをオフにしました。閲覧履歴の記録を再開します。',
+    );
+  }, [privateMode, run, push]);
+
+  const saveHome = useCallback(
+    async (url: string) => {
+      const saved = await persistSettings({ home_url: url });
+      if (!saved) return;
+      if (saved.home_url !== url) {
+        push('error', 'ホームページには http:// または https:// の URL を指定してください。');
+      } else {
+        push('success', 'ホームページを保存しました');
+      }
+    },
+    [persistSettings, push],
+  );
+
+  // ── ページ内検索 ────────────────────────────────────────────
+
+  const closeFind = useCallback(() => {
+    setShowFind(false);
+    setFindQuery('');
+    setFindResult({ total: 0, index: 0 });
+    void run('find_clear');
+  }, [run]);
+
+  // 入力のたびに全文走査すると重いので、少し待ってから検索する
+  useEffect(() => {
+    if (!showFind) return;
+    const t = setTimeout(() => void run('find_in_page', { query: findQuery }), 180);
+    return () => clearTimeout(t);
+  }, [findQuery, showFind, run]);
+
+  useEffect(() => {
+    const sub = listen<[number, number]>('find-result', (e) => {
+      setFindResult({ total: e.payload[0], index: e.payload[1] });
+    });
+    return () => void sub.then((off) => off());
+  }, []);
+
   // ── キーボードショートカット ────────────────────────────────
   //
   // ハンドラを ref 経由で呼ぶことで、リスナーの購読は初回マウント時の 1 回だけにする。
@@ -211,7 +319,7 @@ export default function App() {
     (cmd: string) => {
       switch (cmd) {
         case 'new-tab':
-          void run('new_tab', { url: HOME });
+          void run('new_tab', { url: homeUrl });
           break;
         case 'close-tab':
           if (tabs.length <= 1) {
@@ -232,9 +340,43 @@ export default function App() {
         case 'toggle-history':
           void toggleHistory();
           break;
+        case 'find':
+          setShowMenu(false);
+          setShowFind(true);
+          break;
+        case 'zoom-in':
+          stepZoom(1);
+          break;
+        case 'zoom-out':
+          stepZoom(-1);
+          break;
+        case 'zoom-reset':
+          void applyZoom(1);
+          break;
+        case 'escape':
+          // コンテンツ側で Esc が押された。開いているものを1つ閉じる。
+          if (showFind) closeFind();
+          else if (showMenu) setShowMenu(false);
+          else if (showHistory) setShowHistory(false);
+          break;
       }
     },
-    [tabs.length, activeId, run, push, focusAddressBar, toggleBookmark, toggleHistory],
+    [
+      tabs.length,
+      activeId,
+      homeUrl,
+      run,
+      push,
+      focusAddressBar,
+      toggleBookmark,
+      toggleHistory,
+      stepZoom,
+      applyZoom,
+      showFind,
+      showMenu,
+      showHistory,
+      closeFind,
+    ],
   );
 
   // 最新のハンドラを ref に保持する（購読側の依存配列を空に保つため）
@@ -259,6 +401,7 @@ export default function App() {
           r: 'reload',
           d: 'bookmark',
           h: 'toggle-history',
+          f: 'find',
         };
         const cmd = map[e.key.toLowerCase()];
         if (cmd) {
@@ -266,14 +409,30 @@ export default function App() {
           dispatch(cmd);
           return;
         }
+        // ズームは配列レイアウトによって記号が変わるため個別に拾う
+        if (e.key === '+' || e.key === '=' || e.key === ';') {
+          e.preventDefault();
+          dispatch('zoom-in');
+          return;
+        }
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          dispatch('zoom-out');
+          return;
+        }
+        if (e.key === '0') {
+          e.preventDefault();
+          dispatch('zoom-reset');
+          return;
+        }
       }
       if (!e.ctrlKey && e.key === 'F5') {
         e.preventDefault();
         dispatch('reload');
       }
-      // Escape で開いているパネルを閉じる（一般的な期待どおりの挙動）
+      // Escape で開いているものを1つ閉じる（一般的な期待どおりの挙動）
       if (e.key === 'Escape') {
-        setShowHistory((v) => (v ? false : v));
+        dispatch('escape');
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -302,7 +461,7 @@ export default function App() {
           if (id !== activeId) void run('switch_tab', { id });
         }}
         onClose={(id) => void run('close_tab', { id })}
-        onNew={() => void run('new_tab', { url: HOME })}
+        onNew={() => void run('new_tab', { url: homeUrl })}
       />
 
       <NavBar
@@ -311,9 +470,9 @@ export default function App() {
         focused={focused}
         bookmarked={!!currentBm}
         engine={engine}
-        showBmBar={showBmBar}
+        showMenu={showMenu}
         showHistory={showHistory}
-        canGoBack
+        privateMode={privateMode}
         onAddressChange={setAddress}
         onSubmit={() => {
           isEditing.current = false;
@@ -329,10 +488,57 @@ export default function App() {
         onForward={() => void run('go_forward')}
         onReload={() => void run('reload')}
         onToggleBookmark={() => void toggleBookmark()}
-        onToggleBmBar={() => setShowBmBar((v) => !v)}
+        onToggleMenu={() => setShowMenu((v) => !v)}
         onToggleHistory={() => void toggleHistory()}
-        onEngineChange={setEngine}
+        onEngineChange={(id) => {
+          setEngine(id);
+          void persistSettings({ engine_id: id });
+        }}
       />
+
+      {showFind && (
+        <FindBar
+          query={findQuery}
+          total={findResult.total}
+          index={findResult.index}
+          onQueryChange={setFindQuery}
+          onStep={(forward) => void run('find_step', { forward })}
+          onClose={closeFind}
+        />
+      )}
+
+      {showMenu && (
+        <AppMenu
+          key={homeUrl}
+          zoom={zoom}
+          privateMode={privateMode}
+          showBmBar={showBmBar}
+          homeUrl={homeUrl}
+          onZoomIn={() => stepZoom(1)}
+          onZoomOut={() => stepZoom(-1)}
+          onZoomReset={() => void applyZoom(1)}
+          onTogglePrivate={() => void togglePrivate()}
+          onToggleBmBar={() => setShowBmBar((v) => !v)}
+          onOpenHistory={() => {
+            setShowMenu(false);
+            void toggleHistory();
+          }}
+          onOpenFind={() => {
+            setShowMenu(false);
+            setShowFind(true);
+          }}
+          onNewTab={() => {
+            setShowMenu(false);
+            void run('new_tab', { url: homeUrl });
+          }}
+          onGoHome={() => {
+            setShowMenu(false);
+            void navigateTo(homeUrl);
+          }}
+          onSaveHome={(url) => void saveHome(url)}
+          onClose={() => setShowMenu(false)}
+        />
+      )}
 
       {showBmBar && (
         <BookmarkBar
