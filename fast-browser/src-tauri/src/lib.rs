@@ -75,6 +75,26 @@ impl PageCmdGate {
     }
 }
 
+// 戻る/進むの参照をページより先に確保しておくスクリプト。
+//
+// Tauri には戻る/進むのネイティブ API が無く eval に頼るしかないが、
+// `history.back()` をそのまま呼ぶと、悪意あるページが
+// `history.back = () => {}` と上書きするだけで戻れなくなる。
+// 初期化スクリプトはページのスクリプトより先に走るので、
+// ここで本来の関数を退避し、書き換え不可の形で保持する。
+const NAV_GUARD_SCRIPT: &str = r#"
+(function () {
+    var back = history.back.bind(history);
+    var forward = history.forward.bind(history);
+    Object.defineProperty(window, '__fbNav', {
+        value: Object.freeze({ back: back, forward: forward }),
+        writable: false,
+        configurable: false,
+        enumerable: false
+    });
+})();
+"#;
+
 // コンテンツ WebView に注入するキーボードショートカットスクリプト
 // fbcmd:// スキームで Rust に通知し、on_navigation でキャンセルしながら処理
 const SHORTCUT_INIT_SCRIPT: &str = r#"
@@ -95,8 +115,9 @@ const SHORTCUT_INIT_SCRIPT: &str = r#"
             if (cmd) { e.preventDefault(); e.stopPropagation(); location.href = 'fbcmd://' + cmd; }
         }
         if (e.altKey && !e.ctrlKey) {
-            if (e.key === 'ArrowLeft')  { e.preventDefault(); history.back();    }
-            if (e.key === 'ArrowRight') { e.preventDefault(); history.forward(); }
+            // 退避済みの参照を使う（ページによる history.back の上書きを回避）
+            if (e.key === 'ArrowLeft')  { e.preventDefault(); window.__fbNav.back();    }
+            if (e.key === 'ArrowRight') { e.preventDefault(); window.__fbNav.forward(); }
         }
         if (e.ctrlKey && (e.key === '+' || e.key === ';' || e.key === '=')) {
             e.preventDefault(); location.href = 'fbcmd://zoom-in';
@@ -959,11 +980,13 @@ fn navigate(url: String, app: AppHandle, tabs: State<'_, Mutex<TabManager>>) -> 
     Ok(())
 }
 
+// 戻る/進むはページより先に退避した参照を使う（NAV_GUARD_SCRIPT 参照）。
+// `history.back()` を直接呼ぶとページ側の上書きで無効化されうる。
 #[tauri::command]
 fn go_back(app: AppHandle) -> Result<(), String> {
     app.get_webview("browser-content")
         .ok_or("not found")?
-        .eval("history.back()")
+        .eval("window.__fbNav&&window.__fbNav.back()")
         .map_err(|e| e.to_string())
 }
 
@@ -971,15 +994,17 @@ fn go_back(app: AppHandle) -> Result<(), String> {
 fn go_forward(app: AppHandle) -> Result<(), String> {
     app.get_webview("browser-content")
         .ok_or("not found")?
-        .eval("history.forward()")
+        .eval("window.__fbNav&&window.__fbNav.forward()")
         .map_err(|e| e.to_string())
 }
 
+/// 再読み込みはネイティブ API を使う。
+/// `location.reload()` の eval はページ側から差し替えられる可能性がある。
 #[tauri::command]
-fn reload(app: AppHandle) -> Result<(), String> {
+async fn reload(app: AppHandle) -> Result<(), String> {
     app.get_webview("browser-content")
         .ok_or("not found")?
-        .eval("location.reload()")
+        .reload()
         .map_err(|e| e.to_string())
 }
 
@@ -1314,6 +1339,7 @@ pub fn run() {
             let app_dl = app.handle().clone();
             let content_builder =
                 WebviewBuilder::new("browser-content", WebviewUrl::External(start_url))
+                    .initialization_script(NAV_GUARD_SCRIPT)
                     .initialization_script(SHORTCUT_INIT_SCRIPT)
                     .initialization_script(PAGE_META_SCRIPT)
                     .initialization_script(FIND_SCRIPT)
