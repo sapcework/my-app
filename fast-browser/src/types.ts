@@ -30,6 +30,15 @@ export interface HistoryEntry {
   favicon: string | null;
 }
 
+export interface Download {
+  id: number;
+  url: string;
+  file_name: string;
+  path: string;
+  status: 'running' | 'done' | 'failed';
+  started_at: number;
+}
+
 /** 永続化される設定（Rust 側 Settings と対応）。 */
 export interface Settings {
   home_url: string;

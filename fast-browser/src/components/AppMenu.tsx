@@ -11,6 +11,7 @@ interface Props {
   onTogglePrivate: () => void;
   onToggleBmBar: () => void;
   onOpenHistory: () => void;
+  onOpenDownloads: () => void;
   onOpenFind: () => void;
   onNewTab: () => void;
   onGoHome: () => void;
@@ -36,6 +37,7 @@ export function AppMenu(props: Props) {
     onTogglePrivate,
     onToggleBmBar,
     onOpenHistory,
+    onOpenDownloads,
     onOpenFind,
     onNewTab,
     onGoHome,
@@ -81,6 +83,10 @@ export function AppMenu(props: Props) {
         <button className="menu-item" onClick={onOpenHistory}>
           <span>履歴</span>
           <kbd>Ctrl+H</kbd>
+        </button>
+        <button className="menu-item" onClick={onOpenDownloads}>
+          <span>ダウンロード</span>
+          <kbd>Ctrl+J</kbd>
         </button>
       </div>
 

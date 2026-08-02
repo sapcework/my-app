@@ -1,8 +1,9 @@
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tauri::{
-    webview::PageLoadEvent, AppHandle, Emitter, EventTarget, LogicalPosition, LogicalSize, Manager,
-    State, WebviewBuilder, WebviewUrl,
+    webview::{DownloadEvent, NewWindowResponse, PageLoadEvent},
+    AppHandle, Emitter, EventTarget, LogicalPosition, LogicalSize, Manager, State, WebviewBuilder,
+    WebviewUrl,
 };
 
 // タブバー 36px + ナビバー 52px。src/App.tsx の BASE_HEIGHT と必ず一致させること
@@ -88,6 +89,7 @@ const SHORTCUT_INIT_SCRIPT: &str = r#"
             else if (key === 'r') cmd = 'reload';
             else if (key === 'd') cmd = 'bookmark';
             else if (key === 'h') cmd = 'toggle-history';
+            else if (key === 'j') cmd = 'toggle-downloads';
             else if (key === 'f') cmd = 'find';
             else if (key === '0') cmd = 'zoom-reset';
             if (cmd) { e.preventDefault(); e.stopPropagation(); location.href = 'fbcmd://' + cmd; }
@@ -374,6 +376,213 @@ impl Settings {
 
 /// プライベートモード。オンの間は履歴を一切記録しない。
 pub struct PrivateMode(pub bool);
+
+// ─── ダウンロード ─────────────────────────────────────────────────
+
+const MAX_DOWNLOAD_ENTRIES: usize = 200;
+
+#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DownloadStatus {
+    Running,
+    Done,
+    Failed,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct Download {
+    pub id: u32,
+    pub url: String,
+    pub file_name: String,
+    pub path: String,
+    pub status: DownloadStatus,
+    pub started_at: i64,
+}
+
+pub struct DownloadStore {
+    items: Vec<Download>, // 新しい順
+    next_id: u32,
+    data_path: Option<std::path::PathBuf>,
+}
+
+impl DownloadStore {
+    fn new() -> Self {
+        Self {
+            items: vec![],
+            next_id: 1,
+            data_path: None,
+        }
+    }
+
+    fn init(&mut self, data_dir: std::path::PathBuf) {
+        self.data_path = Some(data_dir.join("downloads.json"));
+        if let Some(path) = &self.data_path {
+            if let Ok(data) = std::fs::read_to_string(path) {
+                if let Ok(mut items) = serde_json::from_str::<Vec<Download>>(&data) {
+                    // 前回の実行中に中断したものは「失敗」として復元する
+                    for i in items.iter_mut() {
+                        if i.status == DownloadStatus::Running {
+                            i.status = DownloadStatus::Failed;
+                        }
+                    }
+                    self.next_id = items.iter().map(|i| i.id).max().unwrap_or(0) + 1;
+                    self.items = items;
+                }
+            }
+        }
+    }
+
+    fn save(&self) {
+        let Some(path) = &self.data_path else { return };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(data) = serde_json::to_string_pretty(&self.items) {
+            let _ = std::fs::write(path, data);
+        }
+    }
+
+    fn start(&mut self, url: String, file_name: String, path: String) -> Download {
+        let item = Download {
+            id: self.next_id,
+            url,
+            file_name,
+            path,
+            status: DownloadStatus::Running,
+            started_at: now_secs(),
+        };
+        self.next_id += 1;
+        self.items.insert(0, item.clone());
+        self.items.truncate(MAX_DOWNLOAD_ENTRIES);
+        self.save();
+        item
+    }
+
+    /// 完了通知は保存先パスで突き合わせる（同一 URL を複数回落とす場合があるため）
+    fn finish(&mut self, path: &str, success: bool) {
+        if let Some(item) = self
+            .items
+            .iter_mut()
+            .find(|i| i.path == path && i.status == DownloadStatus::Running)
+        {
+            item.status = if success {
+                DownloadStatus::Done
+            } else {
+                DownloadStatus::Failed
+            };
+            self.save();
+        }
+    }
+
+    fn all(&self) -> Vec<Download> {
+        self.items.clone()
+    }
+
+    fn find(&self, id: u32) -> Option<Download> {
+        self.items.iter().find(|i| i.id == id).cloned()
+    }
+
+    fn remove(&mut self, id: u32) {
+        self.items.retain(|i| i.id != id);
+        self.save();
+    }
+
+    fn clear(&mut self) {
+        self.items.clear();
+        self.save();
+    }
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
+
+/// URL からダウンロードのファイル名を決める。
+///
+/// パス区切りや `..` を含む値をそのまま使うと保存先ディレクトリの外へ
+/// 書き出せてしまうため（パストラバーサル）、必ず末尾要素だけを取り出し
+/// 危険な文字を落とす。
+fn file_name_from_url(url: &url::Url) -> String {
+    let raw = url
+        .path_segments()
+        .and_then(|mut s| s.rfind(|p: &&str| !p.is_empty()))
+        .unwrap_or("");
+    let name = sanitize_file_name(&percent_decode(raw));
+    if name.is_empty() {
+        "download".to_string()
+    } else {
+        name
+    }
+}
+
+/// ファイル名として安全な形に整える。
+/// パス区切り・Windows の予約文字・制御文字を落とし、長さを制限する。
+/// 空文字を返しうるので、呼び出し側でフォールバックすること。
+fn sanitize_file_name(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .filter(|c| !c.is_control())
+        .collect();
+    cleaned
+        .trim()
+        .trim_matches('.')
+        .chars()
+        .take(150)
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// 既存ファイルを上書きしないよう "name (1).ext" のように連番を付ける
+fn unique_path(dir: &std::path::Path, file_name: &str) -> std::path::PathBuf {
+    let candidate = dir.join(file_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let path = std::path::Path::new(file_name);
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "download".into());
+    let ext = path.extension().map(|e| e.to_string_lossy().into_owned());
+    for n in 1..1000 {
+        let name = match &ext {
+            Some(e) => format!("{stem} ({n}).{e}"),
+            None => format!("{stem} ({n})"),
+        };
+        let p = dir.join(name);
+        if !p.exists() {
+            return p;
+        }
+    }
+    candidate
+}
+
+/// ポップアップ（window.open / target=_blank）の連打を抑えるゲート。
+/// fbcmd 用とは別インスタンスにして、互いの制限が干渉しないようにする。
+pub struct PopupGate(PageCmdGate);
 
 // ─── タブマネージャー ─────────────────────────────────────────────
 
@@ -937,6 +1146,51 @@ async fn find_clear(app: AppHandle) -> Result<(), String> {
     eval_find(&app, "window.__fbFind&&window.__fbFind.clear()")
 }
 
+// ─── ダウンロード コマンド ────────────────────────────────────────
+
+#[tauri::command]
+fn get_downloads(store: State<'_, Mutex<DownloadStore>>) -> Vec<Download> {
+    lock(&store).all()
+}
+
+#[tauri::command]
+fn remove_download(id: u32, store: State<'_, Mutex<DownloadStore>>) {
+    lock(&store).remove(id);
+}
+
+#[tauri::command]
+fn clear_downloads(store: State<'_, Mutex<DownloadStore>>) {
+    lock(&store).clear();
+}
+
+/// 保存先フォルダをエクスプローラーで開き、該当ファイルを選択する。
+///
+/// パスは自前で決めたものだけを使い、ID 経由でしか参照させない
+/// （フロントから任意のパスを渡せるようにするとコマンド実行の踏み台になる）。
+#[tauri::command]
+fn reveal_download(id: u32, store: State<'_, Mutex<DownloadStore>>) -> Result<(), String> {
+    let item = lock(&store).find(id).ok_or("ダウンロードが見つかりません")?;
+    let path = std::path::PathBuf::from(&item.path);
+    if !path.exists() {
+        return Err("ファイルが見つかりません（移動または削除された可能性があります）".into());
+    }
+    #[cfg(windows)]
+    {
+        // 引数は個別に渡す（シェルを経由しないため文字列連結による注入は起きない）
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(windows))]
+    {
+        return Err("この環境では未対応です".into());
+    }
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
 // ─── WebView 位置調整 ─────────────────────────────────────────────
 
 /// chrome（ツールバー）の高さ変化に合わせてコンテンツ WebView を押し下げる。
@@ -984,6 +1238,8 @@ pub fn run() {
         .manage(Mutex::new(PageCmdGate::new()))
         .manage(Mutex::new(SettingsStore::new()))
         .manage(Mutex::new(PrivateMode(false)))
+        .manage(Mutex::new(DownloadStore::new()))
+        .manage(Mutex::new(PopupGate(PageCmdGate::new())))
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -1004,6 +1260,13 @@ pub fn run() {
             {
                 let data_dir = app.path().app_data_dir()?;
                 let state = app.state::<Mutex<HistoryStore>>();
+                lock(&state).init(data_dir);
+            }
+
+            // ダウンロード履歴を初期化
+            {
+                let data_dir = app.path().app_data_dir()?;
+                let state = app.state::<Mutex<DownloadStore>>();
                 lock(&state).init(data_dir);
             }
 
@@ -1047,11 +1310,83 @@ pub fn run() {
                 .unwrap_or_else(|_| HOME_URL.parse().expect("HOME_URL は妥当な URL"));
 
             let app_shortcuts = app.handle().clone();
+            let app_popup = app.handle().clone();
+            let app_dl = app.handle().clone();
             let content_builder =
                 WebviewBuilder::new("browser-content", WebviewUrl::External(start_url))
                     .initialization_script(SHORTCUT_INIT_SCRIPT)
                     .initialization_script(PAGE_META_SCRIPT)
                     .initialization_script(FIND_SCRIPT)
+                    .on_new_window(move |url, _features| {
+                        // target="_blank" / window.open。単一 WebView 構成のため
+                        // 実際の別ウィンドウは作らず、自前のタブとして開く。
+                        if !matches!(url.scheme(), "http" | "https") {
+                            log::warn!("blocked popup with unsupported scheme: {}", url);
+                            return NewWindowResponse::Deny;
+                        }
+                        let gate = app_popup.state::<Mutex<PopupGate>>();
+                        if !lock(&gate).0.allow(Instant::now()) {
+                            log::warn!("popup throttled: {}", url);
+                            return NewWindowResponse::Deny;
+                        }
+                        let target = url.to_string();
+                        let snapshot = {
+                            let state = app_popup.state::<Mutex<TabManager>>();
+                            let mut mgr = lock(&state);
+                            mgr.open_tab(target.clone());
+                            mgr.snapshot()
+                        };
+                        let _ = navigate_webview(&app_popup, &target);
+                        emit_tabs(&app_popup, &snapshot);
+                        NewWindowResponse::Deny
+                    })
+                    .on_download(move |_wv, event| match event {
+                        DownloadEvent::Requested { url, destination } => {
+                            let Ok(dir) = app_dl.path().download_dir() else {
+                                log::error!("download dir not available");
+                                return false;
+                            };
+                            // WebView2 が提案するファイル名（Content-Disposition 由来）を優先する。
+                            // ただしサーバー由来の値なので必ず検証してから使う。
+                            let suggested = destination
+                                .file_name()
+                                .map(|s| sanitize_file_name(&s.to_string_lossy()))
+                                .filter(|s| !s.is_empty());
+                            let name = suggested.unwrap_or_else(|| file_name_from_url(&url));
+                            let target = unique_path(&dir, &name);
+                            let final_name = target
+                                .file_name()
+                                .map(|s| s.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| name.clone());
+                            *destination = target.clone();
+
+                            let item = lock(&app_dl.state::<Mutex<DownloadStore>>()).start(
+                                url.to_string(),
+                                final_name,
+                                target.to_string_lossy().into_owned(),
+                            );
+                            let _ = app_dl.emit_to(
+                                EventTarget::webview_window("main"),
+                                "download-started",
+                                item,
+                            );
+                            true
+                        }
+                        DownloadEvent::Finished { url, path, success } => {
+                            let key = path
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .unwrap_or_default();
+                            lock(&app_dl.state::<Mutex<DownloadStore>>()).finish(&key, success);
+                            log::info!("download finished: {} success={}", url, success);
+                            let _ = app_dl.emit_to(
+                                EventTarget::webview_window("main"),
+                                "downloads-updated",
+                                (),
+                            );
+                            true
+                        }
+                        _ => true,
+                    })
                     .on_navigation(move |url| {
                 // ページ内容は信頼できない入力。fbcmd:// / fbmeta:// はいずれも
                 // 任意の Web ページが location.href で自由に発火できる点に注意。
@@ -1207,6 +1542,10 @@ pub fn run() {
             find_in_page,
             find_step,
             find_clear,
+            get_downloads,
+            remove_download,
+            clear_downloads,
+            reveal_download,
             set_webview_top
         ])
         .build(tauri::generate_context!())
@@ -1380,6 +1719,85 @@ mod tests {
         assert_eq!(reloaded.all().len(), 1);
         assert_eq!(reloaded.all()[0].url, "https://a.test/");
         assert_eq!(reloaded.next_id, 2, "id 採番が重複しないよう復元される");
+    }
+
+    // --- ダウンロードのファイル名 ---
+
+    fn fname(u: &str) -> String {
+        file_name_from_url(&url::Url::parse(u).unwrap())
+    }
+
+    #[test]
+    fn download_name_uses_last_path_segment() {
+        assert_eq!(fname("https://a.test/files/report.pdf"), "report.pdf");
+        assert_eq!(fname("https://a.test/a/b/c.zip?x=1#f"), "c.zip");
+        assert_eq!(fname("https://a.test/files/"), "files");
+    }
+
+    #[test]
+    fn download_name_decodes_percent_escapes() {
+        assert_eq!(fname("https://a.test/%E8%B3%87%E6%96%99.pdf"), "資料.pdf");
+        assert_eq!(fname("https://a.test/my%20file.txt"), "my file.txt");
+    }
+
+    #[test]
+    fn download_name_blocks_path_traversal() {
+        // %2F / %5C はデコードするとパス区切りになる。保存先の外へ出られてはいけない。
+        for u in [
+            "https://a.test/..%2F..%2Fwindows%2Fsystem32%2Fevil.exe",
+            "https://a.test/..%5C..%5Cevil.exe",
+        ] {
+            let n = fname(u);
+            assert!(!n.contains('/'), "{n} にスラッシュが残っている");
+            assert!(!n.contains('\\'), "{n} に円記号が残っている");
+            assert!(!n.starts_with('.'), "{n} が . で始まっている");
+        }
+    }
+
+    #[test]
+    fn download_name_strips_windows_reserved_chars_and_falls_back() {
+        assert_eq!(fname("https://a.test/a%3Ab%2Ac%3Fd.txt"), "abcd.txt");
+        assert_eq!(fname("https://a.test/"), "download");
+        assert_eq!(fname("https://a.test/..."), "download");
+    }
+
+    #[test]
+    fn sanitize_file_name_blocks_traversal_from_content_disposition() {
+        // Content-Disposition のファイル名はサーバー由来。保存先の外に出せてはいけない。
+        assert_eq!(sanitize_file_name("../../evil.exe"), "evil.exe");
+        assert_eq!(sanitize_file_name("..\\..\\evil.exe"), "evil.exe");
+        assert_eq!(sanitize_file_name("C:\\Windows\\system.ini"), "CWindowssystem.ini");
+        assert_eq!(sanitize_file_name("  ..  "), "");
+        assert_eq!(sanitize_file_name("ok.txt"), "ok.txt");
+    }
+
+    #[test]
+    fn download_name_is_length_capped() {
+        let long = "x".repeat(400);
+        assert!(fname(&format!("https://a.test/{long}")).chars().count() <= 150);
+    }
+
+    #[test]
+    fn unique_path_avoids_overwriting_existing_files() {
+        let dir = std::env::temp_dir().join("fb_test_dl");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let first = unique_path(&dir, "a.txt");
+        assert_eq!(first.file_name().unwrap(), "a.txt");
+        std::fs::write(&first, b"x").unwrap();
+
+        let second = unique_path(&dir, "a.txt");
+        assert_eq!(second.file_name().unwrap(), "a (1).txt", "既存ファイルは上書きしない");
+        std::fs::write(&second, b"x").unwrap();
+
+        let third = unique_path(&dir, "a.txt");
+        assert_eq!(third.file_name().unwrap(), "a (2).txt");
+
+        // 拡張子が無い場合も連番が付く
+        let noext = unique_path(&dir, "b");
+        std::fs::write(&noext, b"x").unwrap();
+        assert_eq!(unique_path(&dir, "b").file_name().unwrap(), "b (1)");
     }
 
     // --- 設定 ---

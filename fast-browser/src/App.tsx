@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react
 import { listen } from '@tauri-apps/api/event';
 import './App.css';
 
-import type { Tab, TabsState, Bookmark, HistoryEntry, Settings } from './types';
+import type { Tab, TabsState, Bookmark, HistoryEntry, Settings, Download } from './types';
 import { HOME, type EngineId, normalizeUrl, shortUrl, sameUrl } from './lib/url';
 import { useToasts, FAILED } from './hooks/useToasts';
 import { TabBar } from './components/TabBar';
 import { NavBar } from './components/NavBar';
 import { BookmarkBar } from './components/BookmarkBar';
 import { HistoryPanel } from './components/HistoryPanel';
+import { DownloadPanel } from './components/DownloadPanel';
 import { AppMenu } from './components/AppMenu';
 import { FindBar } from './components/FindBar';
 import { Toasts } from './components/Toasts';
@@ -23,7 +24,8 @@ const HISTORY_PANEL_HEIGHT = 360;
 // 重ねて表示することができない。表示中はその分だけ chrome の高さを確保する。
 const TOAST_ROW_HEIGHT = 46;
 const MAX_VISIBLE_TOASTS = 3;
-const MENU_HEIGHT = 348; // App.css の #app-menu の height と一致させること
+const MENU_HEIGHT = 382; // App.css の #app-menu の height と一致させること
+const DOWNLOAD_PANEL_HEIGHT = 300; // App.css の #download-panel と一致させること
 const FIND_BAR_HEIGHT = 40;
 const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
@@ -45,6 +47,8 @@ export default function App() {
   const [findQuery, setFindQuery] = useState('');
   const [findResult, setFindResult] = useState({ total: 0, index: 0 });
   const [zoom, setZoom] = useState(1);
+  const [downloads, setDownloads] = useState<Download[]>([]);
+  const [showDownloads, setShowDownloads] = useState(false);
   const [privateMode, setPrivateMode] = useState(false);
   const [homeUrl, setHomeUrl] = useState(HOME);
 
@@ -63,6 +67,7 @@ export default function App() {
     (showFind ? FIND_BAR_HEIGHT : 0) +
     (showMenu ? MENU_HEIGHT : 0) +
     (showHistory ? HISTORY_PANEL_HEIGHT : 0) +
+    (showDownloads ? DOWNLOAD_PANEL_HEIGHT : 0) +
     visibleToasts.length * TOAST_ROW_HEIGHT;
 
   // ── 初期ロード ──────────────────────────────────────────────
@@ -286,6 +291,56 @@ export default function App() {
     [persistSettings, push],
   );
 
+  // ── ダウンロード ────────────────────────────────────────────
+
+  const loadDownloads = useCallback(async () => {
+    const d = await run<Download[]>('get_downloads');
+    if (d !== FAILED) setDownloads(d);
+  }, [run]);
+
+  const toggleDownloads = useCallback(async () => {
+    if (!showDownloads) await loadDownloads();
+    setShowDownloads((v) => !v);
+  }, [showDownloads, loadDownloads]);
+
+  // ダウンロードの開始・完了を Rust から受け取り、一覧と通知に反映する
+  useEffect(() => {
+    const subs = [
+      listen<Download>('download-started', (e) => {
+        setDownloads((prev) => [e.payload, ...prev.filter((d) => d.id !== e.payload.id)]);
+        push('info', `「${e.payload.file_name}」のダウンロードを開始しました`);
+      }),
+      listen('downloads-updated', () => void loadDownloads()),
+    ];
+    return () => {
+      subs.forEach((p) => void p.then((off) => off()));
+    };
+  }, [push, loadDownloads]);
+
+  const revealDownload = useCallback(
+    async (d: Download) => {
+      const ok = await run<void>('reveal_download', { id: d.id });
+      if (ok === FAILED) return;
+    },
+    [run],
+  );
+
+  const removeDownload = useCallback(
+    async (d: Download) => {
+      const ok = await run<void>('remove_download', { id: d.id });
+      if (ok === FAILED) return;
+      setDownloads((prev) => prev.filter((x) => x.id !== d.id));
+    },
+    [run],
+  );
+
+  const clearDownloads = useCallback(async () => {
+    const ok = await run<void>('clear_downloads');
+    if (ok === FAILED) return;
+    setDownloads([]);
+    push('info', 'ダウンロード一覧を消去しました（ファイルは削除されていません）');
+  }, [run, push]);
+
   // ── ページ内検索 ────────────────────────────────────────────
 
   const closeFind = useCallback(() => {
@@ -340,6 +395,9 @@ export default function App() {
         case 'toggle-history':
           void toggleHistory();
           break;
+        case 'toggle-downloads':
+          void toggleDownloads();
+          break;
         case 'find':
           setShowMenu(false);
           setShowFind(true);
@@ -357,6 +415,7 @@ export default function App() {
           // コンテンツ側で Esc が押された。開いているものを1つ閉じる。
           if (showFind) closeFind();
           else if (showMenu) setShowMenu(false);
+          else if (showDownloads) setShowDownloads(false);
           else if (showHistory) setShowHistory(false);
           break;
       }
@@ -370,11 +429,13 @@ export default function App() {
       focusAddressBar,
       toggleBookmark,
       toggleHistory,
+      toggleDownloads,
       stepZoom,
       applyZoom,
       showFind,
       showMenu,
       showHistory,
+      showDownloads,
       closeFind,
     ],
   );
@@ -401,6 +462,7 @@ export default function App() {
           r: 'reload',
           d: 'bookmark',
           h: 'toggle-history',
+          j: 'toggle-downloads',
           f: 'find',
         };
         const cmd = map[e.key.toLowerCase()];
@@ -523,6 +585,10 @@ export default function App() {
             setShowMenu(false);
             void toggleHistory();
           }}
+          onOpenDownloads={() => {
+            setShowMenu(false);
+            void toggleDownloads();
+          }}
           onOpenFind={() => {
             setShowMenu(false);
             setShowFind(true);
@@ -564,6 +630,16 @@ export default function App() {
             setShowHistory(false);
             setHistoryQuery('');
           }}
+        />
+      )}
+
+      {showDownloads && (
+        <DownloadPanel
+          items={downloads}
+          onReveal={(d) => void revealDownload(d)}
+          onRemove={(d) => void removeDownload(d)}
+          onClearAll={() => void clearDownloads()}
+          onClose={() => setShowDownloads(false)}
         />
       )}
 
