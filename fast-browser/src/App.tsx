@@ -17,6 +17,7 @@ interface Tab {
   url: string;
   title: string;
   is_loading: boolean;
+  favicon: string | null;
 }
 
 interface TabsState {
@@ -36,6 +37,7 @@ interface HistoryEntry {
   url: string;
   title: string;
   visited_at: number;
+  favicon: string | null;
 }
 
 const ENGINES = [
@@ -78,7 +80,7 @@ function formatTime(epochSec: number): string {
 // ── コンポーネント ────────────────────────────────────────────────
 
 export default function App() {
-  const [tabs, setTabs]         = useState<Tab[]>([{ id: 1, url: HOME, title: 'New Tab', is_loading: true }]);
+  const [tabs, setTabs]         = useState<Tab[]>([{ id: 1, url: HOME, title: 'New Tab', is_loading: true, favicon: null }]);
   const [activeId, setActiveId] = useState(1);
   const [address, setAddress]   = useState(HOME);
   const [focused, setFocused]   = useState(false);
@@ -272,7 +274,16 @@ export default function App() {
             onClick={() => handleSwitchTab(tab.id)}
             title={tab.url}
           >
-            {tab.is_loading && <span className="tab-spinner" />}
+            {tab.is_loading
+              ? <span className="tab-spinner" />
+              : tab.favicon && (
+                  <img
+                    className="tab-favicon"
+                    src={tab.favicon}
+                    alt=""
+                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                  />
+                )}
             <span className="tab-title">{tab.title || 'New Tab'}</span>
             {tabs.length > 1 && (
               <button className="tab-close" onClick={e => handleCloseTab(tab.id, e)}>×</button>
@@ -382,6 +393,14 @@ export default function App() {
                     onClick={() => { navigateTo(h.url); setShowHistory(false); }}
                     title={h.url}
                   >
+                    {h.favicon && (
+                      <img
+                        className="history-item-favicon"
+                        src={h.favicon}
+                        alt=""
+                        onError={e => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
                     <span className="history-item-title">{h.title || shortUrl(h.url)}</span>
                     <span className="history-item-time">{formatTime(h.visited_at)}</span>
                     <button className="history-item-del" onClick={e => removeHistoryEntry(h.id, e)} title="削除">×</button>

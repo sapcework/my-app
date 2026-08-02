@@ -35,20 +35,28 @@ const SHORTCUT_INIT_SCRIPT: &str = r#"
 })();
 "#;
 
-// コンテンツ WebView の実ページタイトルを検出して Rust に通知するスクリプト
-// <title> 要素の変更を MutationObserver で監視し、fbtitle:// スキーム経由で送信
-const TITLE_WATCH_SCRIPT: &str = r#"
+// コンテンツ WebView の実ページタイトル・ファビコンを検出して Rust に通知するスクリプト
+// <title> / <link rel=icon> の変更を MutationObserver で監視し、fbmeta:// スキーム経由で送信
+const PAGE_META_SCRIPT: &str = r#"
 (function () {
-    function sendTitle() {
-        if (document.title) {
-            location.href = 'fbtitle://update?t=' + encodeURIComponent(document.title);
-        }
+    function faviconUrl() {
+        var link = document.querySelector('link[rel~="icon" i]');
+        return (link && link.href) ? link.href : (location.origin + '/favicon.ico');
+    }
+    function sendMeta() {
+        var t = encodeURIComponent(document.title || '');
+        var f = encodeURIComponent(faviconUrl());
+        location.href = 'fbmeta://update?t=' + t + '&f=' + f;
     }
     function attach() {
-        sendTitle();
-        var t = document.querySelector('title');
-        var target = t || document.head || document.documentElement;
-        new MutationObserver(sendTitle).observe(target, { childList: true, subtree: !t });
+        sendMeta();
+        var titleEl = document.querySelector('title');
+        var titleTarget = titleEl || document.head || document.documentElement;
+        new MutationObserver(sendMeta).observe(titleTarget, { childList: true, subtree: !titleEl });
+        // <link rel=icon> の追加・削除・差し替え（動的favicon変更）も検知
+        if (document.head) {
+            new MutationObserver(sendMeta).observe(document.head, { childList: true, subtree: true });
+        }
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', attach);
@@ -66,6 +74,7 @@ pub struct Tab {
     pub url: String,
     pub title: String,
     pub is_loading: bool,
+    pub favicon: Option<String>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -92,6 +101,8 @@ pub struct HistoryEntry {
     pub url: String,
     pub title: String,
     pub visited_at: i64,
+    #[serde(default)]
+    pub favicon: Option<String>,
 }
 
 // ─── タブマネージャー ─────────────────────────────────────────────
@@ -110,6 +121,7 @@ impl TabManager {
                 url: HOME_URL.to_string(),
                 title: "New Tab".to_string(),
                 is_loading: true,
+                favicon: None,
             }],
             active_id: 1,
             next_id: 2,
@@ -131,6 +143,7 @@ impl TabManager {
             url: url.clone(),
             title: hostname_of(&url),
             is_loading: true,
+            favicon: None,
         });
         self.active_id = id;
     }
@@ -161,6 +174,7 @@ impl TabManager {
             t.url = url.to_string();
             t.title = hostname_of(url);
             t.is_loading = true;
+            t.favicon = None; // 新しいページ用に前ページのファビコンをクリア
         }
     }
 
@@ -170,9 +184,10 @@ impl TabManager {
         }
     }
 
-    fn set_active_title(&mut self, title: String) {
+    fn set_active_meta(&mut self, title: String, favicon: Option<String>) {
         if let Some(t) = self.tabs.iter_mut().find(|t| t.id == self.active_id) {
             t.title = title;
+            t.favicon = favicon;
         }
     }
 }
@@ -321,6 +336,7 @@ impl HistoryStore {
                 url,
                 title,
                 visited_at: now,
+                favicon: None,
             },
         );
         self.entries.truncate(MAX_HISTORY_ENTRIES);
@@ -341,10 +357,11 @@ impl HistoryStore {
         self.entries.clone()
     }
 
-    // 直近訪問（先頭）エントリのタイトルを実ページタイトルで更新する
-    fn update_latest_title(&mut self, title: String) {
+    // 直近訪問（先頭）エントリのタイトル・ファビコンを実ページ情報で更新する
+    fn update_latest_meta(&mut self, title: String, favicon: Option<String>) {
         if let Some(last) = self.entries.first_mut() {
             last.title = title;
+            last.favicon = favicon;
             self.save();
         }
     }
@@ -584,7 +601,7 @@ pub fn run() {
                 WebviewUrl::External(HOME_URL.parse().unwrap()),
             )
             .initialization_script(SHORTCUT_INIT_SCRIPT)
-            .initialization_script(TITLE_WATCH_SCRIPT)
+            .initialization_script(PAGE_META_SCRIPT)
             .on_navigation(move |url| {
                 // fbcmd:// はキーボードショートカットシグナル。キャンセルしてイベントを送信。
                 if url.scheme() == "fbcmd" {
@@ -593,18 +610,23 @@ pub fn run() {
                         app_shortcuts.emit_to(EventTarget::webview_window("main"), "shortcut", cmd);
                     return false; // ナビゲーションをキャンセル
                 }
-                // fbtitle:// は実ページタイトル通知。アクティブタブと履歴の最新エントリに反映。
-                if url.scheme() == "fbtitle" {
-                    let title = url
-                        .query_pairs()
-                        .find(|(k, _)| k == "t")
-                        .map(|(_, v)| v.into_owned())
-                        .unwrap_or_default();
+                // fbmeta:// は実ページタイトル・ファビコン通知。アクティブタブと履歴の最新エントリに反映。
+                if url.scheme() == "fbmeta" {
+                    let mut title = String::new();
+                    let mut favicon = String::new();
+                    for (k, v) in url.query_pairs() {
+                        match &*k {
+                            "t" => title = v.into_owned(),
+                            "f" => favicon = v.into_owned(),
+                            _ => {}
+                        }
+                    }
                     if !title.is_empty() {
+                        let favicon_opt = (!favicon.is_empty()).then_some(favicon);
                         let snapshot = {
                             let state = app_shortcuts.state::<Mutex<TabManager>>();
                             let mut mgr = state.lock().unwrap();
-                            mgr.set_active_title(title.clone());
+                            mgr.set_active_meta(title.clone(), favicon_opt.clone());
                             mgr.snapshot()
                         };
                         emit_tabs(&app_shortcuts, &snapshot);
@@ -612,7 +634,7 @@ pub fn run() {
                             .state::<Mutex<HistoryStore>>()
                             .lock()
                             .unwrap()
-                            .update_latest_title(title);
+                            .update_latest_meta(title, favicon_opt);
                     }
                     return false; // ナビゲーションをキャンセル
                 }
