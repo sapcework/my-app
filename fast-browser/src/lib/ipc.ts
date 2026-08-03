@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { translate, type Locale, type MessageKey } from '../i18n/messages';
 
 /**
  * Rust コマンド呼び出しの薄いラッパー。
@@ -27,25 +28,31 @@ function toMessage(e: unknown): string {
  * 技術的なエラーを、ユーザーが次の行動を取れる日本語メッセージに翻訳する。
  * 原文をそのまま出すと「何をすればよいか」が伝わらないため。
  */
-export function friendlyError(cmd: string, raw: string): string {
+export function friendlyError(locale: Locale, cmd: string, raw: string): string {
   const r = raw.toLowerCase();
   if (r.includes('relative url') || r.includes('invalid') || r.includes('parse')) {
-    return 'URL の形式が正しくありません。入力内容を確認してください。';
+    return translate(locale, 'err.badUrl');
   }
   if (r.includes('not found') || r.includes('webview')) {
-    return 'ブラウザ画面の準備ができていません。少し待ってからもう一度お試しください。';
+    return translate(locale, 'err.notReady');
   }
-  const labels: Record<string, string> = {
-    navigate: 'ページを開けませんでした',
-    new_tab: '新しいタブを開けませんでした',
-    close_tab: 'タブを閉じられませんでした',
-    switch_tab: 'タブを切り替えられませんでした',
-    add_bookmark: 'ブックマークを追加できませんでした',
-    remove_bookmark: 'ブックマークを削除できませんでした',
-    get_history: '履歴を読み込めませんでした',
-    clear_history: '履歴を削除できませんでした',
-    restore_history: '履歴を元に戻せませんでした',
-    reload: '再読み込みできませんでした',
-  };
-  return `${labels[cmd] ?? '操作に失敗しました'}。ネットワーク接続を確認してください。`;
+  const key = `err.${cmd}` as MessageKey;
+  const known = key in MESSAGE_KEYS ? key : 'err.generic';
+  return translate(locale, 'err.checkNetwork', { action: translate(locale, known) });
 }
+
+// コマンド名に対応する専用メッセージがあるかを判定するための集合
+const MESSAGE_KEYS: Record<string, true> = {
+  'err.navigate': true,
+  'err.new_tab': true,
+  'err.close_tab': true,
+  'err.switch_tab': true,
+  'err.add_bookmark': true,
+  'err.remove_bookmark': true,
+  'err.get_history': true,
+  'err.clear_history': true,
+  'err.restore_history': true,
+  'err.reload': true,
+  'err.get_downloads': true,
+  'err.reveal_download': true,
+};

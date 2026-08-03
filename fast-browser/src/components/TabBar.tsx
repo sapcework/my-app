@@ -1,4 +1,5 @@
 import type { Tab } from '../types';
+import { useI18n } from '../i18n/context';
 
 interface Props {
   tabs: Tab[];
@@ -9,10 +10,11 @@ interface Props {
 }
 
 export function TabBar({ tabs, activeId, onSwitch, onClose, onNew }: Props) {
+  const { t } = useI18n();
   return (
-    <div id="tab-bar" role="tablist" aria-label="開いているタブ">
+    <div id="tab-bar" role="tablist" aria-label={t('tab.listAria')}>
       {tabs.map((tab) => {
-        const label = tab.title || '新しいタブ';
+        const label = tab.title || t('tab.new');
         return (
           <div
             key={tab.id}
@@ -50,7 +52,7 @@ export function TabBar({ tabs, activeId, onSwitch, onClose, onNew }: Props) {
             {tabs.length > 1 && (
               <button
                 className="tab-close"
-                aria-label={`${label} を閉じる`}
+                aria-label={t('tab.closeAria', { name: label })}
                 onClick={(e) => {
                   e.stopPropagation();
                   onClose(tab.id);
@@ -62,7 +64,7 @@ export function TabBar({ tabs, activeId, onSwitch, onClose, onNew }: Props) {
           </div>
         );
       })}
-      <button className="new-tab-btn" onClick={onNew} aria-label="新しいタブを開く (Ctrl+T)">
+      <button className="new-tab-btn" onClick={onNew} aria-label={t('tab.newAria')}>
         <span aria-hidden="true">+</span>
       </button>
     </div>

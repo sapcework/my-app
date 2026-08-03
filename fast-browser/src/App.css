@@ -41,7 +41,13 @@ body {
   color: var(--text);
   user-select: none;
   -webkit-user-select: none;
-  font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'Hiragino Sans',
+    'Noto Sans JP',
+    sans-serif;
   font-size: 13px;
 }
 
@@ -440,7 +446,7 @@ kbd {
   display: flex;
   flex-direction: column;
   /* src/App.tsx の MENU_HEIGHT と一致させること */
-  height: 382px;
+  height: 476px;
   overflow-y: auto;
   background: var(--bg-deep);
   border-bottom: 1px solid var(--surface);

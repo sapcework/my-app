@@ -5,6 +5,9 @@ import './App.css';
 import type { Tab, TabsState, Bookmark, HistoryEntry, Settings, Download } from './types';
 import { HOME, type EngineId, normalizeUrl, shortUrl, sameUrl } from './lib/url';
 import { useToasts, FAILED } from './hooks/useToasts';
+import { I18nProvider } from './i18n/I18nProvider';
+import { useI18n } from './i18n/context';
+import { detectLocale, type Locale } from './i18n/messages';
 import { TabBar } from './components/TabBar';
 import { NavBar } from './components/NavBar';
 import { BookmarkBar } from './components/BookmarkBar';
@@ -24,14 +27,35 @@ const HISTORY_PANEL_HEIGHT = 360;
 // 重ねて表示することができない。表示中はその分だけ chrome の高さを確保する。
 const TOAST_ROW_HEIGHT = 46;
 const MAX_VISIBLE_TOASTS = 3;
-const MENU_HEIGHT = 382; // App.css の #app-menu の height と一致させること
+const MENU_HEIGHT = 476; // App.css の #app-menu の height と一致させること
 const DOWNLOAD_PANEL_HEIGHT = 300; // App.css の #download-panel と一致させること
 const FIND_BAR_HEIGHT = 40;
-const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
+const ZOOM_STEPS = [
+  0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5,
+];
 
-const INITIAL_TAB: Tab = { id: 1, url: HOME, title: '新しいタブ', is_loading: true, favicon: null };
+const INITIAL_TAB: Tab = { id: 1, url: HOME, title: '', is_loading: true, favicon: null };
 
 export default function App() {
+  // 言語設定はアプリ全体に影響するため最上位で解決し、Provider で配る。
+  // '' は「OS の設定に従う」を意味する。
+  const [localePref, setLocalePref] = useState<Locale | ''>('');
+  const activeLocale: Locale = localePref || detectLocale();
+  return (
+    <I18nProvider locale={activeLocale}>
+      <BrowserChrome localePref={localePref} onLocalePref={setLocalePref} />
+    </I18nProvider>
+  );
+}
+
+function BrowserChrome({
+  localePref,
+  onLocalePref,
+}: {
+  localePref: Locale | '';
+  onLocalePref: (l: Locale | '') => void;
+}) {
+  const { locale, t } = useI18n();
   const [tabs, setTabs] = useState<Tab[]>([INITIAL_TAB]);
   const [activeId, setActiveId] = useState(1);
   const [address, setAddress] = useState(HOME);
@@ -52,7 +76,7 @@ export default function App() {
   const [privateMode, setPrivateMode] = useState(false);
   const [homeUrl, setHomeUrl] = useState(HOME);
 
-  const { toasts, push, dismiss, run } = useToasts();
+  const { toasts, push, dismiss, run } = useToasts(locale);
 
   // アドレスバー編集中はページ側の URL 更新で入力を上書きしない
   const isEditing = useRef(false);
@@ -86,11 +110,12 @@ export default function App() {
         setHomeUrl(cfg.home_url);
         setEngine(cfg.engine_id as EngineId);
         setZoom(cfg.zoom);
+        onLocalePref((cfg.locale as Locale | '') ?? '');
         // 保存済みのズームを起動時のページへ適用する
         if (cfg.zoom !== 1) void run('set_zoom', { factor: cfg.zoom });
       }
     })();
-  }, [run]);
+  }, [run, onLocalePref]);
 
   // ── Rust からの状態同期 ─────────────────────────────────────
 
@@ -153,8 +178,8 @@ export default function App() {
       const ok = await run<void>('remove_bookmark', { id: currentBm.id });
       if (ok !== FAILED) {
         setBookmarks((prev) => prev.filter((b) => b.id !== currentBm.id));
-        push('info', 'ブックマークを解除しました', {
-          label: '元に戻す',
+        push('info', t('bm.removed'), {
+          label: t('toast.undo'),
           run: () => {
             void (async () => {
               const bm = await run<Bookmark>('add_bookmark', {
@@ -171,18 +196,18 @@ export default function App() {
       const bm = await run<Bookmark>('add_bookmark', { url: address, title });
       if (bm !== FAILED) {
         setBookmarks((prev) => [...prev, bm]);
-        push('success', `「${title}」をブックマークに追加しました`);
+        push('success', t('bm.added', { name: title }));
       }
     }
-  }, [currentBm, activeTab, address, run, push]);
+  }, [currentBm, activeTab, address, run, push, t]);
 
   const removeBookmark = useCallback(
     async (bm: Bookmark) => {
       const ok = await run<void>('remove_bookmark', { id: bm.id });
       if (ok === FAILED) return;
       setBookmarks((prev) => prev.filter((b) => b.id !== bm.id));
-      push('info', `「${bm.title || shortUrl(bm.url)}」を削除しました`, {
-        label: '元に戻す',
+      push('info', t('bm.deleted', { name: bm.title || shortUrl(bm.url) }), {
+        label: t('toast.undo'),
         run: () => {
           void (async () => {
             const re = await run<Bookmark>('add_bookmark', { url: bm.url, title: bm.title });
@@ -191,7 +216,7 @@ export default function App() {
         },
       });
     },
-    [run, push],
+    [run, push, t],
   );
 
   const removeHistoryEntry = useCallback(
@@ -199,8 +224,8 @@ export default function App() {
       const removed = await run<HistoryEntry | null>('remove_history_entry', { id: entry.id });
       if (removed === FAILED) return;
       setHistory((prev) => prev.filter((h) => h.id !== entry.id));
-      push('info', '履歴を1件削除しました', {
-        label: '元に戻す',
+      push('info', t('history.deletedOne'), {
+        label: t('toast.undo'),
         run: () => {
           void (async () => {
             await run('restore_history', { entries: [entry] });
@@ -209,7 +234,7 @@ export default function App() {
         },
       });
     },
-    [run, push, loadHistory],
+    [run, push, loadHistory, t],
   );
 
   const clearHistory = useCallback(async () => {
@@ -217,8 +242,8 @@ export default function App() {
     const removed = await run<HistoryEntry[]>('clear_history');
     if (removed === FAILED) return;
     setHistory([]);
-    push('info', `履歴 ${removed.length} 件をすべて削除しました`, {
-      label: '元に戻す',
+    push('info', t('history.clearedAll', { n: removed.length }), {
+      label: t('toast.undo'),
       run: () => {
         void (async () => {
           await run('restore_history', { entries: removed });
@@ -226,7 +251,7 @@ export default function App() {
         })();
       },
     });
-  }, [run, push, loadHistory]);
+  }, [run, push, loadHistory, t]);
 
   // ── 設定・ズーム・プライベートモード ────────────────────────
 
@@ -236,15 +261,17 @@ export default function App() {
         home_url: patch.home_url ?? homeUrl,
         engine_id: patch.engine_id ?? engine,
         zoom: patch.zoom ?? zoom,
+        locale: patch.locale ?? localePref,
       };
       const saved = await run<Settings>('save_settings', { settings: next });
       if (saved === FAILED) return null;
       // Rust 側で不正値が補正されるため、返ってきた値を正とする
       setHomeUrl(saved.home_url);
       setEngine(saved.engine_id as EngineId);
+      onLocalePref((saved.locale as Locale | '') ?? '');
       return saved;
     },
-    [homeUrl, engine, zoom, run],
+    [homeUrl, engine, zoom, localePref, run, onLocalePref],
   );
 
   const applyZoom = useCallback(
@@ -270,25 +297,20 @@ export default function App() {
     const ok = await run<void>('set_private_mode', { on: next });
     if (ok === FAILED) return;
     setPrivateMode(next);
-    push(
-      'info',
-      next
-        ? 'プライベートモードをオンにしました。以降の閲覧は履歴に残りません。'
-        : 'プライベートモードをオフにしました。閲覧履歴の記録を再開します。',
-    );
-  }, [privateMode, run, push]);
+    push('info', next ? t('private.on') : t('private.off'));
+  }, [privateMode, run, push, t]);
 
   const saveHome = useCallback(
     async (url: string) => {
       const saved = await persistSettings({ home_url: url });
       if (!saved) return;
       if (saved.home_url !== url) {
-        push('error', 'ホームページには http:// または https:// の URL を指定してください。');
+        push('error', t('settings.homeInvalid'));
       } else {
-        push('success', 'ホームページを保存しました');
+        push('success', t('settings.homeSaved'));
       }
     },
-    [persistSettings, push],
+    [persistSettings, push, t],
   );
 
   // ── ダウンロード ────────────────────────────────────────────
@@ -308,14 +330,14 @@ export default function App() {
     const subs = [
       listen<Download>('download-started', (e) => {
         setDownloads((prev) => [e.payload, ...prev.filter((d) => d.id !== e.payload.id)]);
-        push('info', `「${e.payload.file_name}」のダウンロードを開始しました`);
+        push('info', t('dl.started', { name: e.payload.file_name }));
       }),
       listen('downloads-updated', () => void loadDownloads()),
     ];
     return () => {
       subs.forEach((p) => void p.then((off) => off()));
     };
-  }, [push, loadDownloads]);
+  }, [push, loadDownloads, t]);
 
   const revealDownload = useCallback(
     async (d: Download) => {
@@ -338,8 +360,8 @@ export default function App() {
     const ok = await run<void>('clear_downloads');
     if (ok === FAILED) return;
     setDownloads([]);
-    push('info', 'ダウンロード一覧を消去しました（ファイルは削除されていません）');
-  }, [run, push]);
+    push('info', t('dl.listCleared'));
+  }, [run, push, t]);
 
   // ── ページ内検索 ────────────────────────────────────────────
 
@@ -378,7 +400,7 @@ export default function App() {
           break;
         case 'close-tab':
           if (tabs.length <= 1) {
-            push('info', '最後のタブは閉じられません');
+            push('info', t('tab.lastCannotClose'));
             return;
           }
           void run('close_tab', { id: activeId });
@@ -421,6 +443,7 @@ export default function App() {
       }
     },
     [
+      t,
       tabs.length,
       activeId,
       homeUrl,
@@ -576,6 +599,7 @@ export default function App() {
           privateMode={privateMode}
           showBmBar={showBmBar}
           homeUrl={homeUrl}
+          locale={localePref}
           onZoomIn={() => stepZoom(1)}
           onZoomOut={() => stepZoom(-1)}
           onZoomReset={() => void applyZoom(1)}
@@ -602,6 +626,10 @@ export default function App() {
             void navigateTo(homeUrl);
           }}
           onSaveHome={(url) => void saveHome(url)}
+          onChangeLocale={(l) => {
+            onLocalePref(l);
+            void persistSettings({ locale: l });
+          }}
           onClose={() => setShowMenu(false)}
         />
       )}
@@ -643,7 +671,9 @@ export default function App() {
         />
       )}
 
-      {activeTab?.is_loading && <div id="loading-bar" role="progressbar" aria-label="ページを読み込み中" />}
+      {activeTab?.is_loading && (
+        <div id="loading-bar" role="progressbar" aria-label={t('nav.loading')} />
+      )}
 
       <Toasts toasts={visibleToasts} onDismiss={dismiss} />
     </div>

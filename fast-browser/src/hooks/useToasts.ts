@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Toast } from '../types';
 import { call, friendlyError } from '../lib/ipc';
+import type { Locale } from '../i18n/messages';
 
 /** コマンド失敗を表す番兵。null / undefined は正常な戻り値なので使えない。 */
 export const FAILED = Symbol('command-failed');
@@ -14,7 +15,7 @@ const AUTO_DISMISS_WITH_ACTION_MS = 8000; // 「元に戻す」は押す時間�
  * 併せて `run()` を提供し、Rust コマンドの失敗を必ず可視化する。
  * これがないと通信・IO エラーがユーザーに一切伝わらない。
  */
-export function useToasts() {
+export function useToasts(locale: Locale) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
@@ -50,15 +51,15 @@ export function useToasts() {
    * 区別できず、UI が更新されないまま状態がずれる。
    */
   const run = useCallback(
-    async <T,>(cmd: string, args?: Record<string, unknown>): Promise<T | typeof FAILED> => {
+    async <T>(cmd: string, args?: Record<string, unknown>): Promise<T | typeof FAILED> => {
       try {
         return await call<T>(cmd, args);
       } catch (e) {
-        push('error', friendlyError(cmd, e instanceof Error ? e.message : String(e)));
+        push('error', friendlyError(locale, cmd, e instanceof Error ? e.message : String(e)));
         return FAILED;
       }
     },
-    [push],
+    [push, locale],
   );
 
   return { toasts, push, dismiss, run };

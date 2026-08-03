@@ -44,6 +44,8 @@ export interface Settings {
   home_url: string;
   engine_id: string;
   zoom: number;
+  /** 表示言語。空文字は「OS の設定に従う」。 */
+  locale: string;
 }
 
 /** 画面右下に出す通知。action があれば「元に戻す」等のボタンを表示する。 */

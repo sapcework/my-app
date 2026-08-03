@@ -1,5 +1,6 @@
 import type { Bookmark } from '../types';
 import { shortUrl } from '../lib/url';
+import { useI18n } from '../i18n/context';
 
 interface Props {
   bookmarks: Bookmark[];
@@ -8,13 +9,11 @@ interface Props {
 }
 
 export function BookmarkBar({ bookmarks, onOpen, onRemove }: Props) {
+  const { t } = useI18n();
   return (
-    <div id="bm-bar" aria-label="ブックマークバー">
+    <div id="bm-bar" aria-label={t('bm.barAria')}>
       {bookmarks.length === 0 ? (
-        <p className="empty-hint">
-          ブックマークはまだありません。アドレスバーの <span aria-hidden="true">☆</span> または{' '}
-          <kbd>Ctrl</kbd>+<kbd>D</kbd> で追加できます。
-        </p>
+        <p className="empty-hint">{t('bm.empty')}</p>
       ) : (
         bookmarks.map((bm) => {
           const label = bm.title || shortUrl(bm.url);
@@ -26,7 +25,7 @@ export function BookmarkBar({ bookmarks, onOpen, onRemove }: Props) {
               <button
                 className="bm-chip-del"
                 onClick={() => onRemove(bm)}
-                aria-label={`ブックマーク ${label} を削除`}
+                aria-label={t('bm.deleteAria', { name: label })}
               >
                 <span aria-hidden="true">×</span>
               </button>

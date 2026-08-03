@@ -1,6 +1,8 @@
 import { useMemo, useRef, useEffect } from 'react';
 import type { HistoryEntry } from '../types';
-import { shortUrl, formatTime, dayLabel, matchesQuery } from '../lib/url';
+import { shortUrl, formatTime, matchesQuery } from '../lib/url';
+import { useI18n } from '../i18n/context';
+import { dayLabelKey } from '../lib/url';
 
 interface Props {
   entries: HistoryEntry[];
@@ -21,6 +23,7 @@ export function HistoryPanel({
   onClearAll,
   onClose,
 }: Props) {
+  const { t } = useI18n();
   const searchRef = useRef<HTMLInputElement>(null);
 
   // 開いた直後に検索へフォーカスを置く（目的の項目へ最短で辿り着けるように）
@@ -33,13 +36,21 @@ export function HistoryPanel({
     const filtered = entries.filter((e) => matchesQuery(e, query));
     const out: { label: string; items: HistoryEntry[] }[] = [];
     for (const e of filtered) {
-      const label = dayLabel(e.visited_at);
+      const d = dayLabelKey(e.visited_at);
+      const label =
+        d.kind === 'today'
+          ? t('history.today')
+          : d.kind === 'yesterday'
+            ? t('history.yesterday')
+            : d.kind === 'daysAgo'
+              ? t('history.daysAgo', { n: d.days })
+              : d.text;
       const last = out[out.length - 1];
       if (last && last.label === label) last.items.push(e);
       else out.push({ label, items: [e] });
     }
     return out;
-  }, [entries, query]);
+  }, [entries, query, t]);
 
   const total = entries.length;
   const shown = groups.reduce((n, g) => n + g.items.length, 0);
@@ -49,7 +60,7 @@ export function HistoryPanel({
       id="history-panel"
       role="dialog"
       aria-modal="false"
-      aria-label="閲覧履歴"
+      aria-label={t('history.title')}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation();
@@ -58,29 +69,29 @@ export function HistoryPanel({
       }}
     >
       <div id="history-panel-header">
-        <h2 id="history-heading">履歴</h2>
+        <h2 id="history-heading">{t('history.title')}</h2>
         <input
           ref={searchRef}
           id="history-search"
           type="search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="タイトル・URL で絞り込み"
-          aria-label="履歴を検索"
+          placeholder={t('history.searchPlaceholder')}
+          aria-label={t('history.searchAria')}
           spellCheck={false}
         />
         <span className="history-count" aria-live="polite">
-          {query ? `${shown} / ${total} 件` : `${total} 件`}
+          {query ? t('history.countFiltered', { shown, total }) : t('history.count', { n: total })}
         </span>
         <button
           id="history-clear"
           onClick={onClearAll}
           disabled={total === 0}
-          aria-label="履歴をすべて削除（あとで元に戻せます）"
+          aria-label={t('history.clearAllAria')}
         >
-          すべて削除
+          {t('history.clearAll')}
         </button>
-        <button id="history-close" onClick={onClose} aria-label="履歴を閉じる">
+        <button id="history-close" onClick={onClose} aria-label={t('history.close')}>
           <span aria-hidden="true">×</span>
         </button>
       </div>
@@ -88,14 +99,14 @@ export function HistoryPanel({
       <div id="history-list">
         {total === 0 ? (
           <div className="empty-state">
-            <p className="empty-title">まだ履歴がありません</p>
-            <p className="empty-body">ページを開くと、ここに閲覧履歴が記録されます。</p>
+            <p className="empty-title">{t('history.emptyTitle')}</p>
+            <p className="empty-body">{t('history.emptyBody')}</p>
           </div>
         ) : shown === 0 ? (
           <div className="empty-state">
-            <p className="empty-title">「{query}」に一致する履歴はありません</p>
+            <p className="empty-title">{t('history.noMatchTitle', { query })}</p>
             <button className="link-btn" onClick={() => onQueryChange('')}>
-              検索条件をクリア
+              {t('history.clearFilter')}
             </button>
           </div>
         ) : (
@@ -106,7 +117,11 @@ export function HistoryPanel({
                 const label = h.title || shortUrl(h.url);
                 return (
                   <div key={h.id} className="history-item">
-                    <button className="history-item-open" onClick={() => onOpen(h.url)} title={h.url}>
+                    <button
+                      className="history-item-open"
+                      onClick={() => onOpen(h.url)}
+                      title={h.url}
+                    >
                       {h.favicon ? (
                         <img
                           className="history-item-favicon"
@@ -122,14 +137,17 @@ export function HistoryPanel({
                       )}
                       <span className="history-item-title">{label}</span>
                       <span className="history-item-host">{shortUrl(h.url)}</span>
-                      <time className="history-item-time" dateTime={new Date(h.visited_at * 1000).toISOString()}>
+                      <time
+                        className="history-item-time"
+                        dateTime={new Date(h.visited_at * 1000).toISOString()}
+                      >
                         {formatTime(h.visited_at)}
                       </time>
                     </button>
                     <button
                       className="history-item-del"
                       onClick={() => onRemove(h)}
-                      aria-label={`履歴から ${label} を削除`}
+                      aria-label={t('history.deleteAria', { name: label })}
                     >
                       <span aria-hidden="true">×</span>
                     </button>

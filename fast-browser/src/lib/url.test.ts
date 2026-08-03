@@ -5,7 +5,7 @@ import {
   splitUrlForDisplay,
   isSecure,
   formatTime,
-  dayLabel,
+  dayLabelKey,
   matchesQuery,
   sameUrl,
   HOME,
@@ -91,18 +91,23 @@ describe('formatTime / dayLabel', () => {
     expect(formatTime(t, now)).toBe('08/01 09:05');
   });
 
-  it('今日・昨日・N日前で見出しを分ける', () => {
+  it('今日・昨日・N日前を言語に依存しない形で返す', () => {
     const at = (d: number, h = 10) => new Date(2026, 7, d, h).getTime() / 1000;
-    expect(dayLabel(at(3), now)).toBe('今日');
-    expect(dayLabel(at(2), now)).toBe('昨日');
-    expect(dayLabel(at(1), now)).toBe('2 日前');
+    expect(dayLabelKey(at(3), now)).toEqual({ kind: 'today' });
+    expect(dayLabelKey(at(2), now)).toEqual({ kind: 'yesterday' });
+    expect(dayLabelKey(at(1), now)).toEqual({ kind: 'daysAgo', days: 2 });
+  });
+
+  it('1週間以上前は年月を返す', () => {
+    const old = new Date(2026, 5, 15, 10).getTime() / 1000;
+    expect(dayLabelKey(old, now)).toEqual({ kind: 'month', text: '2026/06' });
   });
 
   it('日付をまたぐ境界で「今日」判定がずれない', () => {
     const justAfterMidnight = new Date(2026, 7, 3, 0, 1).getTime() / 1000;
-    expect(dayLabel(justAfterMidnight, now)).toBe('今日');
+    expect(dayLabelKey(justAfterMidnight, now)).toEqual({ kind: 'today' });
     const justBeforeMidnight = new Date(2026, 7, 2, 23, 59).getTime() / 1000;
-    expect(dayLabel(justBeforeMidnight, now)).toBe('昨日');
+    expect(dayLabelKey(justBeforeMidnight, now)).toEqual({ kind: 'yesterday' });
   });
 });
 

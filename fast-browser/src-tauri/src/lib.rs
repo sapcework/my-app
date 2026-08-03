@@ -315,6 +315,9 @@ pub struct Settings {
     pub home_url: String,
     pub engine_id: String,
     pub zoom: f64,
+    /// 表示言語。空文字は「OS の設定に従う」を意味する。
+    #[serde(default)]
+    pub locale: String,
 }
 
 impl Default for Settings {
@@ -323,6 +326,7 @@ impl Default for Settings {
             home_url: HOME_URL.to_string(),
             engine_id: "google".to_string(),
             zoom: 1.0,
+            locale: String::new(),
         }
     }
 }
@@ -384,6 +388,10 @@ impl Settings {
     fn sanitize(&mut self) {
         if !ZOOM_RANGE.contains(&self.zoom) || !self.zoom.is_finite() {
             self.zoom = 1.0;
+        }
+        // 未対応の言語 ID は「OS に従う」に倒す
+        if !matches!(self.locale.as_str(), "" | "ja" | "en") {
+            self.locale = String::new();
         }
         // ホームには http(s) のみ許可（javascript: などを起動時に開かせない）
         let ok = url::Url::parse(&self.home_url)
@@ -1157,13 +1165,19 @@ fn eval_find(app: &AppHandle, js: &str) -> Result<(), String> {
 #[tauri::command]
 async fn find_in_page(query: String, app: AppHandle) -> Result<(), String> {
     let literal = serde_json::to_string(&query).map_err(|e| e.to_string())?;
-    eval_find(&app, &format!("window.__fbFind&&window.__fbFind.search({literal})"))
+    eval_find(
+        &app,
+        &format!("window.__fbFind&&window.__fbFind.search({literal})"),
+    )
 }
 
 #[tauri::command]
 async fn find_step(forward: bool, app: AppHandle) -> Result<(), String> {
     let fnname = if forward { "next" } else { "prev" };
-    eval_find(&app, &format!("window.__fbFind&&window.__fbFind.{fnname}()"))
+    eval_find(
+        &app,
+        &format!("window.__fbFind&&window.__fbFind.{fnname}()"),
+    )
 }
 
 #[tauri::command]
@@ -1194,7 +1208,9 @@ fn clear_downloads(store: State<'_, Mutex<DownloadStore>>) {
 /// （フロントから任意のパスを渡せるようにするとコマンド実行の踏み台になる）。
 #[tauri::command]
 fn reveal_download(id: u32, store: State<'_, Mutex<DownloadStore>>) -> Result<(), String> {
-    let item = lock(&store).find(id).ok_or("ダウンロードが見つかりません")?;
+    let item = lock(&store)
+        .find(id)
+        .ok_or("ダウンロードが見つかりません")?;
     let path = std::path::PathBuf::from(&item.path);
     if !path.exists() {
         return Err("ファイルが見つかりません（移動または削除された可能性があります）".into());
@@ -1414,102 +1430,108 @@ pub fn run() {
                         _ => true,
                     })
                     .on_navigation(move |url| {
-                // ページ内容は信頼できない入力。fbcmd:// / fbmeta:// はいずれも
-                // 任意の Web ページが location.href で自由に発火できる点に注意。
-                if url.scheme() == "fbcmd" {
-                    // 実ユーザーのキー操作を装った連打（タブ・ブックマークの大量生成）を抑止
-                    let gate = app_shortcuts.state::<Mutex<PageCmdGate>>();
-                    let allowed = lock(&gate).allow(Instant::now());
-                    if !allowed {
-                        log::warn!("page-originated command throttled: {}", url);
-                        return false;
-                    }
-                    let cmd = url.host_str().unwrap_or("").to_string();
-                    let _ =
-                        app_shortcuts.emit_to(EventTarget::webview_window("main"), "shortcut", cmd);
-                    return false; // ナビゲーションをキャンセル
-                }
-                // fbmeta:// は実ページタイトル・ファビコン通知。アクティブタブと履歴の最新エントリに反映。
-                if url.scheme() == "fbmeta" {
-                    let mut title = String::new();
-                    let mut favicon = String::new();
-                    for (k, v) in url.query_pairs() {
-                        match &*k {
-                            "t" => title = v.into_owned(),
-                            "f" => favicon = v.into_owned(),
-                            _ => {}
+                        // ページ内容は信頼できない入力。fbcmd:// / fbmeta:// はいずれも
+                        // 任意の Web ページが location.href で自由に発火できる点に注意。
+                        if url.scheme() == "fbcmd" {
+                            // 実ユーザーのキー操作を装った連打（タブ・ブックマークの大量生成）を抑止
+                            let gate = app_shortcuts.state::<Mutex<PageCmdGate>>();
+                            let allowed = lock(&gate).allow(Instant::now());
+                            if !allowed {
+                                log::warn!("page-originated command throttled: {}", url);
+                                return false;
+                            }
+                            let cmd = url.host_str().unwrap_or("").to_string();
+                            let _ = app_shortcuts.emit_to(
+                                EventTarget::webview_window("main"),
+                                "shortcut",
+                                cmd,
+                            );
+                            return false; // ナビゲーションをキャンセル
                         }
-                    }
-                    // ページ由来の文字列は必ず検証・切り詰めてから内部状態に取り込む
-                    let title = sanitize_title(&title);
-                    let favicon_opt = sanitize_favicon(&favicon);
-                    if !title.is_empty() {
-                        let snapshot = {
-                            let state = app_shortcuts.state::<Mutex<TabManager>>();
-                            let mut mgr = lock(&state);
-                            mgr.set_active_meta(title.clone(), favicon_opt.clone());
-                            mgr.snapshot()
-                        };
-                        emit_tabs(&app_shortcuts, &snapshot);
-                        // プライベートモード中は履歴へ書き戻さない
-                        if !lock(&app_shortcuts.state::<Mutex<PrivateMode>>()).0 {
-                            lock(&app_shortcuts.state::<Mutex<HistoryStore>>())
-                                .update_latest_meta(title, favicon_opt);
+                        // fbmeta:// は実ページタイトル・ファビコン通知。アクティブタブと履歴の最新エントリに反映。
+                        if url.scheme() == "fbmeta" {
+                            let mut title = String::new();
+                            let mut favicon = String::new();
+                            for (k, v) in url.query_pairs() {
+                                match &*k {
+                                    "t" => title = v.into_owned(),
+                                    "f" => favicon = v.into_owned(),
+                                    _ => {}
+                                }
+                            }
+                            // ページ由来の文字列は必ず検証・切り詰めてから内部状態に取り込む
+                            let title = sanitize_title(&title);
+                            let favicon_opt = sanitize_favicon(&favicon);
+                            if !title.is_empty() {
+                                let snapshot = {
+                                    let state = app_shortcuts.state::<Mutex<TabManager>>();
+                                    let mut mgr = lock(&state);
+                                    mgr.set_active_meta(title.clone(), favicon_opt.clone());
+                                    mgr.snapshot()
+                                };
+                                emit_tabs(&app_shortcuts, &snapshot);
+                                // プライベートモード中は履歴へ書き戻さない
+                                if !lock(&app_shortcuts.state::<Mutex<PrivateMode>>()).0 {
+                                    lock(&app_shortcuts.state::<Mutex<HistoryStore>>())
+                                        .update_latest_meta(title, favicon_opt);
+                                }
+                            }
+                            return false; // ナビゲーションをキャンセル
                         }
-                    }
-                    return false; // ナビゲーションをキャンセル
-                }
-                // fbfind:// はページ内検索の結果件数。chrome 側の検索バーへ転送する。
-                if url.scheme() == "fbfind" {
-                    let mut total = 0usize;
-                    let mut index = 0usize;
-                    for (k, v) in url.query_pairs() {
-                        match &*k {
-                            "n" => total = v.parse().unwrap_or(0),
-                            "i" => index = v.parse().unwrap_or(0),
-                            _ => {}
+                        // fbfind:// はページ内検索の結果件数。chrome 側の検索バーへ転送する。
+                        if url.scheme() == "fbfind" {
+                            let mut total = 0usize;
+                            let mut index = 0usize;
+                            for (k, v) in url.query_pairs() {
+                                match &*k {
+                                    "n" => total = v.parse().unwrap_or(0),
+                                    "i" => index = v.parse().unwrap_or(0),
+                                    _ => {}
+                                }
+                            }
+                            let _ = app_shortcuts.emit_to(
+                                EventTarget::webview_window("main"),
+                                "find-result",
+                                (total, index),
+                            );
+                            return false; // ナビゲーションをキャンセル
                         }
-                    }
-                    let _ = app_shortcuts.emit_to(
-                        EventTarget::webview_window("main"),
-                        "find-result",
-                        (total, index),
-                    );
-                    return false; // ナビゲーションをキャンセル
-                }
-                true
-            })
-            .on_page_load(|webview, payload| {
-                let app = webview.app_handle();
-                match payload.event() {
-                    PageLoadEvent::Started => {
-                        let url = payload.url().to_string();
-                        let snapshot = {
-                            let state = app.state::<Mutex<TabManager>>();
-                            let mut mgr = lock(&state);
-                            mgr.on_navigate(&url);
-                            mgr.snapshot()
-                        };
-                        emit_tabs(app, &snapshot);
-                        // プライベートモード中は訪問を記録しない
-                        if !lock(&app.state::<Mutex<PrivateMode>>()).0 {
-                            let state = app.state::<Mutex<HistoryStore>>();
-                            lock(&state).visit(url.clone(), hostname_of(&url));
+                        true
+                    })
+                    .on_page_load(|webview, payload| {
+                        let app = webview.app_handle();
+                        match payload.event() {
+                            PageLoadEvent::Started => {
+                                let url = payload.url().to_string();
+                                let snapshot = {
+                                    let state = app.state::<Mutex<TabManager>>();
+                                    let mut mgr = lock(&state);
+                                    mgr.on_navigate(&url);
+                                    mgr.snapshot()
+                                };
+                                emit_tabs(app, &snapshot);
+                                // プライベートモード中は訪問を記録しない
+                                if !lock(&app.state::<Mutex<PrivateMode>>()).0 {
+                                    let state = app.state::<Mutex<HistoryStore>>();
+                                    lock(&state).visit(url.clone(), hostname_of(&url));
+                                }
+                                let _ = app.emit_to(
+                                    EventTarget::webview_window("main"),
+                                    "url-changed",
+                                    url,
+                                );
+                            }
+                            PageLoadEvent::Finished => {
+                                let snapshot = {
+                                    let state = app.state::<Mutex<TabManager>>();
+                                    let mut mgr = lock(&state);
+                                    mgr.on_load_finished();
+                                    mgr.snapshot()
+                                };
+                                emit_tabs(app, &snapshot);
+                            }
                         }
-                        let _ =
-                            app.emit_to(EventTarget::webview_window("main"), "url-changed", url);
-                    }
-                    PageLoadEvent::Finished => {
-                        let snapshot = {
-                            let state = app.state::<Mutex<TabManager>>();
-                            let mut mgr = lock(&state);
-                            mgr.on_load_finished();
-                            mgr.snapshot()
-                        };
-                        emit_tabs(app, &snapshot);
-                    }
-                }
-            });
+                    });
 
             window.add_child(
                 content_builder,
@@ -1594,8 +1616,14 @@ mod tests {
 
     #[test]
     fn hostname_strips_www_and_falls_back() {
-        assert_eq!(hostname_of("https://www.example.com/a/b?q=1"), "example.com");
-        assert_eq!(hostname_of("https://sub.example.co.jp/"), "sub.example.co.jp");
+        assert_eq!(
+            hostname_of("https://www.example.com/a/b?q=1"),
+            "example.com"
+        );
+        assert_eq!(
+            hostname_of("https://sub.example.co.jp/"),
+            "sub.example.co.jp"
+        );
         assert_eq!(hostname_of("not a url"), "New Tab"); // パース不能時のフォールバック
     }
 
@@ -1792,7 +1820,10 @@ mod tests {
         // Content-Disposition のファイル名はサーバー由来。保存先の外に出せてはいけない。
         assert_eq!(sanitize_file_name("../../evil.exe"), "evil.exe");
         assert_eq!(sanitize_file_name("..\\..\\evil.exe"), "evil.exe");
-        assert_eq!(sanitize_file_name("C:\\Windows\\system.ini"), "CWindowssystem.ini");
+        assert_eq!(
+            sanitize_file_name("C:\\Windows\\system.ini"),
+            "CWindowssystem.ini"
+        );
         assert_eq!(sanitize_file_name("  ..  "), "");
         assert_eq!(sanitize_file_name("ok.txt"), "ok.txt");
     }
@@ -1814,7 +1845,11 @@ mod tests {
         std::fs::write(&first, b"x").unwrap();
 
         let second = unique_path(&dir, "a.txt");
-        assert_eq!(second.file_name().unwrap(), "a (1).txt", "既存ファイルは上書きしない");
+        assert_eq!(
+            second.file_name().unwrap(),
+            "a (1).txt",
+            "既存ファイルは上書きしない"
+        );
         std::fs::write(&second, b"x").unwrap();
 
         let third = unique_path(&dir, "a.txt");
@@ -1832,8 +1867,7 @@ mod tests {
     fn settings_sanitize_rejects_unsafe_home_url() {
         let mut s = Settings {
             home_url: "javascript:alert(1)".into(),
-            engine_id: "google".into(),
-            zoom: 1.0,
+            ..Settings::default()
         };
         s.sanitize();
         assert_eq!(s.home_url, HOME_URL, "危険なスキームは既定値へ戻す");
@@ -1850,7 +1884,10 @@ mod tests {
             ..Settings::default()
         };
         ok.sanitize();
-        assert_eq!(ok.home_url, "https://example.test/start", "http(s) は保持する");
+        assert_eq!(
+            ok.home_url, "https://example.test/start",
+            "http(s) は保持する"
+        );
     }
 
     #[test]
@@ -1872,6 +1909,25 @@ mod tests {
     }
 
     #[test]
+    fn settings_sanitize_rejects_unknown_locale() {
+        let mut s = Settings {
+            locale: "fr".into(),
+            ..Settings::default()
+        };
+        s.sanitize();
+        assert_eq!(s.locale, "", "未対応の言語は OS 追従に倒す");
+
+        for ok in ["", "ja", "en"] {
+            let mut s = Settings {
+                locale: ok.into(),
+                ..Settings::default()
+            };
+            s.sanitize();
+            assert_eq!(s.locale, ok);
+        }
+    }
+
+    #[test]
     fn settings_roundtrip_through_disk() {
         let tmp = std::env::temp_dir().join("fb_test_settings");
         let _ = std::fs::remove_dir_all(&tmp);
@@ -1882,6 +1938,7 @@ mod tests {
                 home_url: "https://a.test/".into(),
                 engine_id: "ddg".into(),
                 zoom: 1.25,
+                locale: "en".into(),
             });
         }
         let mut reloaded = SettingsStore::new();
@@ -1890,6 +1947,7 @@ mod tests {
         assert_eq!(got.home_url, "https://a.test/");
         assert_eq!(got.engine_id, "ddg");
         assert_eq!(got.zoom, 1.25);
+        assert_eq!(got.locale, "en");
     }
 
     // --- ブックマーク ---

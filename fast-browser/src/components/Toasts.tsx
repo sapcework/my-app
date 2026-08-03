@@ -1,4 +1,5 @@
 import type { Toast } from '../types';
+import { useI18n } from '../i18n/context';
 
 interface Props {
   toasts: Toast[];
@@ -10,29 +11,34 @@ interface Props {
  * スクリーンリーダー利用者にも操作結果が伝わるようにするため。
  */
 export function Toasts({ toasts, onDismiss }: Props) {
+  const { t } = useI18n();
   if (toasts.length === 0) return null;
   return (
     <div id="toast-region">
-      {toasts.map((t) => (
+      {toasts.map((toast) => (
         <div
-          key={t.id}
-          className={`toast toast-${t.kind}`}
-          role={t.kind === 'error' ? 'alert' : 'status'}
-          aria-live={t.kind === 'error' ? 'assertive' : 'polite'}
+          key={toast.id}
+          className={`toast toast-${toast.kind}`}
+          role={toast.kind === 'error' ? 'alert' : 'status'}
+          aria-live={toast.kind === 'error' ? 'assertive' : 'polite'}
         >
-          <span className="toast-msg">{t.message}</span>
-          {t.action && (
+          <span className="toast-msg">{toast.message}</span>
+          {toast.action && (
             <button
               className="toast-action"
               onClick={() => {
-                t.action?.run();
-                onDismiss(t.id);
+                toast.action?.run();
+                onDismiss(toast.id);
               }}
             >
-              {t.action.label}
+              {toast.action.label}
             </button>
           )}
-          <button className="toast-close" onClick={() => onDismiss(t.id)} aria-label="通知を閉じる">
+          <button
+            className="toast-close"
+            onClick={() => onDismiss(toast.id)}
+            aria-label={t('toast.close')}
+          >
             <span aria-hidden="true">×</span>
           </button>
         </div>

@@ -68,15 +68,27 @@ export function formatTime(epochSec: number, now: Date = new Date()): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${hh}:${mi}`;
 }
 
-/** 履歴を「今日 / 昨日 / それ以前」の見出しにまとめるためのキー。 */
-export function dayLabel(epochSec: number, now: Date = new Date()): string {
+/**
+ * 履歴の日付見出しを、言語に依存しない形（メッセージキー）で返す。
+ *
+ * ここで日本語を組み立ててしまうと i18n できないため、
+ * 表示側が辞書を引けるようキーと必要な数値だけを返す。
+ * 1 週間以上前は年月をそのまま出す（言語によらず読める）。
+ */
+export type DayLabel =
+  | { kind: 'today' }
+  | { kind: 'yesterday' }
+  | { kind: 'daysAgo'; days: number }
+  | { kind: 'month'; text: string };
+
+export function dayLabelKey(epochSec: number, now: Date = new Date()): DayLabel {
   const d = new Date(epochSec * 1000);
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((startOf(now) - startOf(d)) / 86_400_000);
-  if (diffDays <= 0) return '今日';
-  if (diffDays === 1) return '昨日';
-  if (diffDays < 7) return `${diffDays} 日前`;
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const days = Math.round((startOf(now) - startOf(d)) / 86_400_000);
+  if (days <= 0) return { kind: 'today' };
+  if (days === 1) return { kind: 'yesterday' };
+  if (days < 7) return { kind: 'daysAgo', days };
+  return { kind: 'month', text: `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}` };
 }
 
 /**

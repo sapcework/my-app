@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { ENGINES, type EngineId, isSecure, splitUrlForDisplay } from '../lib/url';
+import { useI18n } from '../i18n/context';
 
 interface Props {
   address: string;
@@ -52,18 +53,19 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
     onEngineChange,
   } = props;
 
+  const { t } = useI18n();
   const secure = isSecure(address);
   const { prefix, host, rest } = splitUrlForDisplay(address);
 
   return (
     <div id="nav-bar">
-      <button className="nav-btn" onClick={onBack} aria-label="前のページに戻る (Alt+←)">
+      <button className="nav-btn" onClick={onBack} aria-label={t('nav.back')}>
         <span aria-hidden="true">&#8249;</span>
       </button>
-      <button className="nav-btn" onClick={onForward} aria-label="次のページに進む (Alt+→)">
+      <button className="nav-btn" onClick={onForward} aria-label={t('nav.forward')}>
         <span aria-hidden="true">&#8250;</span>
       </button>
-      <button className="nav-btn" onClick={onReload} aria-label="再読み込み (Ctrl+R)">
+      <button className="nav-btn" onClick={onReload} aria-label={t('nav.reload')}>
         <span aria-hidden="true">&#8635;</span>
       </button>
 
@@ -71,8 +73,8 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
         <span
           className={`secure-icon ${secure ? 'secure' : 'insecure'}`}
           role="img"
-          aria-label={secure ? '保護された接続' : '保護されていない接続'}
-          title={secure ? '保護された接続' : '保護されていない接続 — 情報を入力しないでください'}
+          aria-label={secure ? t('nav.secure') : t('nav.insecure')}
+          title={secure ? t('nav.secure') : t('nav.insecureHint')}
         >
           <span aria-hidden="true">{secure ? '🔒' : '⚠'}</span>
         </span>
@@ -96,15 +98,15 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
             spellCheck={false}
             autoComplete="off"
             autoCorrect="off"
-            aria-label="アドレスバー — URL または検索語を入力"
-            placeholder="URL またはキーワードを入力"
+            aria-label={t('nav.addressAria')}
+            placeholder={t('nav.addressPlaceholder')}
           />
         ) : (
           <button
             id="address-display"
             onClick={onRequestFocus}
             onFocus={onRequestFocus}
-            aria-label={`現在のアドレス ${address}。編集するには Enter または Ctrl+L`}
+            aria-label={t('nav.addressDisplayAria', { url: address })}
             title={address}
           >
             <span className="url-dim">{prefix}</span>
@@ -118,17 +120,15 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
           className={bookmarked ? 'active' : ''}
           onClick={onToggleBookmark}
           aria-pressed={bookmarked}
-          aria-label={
-            bookmarked ? 'このページのブックマークを解除 (Ctrl+D)' : 'このページをブックマーク (Ctrl+D)'
-          }
+          aria-label={bookmarked ? t('nav.bookmarkRemove') : t('nav.bookmarkAdd')}
         >
           <span aria-hidden="true">{bookmarked ? '★' : '☆'}</span>
         </button>
       </div>
 
       {privateMode && (
-        <span id="private-badge" title="プライベートモード — 履歴を残していません">
-          <span aria-hidden="true">🕶</span> プライベート
+        <span id="private-badge" title={t('nav.privateHint')}>
+          <span aria-hidden="true">🕶</span> {t('nav.private')}
         </span>
       )}
 
@@ -137,7 +137,7 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
         className={`nav-btn ${showHistory ? 'active' : ''}`}
         onClick={onToggleHistory}
         aria-pressed={showHistory}
-        aria-label="履歴を開く (Ctrl+H)"
+        aria-label={t('nav.history')}
       >
         <span aria-hidden="true">🕘</span>
       </button>
@@ -148,7 +148,7 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
         onClick={onToggleMenu}
         aria-expanded={showMenu}
         aria-haspopup="dialog"
-        aria-label="メニュー"
+        aria-label={t('nav.menu')}
       >
         <span aria-hidden="true">☰</span>
       </button>
@@ -157,7 +157,7 @@ export const NavBar = forwardRef<HTMLInputElement, Props>(function NavBar(props,
         id="engine-select"
         value={engine}
         onChange={(e) => onEngineChange(e.target.value as EngineId)}
-        aria-label="検索エンジンを選択"
+        aria-label={t('nav.engine')}
       >
         {ENGINES.map((e) => (
           <option key={e.id} value={e.id}>
