@@ -5,7 +5,32 @@
       "Bash(echo \"exit: $?\")",
       "Bash(npx create-vite@latest kakeiboWeb --template react-ts)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(npm audit *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(git *)",
+      "PowerShell(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(xargs sed -i -e s/dark:text-slate-500/dark:text-slate-400/g -e s/dark:text-slate-600/dark:text-slate-500/g -e 's/dark:border-slate-800\\\\/60/dark:border-slate-700\\\\/60/g' -e 's/dark:border-slate-800\\\\/80/dark:border-slate-700\\\\/50/g')",
+      "PowerShell(cd D:\\\\projects\\\\my-app\\\\kakeiboWeb; Select-String -Path \"dist/assets/index-CFwuRHz_.js\" -Pattern \"grlvbrhsksxldmasyyg\" -SimpleMatch | Select-Object -First 1 | ForEach-Object { \"URL埋め込み確認: OK\" })",
+      "PowerShell(curl.exe -s -X POST \"https://grlvbrhsksxldmasyyg.supabase.co/auth/v1/token?grant_type=password\" -H \"apikey: sb_publishable_FwFtezMKl2AZBMVTOQwgaQ_TWG11J7k\" -H \"Content-Type: application/json\" -d $body)",
+      "PowerShell($body = '{\"email\":\"test@email.mail\",\"password\":\"testtest\"}')",
+      "PowerShell(curl.exe -s -X POST \"https://grlvbrhsksxldmasyyg.supabase.co/auth/v1/health\" -H \"apikey: sb_publishable_FwFtezMKl2AZBMVTOQwgaQ_TWG11J7k\")",
+      "PowerShell(curl.exe -s \"https://grlvbrhsksxldmasyyg.supabase.co/auth/v1/health\")",
+      "Bash(grep -oE \"eyJ[A-Za-z0-9_-]{20,}\")",
+      "Read(//d/projects/my-app/**)",
+      "Bash(ls -la .github/workflows/)",
+      "Bash(ls -la .github/dependabot.yml)",
+      "Bash(ls -la kakeiboWeb/.env*)",
+      "Bash(ls */package.json)",
+      "Bash(find .github -type f)",
+      "Bash(git ls-tree *)",
+      "Bash(git status *)",
+      "Bash(git check-ignore *)",
+      "Bash(git -C .. log --oneline -3)",
+      "Bash(npm test *)"
     ]
   }
 }
