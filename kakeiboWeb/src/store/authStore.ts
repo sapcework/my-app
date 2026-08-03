@@ -8,11 +8,13 @@ import { useRecurringStore } from './recurringStore'
 import { generateDueRecurringExpenses } from '../utils/recurringGenerator'
 import type { User } from '@supabase/supabase-js'
 
+export type SignInError = { message: string; status?: number }
+
 type AuthStore = {
   user: User | null
   loading: boolean
   init: () => Promise<void>
-  signIn: (email: string, password: string) => Promise<string | null>
+  signIn: (email: string, password: string) => Promise<SignInError | null>
   signOut: () => Promise<void>
 }
 
@@ -61,7 +63,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   signIn: async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return error?.message ?? null
+    return error ? { message: error.message, status: error.status } : null
   },
 
   signOut: async () => {

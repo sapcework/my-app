@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BookOpen } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+
+const MAX_ATTEMPTS = 5 // この回数連続で失敗するとクールダウンを挟む
+const COOLDOWN_SEC = 15
 
 export const LoginPage = () => {
   const { signIn } = useAuthStore()
@@ -8,14 +11,45 @@ export const LoginPage = () => {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [cooldown, setCooldown] = useState(0) // 残り秒数（0なら制限なし）
+  const cooldownTimer = useRef<number | undefined>(undefined)
+
+  useEffect(() => () => window.clearInterval(cooldownTimer.current), [])
+
+  const startCooldown = () => {
+    setCooldown(COOLDOWN_SEC)
+    cooldownTimer.current = window.setInterval(() => {
+      setCooldown((s) => {
+        if (s <= 1) { window.clearInterval(cooldownTimer.current); return 0 }
+        return s - 1
+      })
+    }, 1000)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (cooldown > 0) return
     setError(null)
     setLoading(true)
     const err = await signIn(email, password)
-    if (err) setError('IDまたはパスワードが正しくありません')
     setLoading(false)
+    if (!err) return
+
+    // Supabase側のレート制限（429）はそれと分かるメッセージにする
+    if (err.status === 429) {
+      setError('試行回数が多すぎます。しばらく待ってから再度お試しください')
+      startCooldown()
+      return
+    }
+    setError('IDまたはパスワードが正しくありません')
+    // クライアント側でも連続失敗時に短いクールダウンを挟む（UI上の抑止であり、実際の保護はSupabase側のレート制限に依存）
+    const next = failedAttempts + 1
+    setFailedAttempts(next)
+    if (next >= MAX_ATTEMPTS) {
+      setFailedAttempts(0)
+      startCooldown()
+    }
   }
 
   const inputClass = "w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
@@ -36,10 +70,10 @@ export const LoginPage = () => {
         <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-6 space-y-4">
           <div className="space-y-3">
             <input
-              type="text"
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="ログインID"
+              placeholder="メールアドレス"
               required
               autoComplete="username"
               className={inputClass}
@@ -61,10 +95,10 @@ export const LoginPage = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || cooldown > 0}
             className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
           >
-            {loading ? '処理中...' : 'ログイン'}
+            {cooldown > 0 ? `${cooldown}秒後に再試行できます` : loading ? '処理中...' : 'ログイン'}
           </button>
         </form>
 

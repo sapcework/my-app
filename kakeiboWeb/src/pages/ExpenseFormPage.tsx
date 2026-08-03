@@ -49,7 +49,7 @@ export const ExpenseFormPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!amount || !categoryId) return
+    if (amount <= 0 || !categoryId) return // 負値は電卓側で0に丸めているが、念のため送信時にも防御する
     if (existing) {
       updateExpense(existing.id, { amount, categoryId, itemName, note, date })
       showToast({ message: '更新しました' })
@@ -245,7 +245,7 @@ export const ExpenseFormPage = () => {
         <div className="sticky bottom-0 -mx-4 px-4 pt-6 pb-[calc(5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-50 from-45% to-transparent dark:from-[#090912]">
           <button
             type="submit"
-            disabled={amount === 0}
+            disabled={amount <= 0}
             className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-indigo-600/20"
           >
             {existing ? '更新する' : '追加する'}

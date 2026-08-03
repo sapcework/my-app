@@ -57,11 +57,14 @@ export const Calculator = ({ initialValue, onConfirm, onClose }: Props) => {
     setClearNext(true)
   }
 
+  // 金額入力専用の電卓のため、減算などで負値になった場合は0に丸めて確定する
+  // （呼び出し元の金額バリデーションは基本 amount===0 のみをチェックしており、
+  //   負の金額がここを通り抜けると支出・予算・定期支出が負の値で保存されてしまうため）
   const pressEq = () => {
     const cur = parseFloat(display) || 0
-    if (!op) { onConfirm(Math.round(cur)); return }
+    if (!op) { onConfirm(Math.max(0, Math.round(cur))); return }
     const res = calc(prev, cur, op)
-    onConfirm(Math.round(res))
+    onConfirm(Math.max(0, Math.round(res)))
   }
 
   const pressAC = () => {

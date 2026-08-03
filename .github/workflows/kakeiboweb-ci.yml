@@ -21,6 +21,7 @@ jobs:
           cache: npm
           cache-dependency-path: kakeiboWeb/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npx tsc -b
       - run: npm test

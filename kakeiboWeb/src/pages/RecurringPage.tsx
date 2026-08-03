@@ -54,7 +54,7 @@ export const RecurringPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.amount || !form.categoryId || !form.name.trim()) return
+    if (Number(form.amount) <= 0 || !form.categoryId || !form.name.trim()) return
     const data = {
       name: form.name.trim(),
       amount: Number(form.amount),
@@ -200,7 +200,7 @@ export const RecurringPage = () => {
                 )}
                 <button
                   type="submit"
-                  disabled={!form.amount || Number(form.amount) === 0}
+                  disabled={Number(form.amount) <= 0}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-indigo-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {editingId ? '更新する' : '追加する'}

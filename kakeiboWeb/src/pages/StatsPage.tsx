@@ -100,7 +100,9 @@ export const StatsPage = () => {
                     className="cursor-pointer"
                     onMouseEnter={(_, i) => setActiveIndex(i)}
                     onMouseLeave={() => setActiveIndex(null)}
-                    onClick={(d) => { setActiveIndex(null); setDetailCat((d as unknown as { cat: Category }).cat) }}
+                    // Rechartsのクリックペイロードの形状はバージョンによって変わり不安定なため、
+                    // 常に正しく渡ってくる index 引数から自前の data 配列を引く（payload/元データへの依存を避ける）
+                    onClick={(_, index) => { setActiveIndex(null); setDetailCat(data[index]?.cat ?? null) }}
                   >
                     {data.map((d, i) => (
                       <Cell

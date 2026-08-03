@@ -27,7 +27,7 @@ export const BudgetPage = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!amount) return
+    if (amount <= 0) return // 負値は電卓側で0に丸めているが、念のため送信時にも防御する
     setBudget(selectedMonth, amount)
     showToast({ message: `${formatYearMonth(selectedMonth)}の予算を保存しました` })
   }
@@ -94,7 +94,7 @@ export const BudgetPage = () => {
         </div>
         <button
           type="submit"
-          disabled={amount === 0}
+          disabled={amount <= 0}
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-indigo-600/20"
         >
           保存する
