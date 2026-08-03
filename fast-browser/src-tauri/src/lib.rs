@@ -11,6 +11,16 @@ use tauri::{
 const BASE_TOOLBAR_HEIGHT: f64 = 88.0;
 const HOME_URL: &str = "https://www.google.com";
 
+// 同時に生かしておくコンテンツ WebView の上限。
+//
+// タブごとに WebView を持たせるとページの状態（スクロール位置・入力途中の
+// フォーム・戻る履歴）が切り替えても保たれるが、そのぶん常駐メモリが増える。
+// このプロジェクトの最優先要件はメモリ最小化なので、上限を超えたぶんは
+// 「最後に見てから最も時間が経ったタブ」から WebView を破棄し、URL だけ
+// 覚えておいて再訪時に作り直す（Chrome のタブ破棄と同じ考え方）。
+// 破棄されたタブは再読み込みが走るだけで、ユーザーには見えない。
+const MAX_LIVE_WEBVIEWS: usize = 6;
+
 // ─── ページ由来入力の上限値（信頼できない入力なので必ず切り詰める） ──
 
 const MAX_TITLE_LEN: usize = 300; // タブ・履歴に表示するタイトルの最大文字数
@@ -278,6 +288,14 @@ pub struct Tab {
     pub title: String,
     pub is_loading: bool,
     pub favicon: Option<String>,
+    // 以下は WebView の寿命管理に使う内部状態。chrome 側は関知しないので送らない。
+    /// この タブの WebView が今も存在するか。false のタブは URL だけを保持しており、
+    /// 再びアクティブになったときに作り直す。
+    #[serde(skip)]
+    pub live: bool,
+    /// 最後にアクティブだった時刻。破棄する犠牲タブを選ぶ LRU 判定に使う。
+    #[serde(skip)]
+    pub last_active: Instant,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -615,6 +633,31 @@ pub struct PopupGate(PageCmdGate);
 
 // ─── タブマネージャー ─────────────────────────────────────────────
 
+/// タブを切り替えるために必要な WebView 操作の指示。
+///
+/// WebView を触る処理は `TabManager` のロックを手放してから行う必要がある
+/// （生成はメインスレッドの応答を待つため、ロックを握ったままだと
+/// メインスレッド側のイベントハンドラと相互に待ち合う）。そこで
+/// 「何をすべきか」だけを組み立てて返し、実行は `apply_switch` に任せる。
+pub struct SwitchPlan {
+    /// 前面に出すタブ
+    pub show: u32,
+    /// 背面に回すタブ（アクティブが移った場合のみ）
+    pub hide: Option<u32>,
+    /// `Some` なら WebView が無いので、この URL で作り直す
+    pub create: Option<String>,
+    /// 上限超過のため WebView を破棄するタブ
+    pub discard: Vec<u32>,
+}
+
+/// タブを閉じたときに必要な WebView 操作の指示。
+pub struct ClosePlan {
+    /// 破棄する WebView のタブ id（もともと WebView が無ければ `None`）
+    pub destroy: Option<u32>,
+    /// 閉じたのがアクティブタブだった場合の、次のタブへの切り替え指示
+    pub activate: Option<SwitchPlan>,
+}
+
 pub struct TabManager {
     tabs: Vec<Tab>,
     active_id: u32,
@@ -624,15 +667,27 @@ pub struct TabManager {
 impl TabManager {
     fn new() -> Self {
         Self {
+            // 最初のタブの WebView は setup が直接作るので live で始める。
+            // URL は設定のホームで上書きされる（init_first_tab）。
             tabs: vec![Tab {
                 id: 1,
                 url: HOME_URL.to_string(),
                 title: "New Tab".to_string(),
                 is_loading: true,
                 favicon: None,
+                live: true,
+                last_active: Instant::now(),
             }],
             active_id: 1,
             next_id: 2,
+        }
+    }
+
+    /// 起動時、設定から読んだホーム URL を最初のタブへ反映する。
+    fn init_first_tab(&mut self, url: String) {
+        if let Some(t) = self.tabs.first_mut() {
+            t.title = hostname_of(&url);
+            t.url = url;
         }
     }
 
@@ -643,42 +698,138 @@ impl TabManager {
         }
     }
 
-    fn open_tab(&mut self, url: String) {
+    fn exists(&self, id: u32) -> bool {
+        self.tabs.iter().any(|t| t.id == id)
+    }
+
+    fn is_live(&self, id: u32) -> bool {
+        self.tabs.iter().any(|t| t.id == id && t.live)
+    }
+
+    /// WebView が存在するタブの id 一覧（位置・サイズ・ズームの一括更新に使う）
+    fn live_ids(&self) -> Vec<u32> {
+        self.tabs.iter().filter(|t| t.live).map(|t| t.id).collect()
+    }
+
+    fn url_of(&self, id: u32) -> Option<String> {
+        self.tabs.iter().find(|t| t.id == id).map(|t| t.url.clone())
+    }
+
+    /// タブをアクティブにし、必要な WebView 操作を組み立てて返す。
+    /// 呼び出し前に `exists(id)` を確認すること。
+    fn activate(&mut self, id: u32, prev: Option<u32>) -> SwitchPlan {
+        self.active_id = id;
+        let create = {
+            let t = self
+                .tabs
+                .iter_mut()
+                .find(|t| t.id == id)
+                .expect("activate の前に存在を確認すること");
+            t.last_active = Instant::now();
+            if t.live {
+                None
+            } else {
+                // 破棄済みタブを復活させる。読み込みが始まるので待機表示に戻す。
+                t.live = true;
+                t.is_loading = true;
+                Some(t.url.clone())
+            }
+        };
+        let discard = self.discard_overflow();
+        // 破棄するタブをわざわざ隠す必要はない。自分自身も対象外。
+        let hide = prev.filter(|p| *p != id && !discard.contains(p) && self.is_live(*p));
+        SwitchPlan {
+            show: id,
+            hide,
+            create,
+            discard,
+        }
+    }
+
+    /// 生かしている WebView が上限を超えていたら、古い順に破棄対象へ回す。
+    /// アクティブタブは常に残す。
+    fn discard_overflow(&mut self) -> Vec<u32> {
+        let active = self.active_id;
+        let mut idle: Vec<(u32, Instant)> = self
+            .tabs
+            .iter()
+            .filter(|t| t.live && t.id != active)
+            .map(|t| (t.id, t.last_active))
+            .collect();
+        let total = idle.len() + usize::from(self.is_live(active));
+        if total <= MAX_LIVE_WEBVIEWS {
+            return vec![];
+        }
+        idle.sort_by_key(|(_, at)| *at); // 古い順
+        let victims: Vec<u32> = idle
+            .into_iter()
+            .take(total - MAX_LIVE_WEBVIEWS)
+            .map(|(id, _)| id)
+            .collect();
+        for t in self.tabs.iter_mut().filter(|t| victims.contains(&t.id)) {
+            t.live = false;
+            t.is_loading = false; // 読み込み中に捨てられた場合にスピナーが残らないようにする
+        }
+        victims
+    }
+
+    /// 新しいタブを開いてアクティブにする。WebView の生成は呼び出し側が行う。
+    fn open_tab(&mut self, url: String) -> SwitchPlan {
         let id = self.next_id;
         self.next_id += 1;
+        let prev = self.active_id;
         self.tabs.push(Tab {
-            id,
-            url: url.clone(),
             title: hostname_of(&url),
+            id,
+            url,
             is_loading: true,
             favicon: None,
+            live: false, // 直後の activate が生成を指示する
+            last_active: Instant::now(),
         });
-        self.active_id = id;
+        self.activate(id, Some(prev))
     }
 
-    fn close_tab(&mut self, id: u32) -> Option<String> {
+    fn close_tab(&mut self, id: u32) -> Option<ClosePlan> {
         if self.tabs.len() <= 1 {
-            return None;
+            return None; // 最後の1枚は閉じられない
         }
         let pos = self.tabs.iter().position(|t| t.id == id)?;
+        let had_webview = self.tabs[pos].live;
+        let was_active = self.active_id == id;
         self.tabs.remove(pos);
-        if self.active_id == id {
-            let new_pos = pos.min(self.tabs.len() - 1);
-            self.active_id = self.tabs[new_pos].id;
-            return Some(self.tabs[new_pos].url.clone());
-        }
-        None
-    }
 
-    fn switch_to(&mut self, id: u32) -> Option<String> {
-        self.tabs.iter().find(|t| t.id == id).map(|t| {
-            self.active_id = id;
-            t.url.clone()
+        let activate = was_active.then(|| {
+            // 閉じた位置にずれ込んだタブ（無ければ末尾）を新しいアクティブにする。
+            // 直前のアクティブはもう存在しないので hide 指示は要らない。
+            let next = self.tabs[pos.min(self.tabs.len() - 1)].id;
+            self.activate(next, None)
+        });
+
+        Some(ClosePlan {
+            destroy: had_webview.then_some(id),
+            activate,
         })
     }
 
-    fn on_navigate(&mut self, url: &str) {
-        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == self.active_id) {
+    fn switch_to(&mut self, id: u32) -> Option<SwitchPlan> {
+        if !self.exists(id) || self.active_id == id {
+            return None;
+        }
+        let prev = self.active_id;
+        Some(self.activate(id, Some(prev)))
+    }
+
+    /// WebView の生成に失敗したタブを「破棄済み」に戻す（次回アクセスで再試行される）
+    fn mark_dead(&mut self, id: u32) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
+            t.live = false;
+            t.is_loading = false;
+        }
+    }
+
+    fn on_navigate(&mut self, id: u32, url: &str) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
             t.url = url.to_string();
             t.title = hostname_of(url);
             t.is_loading = true;
@@ -686,14 +837,14 @@ impl TabManager {
         }
     }
 
-    fn on_load_finished(&mut self) {
-        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == self.active_id) {
+    fn on_load_finished(&mut self, id: u32) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
             t.is_loading = false;
         }
     }
 
-    fn set_active_meta(&mut self, title: String, favicon: Option<String>) {
-        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == self.active_id) {
+    fn set_meta(&mut self, id: u32, title: String, favicon: Option<String>) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
             t.title = title;
             t.favicon = favicon;
         }
@@ -907,15 +1058,20 @@ impl HistoryStore {
         self.write_to_disk();
     }
 
-    // 直近訪問（先頭）エントリのタイトル・ファビコンを実ページ情報で更新する。
+    // 指定 URL のいちばん新しいエントリを実ページのタイトル・ファビコンで更新する。
+    //
+    // 背景タブも読み込み完了時に通知してくるため、「先頭のエントリ」ではなく
+    // 通知元タブの URL で対象を選ぶ（先頭固定だと、別タブの閲覧中に届いた通知が
+    // 無関係な履歴のタイトルを書き換えてしまう）。
     // 内容が変わっていなければ何もしない（無駄な書き込みを避ける）。
-    fn update_latest_meta(&mut self, title: String, favicon: Option<String>) {
-        if let Some(last) = self.entries.first_mut() {
-            if last.title == title && last.favicon == favicon {
+    fn update_meta_for_url(&mut self, url: &str, title: String, favicon: Option<String>) {
+        // entries は新しい順なので、最初に見つかったものが最新の訪問
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.url == url) {
+            if entry.title == title && entry.favicon == favicon {
                 return;
             }
-            last.title = title;
-            last.favicon = favicon;
+            entry.title = title;
+            entry.favicon = favicon;
             self.save_throttled();
         }
     }
@@ -965,43 +1121,363 @@ fn emit_tabs(app: &AppHandle, state: &TabsState) {
     );
 }
 
-fn navigate_webview(app: &AppHandle, url: &str) -> Result<(), String> {
-    let webview = app
-        .get_webview("browser-content")
-        .ok_or("browser webview not found")?;
+/// 現在のタブ状態を chrome へ通知する
+fn emit_tabs_now(app: &AppHandle) {
+    let snapshot = lock(&app.state::<Mutex<TabManager>>()).snapshot();
+    emit_tabs(app, &snapshot);
+}
+
+// ─── タブ WebView の管理 ──────────────────────────────────────────
+
+/// タブ id から WebView のラベルを作る。
+/// capabilities/default.json は `webviews: ["main"]` なので、ここで作る
+/// ラベルはどれも権限を持たない（＝任意のページを開いても invoke できない）。
+fn tab_label(id: u32) -> String {
+    format!("tab-{id}")
+}
+
+fn tab_webview(app: &AppHandle, id: u32) -> Option<tauri::Webview> {
+    app.get_webview(&tab_label(id))
+}
+
+/// アクティブタブの WebView。
+/// エラー文言に "webview" を含めること（chrome 側の friendlyError が
+/// この語で「準備できていません」の案内に振り分けている）。
+fn active_webview(app: &AppHandle) -> Result<tauri::Webview, String> {
+    let id = lock(&app.state::<Mutex<TabManager>>()).active_id;
+    tab_webview(app, id).ok_or_else(|| "browser webview not found".to_string())
+}
+
+fn is_active_tab(app: &AppHandle, id: u32) -> bool {
+    lock(&app.state::<Mutex<TabManager>>()).active_id == id
+}
+
+/// 生きている全タブの WebView を chrome の下へ配置し直す。
+/// 隠れているタブも含めて更新することで、切り替えた瞬間に古いサイズのまま
+/// 表示されるのを防ぐ。位置・サイズの指定は往復を伴わないので安全に呼べる。
+fn layout_tab_webviews(app: &AppHandle, w: f64, h: f64, top: f64) {
+    let ids = lock(&app.state::<Mutex<TabManager>>()).live_ids();
+    for id in ids {
+        if let Some(wv) = tab_webview(app, id) {
+            let _ = wv.set_position(LogicalPosition::new(0.0, top));
+            let _ = wv.set_size(LogicalSize::new(w, (h - top).max(0.0)));
+        }
+    }
+}
+
+/// `SwitchPlan` を実際の WebView 操作へ落とす。
+/// **`TabManager` のロックを手放してから呼ぶこと。**
+fn apply_switch(app: &AppHandle, plan: SwitchPlan) -> Result<(), String> {
+    for id in &plan.discard {
+        if let Some(wv) = tab_webview(app, *id) {
+            let _ = wv.close();
+        }
+    }
+    if let Some(prev) = plan.hide {
+        if let Some(wv) = tab_webview(app, prev) {
+            let _ = wv.hide();
+        }
+    }
+    match plan.create {
+        // 破棄済み・新規のタブ。WebView を作ると自動的に最前面かつ表示状態になる。
+        Some(url) => {
+            build_tab_webview(app, plan.show, &url).inspect_err(|_| {
+                lock(&app.state::<Mutex<TabManager>>()).mark_dead(plan.show);
+            })?;
+        }
+        None => {
+            let wv = tab_webview(app, plan.show).ok_or("browser webview not found")?;
+            wv.show().map_err(|e| e.to_string())?;
+        }
+    }
+    // 切り替え先にキーボードフォーカスを渡す。これが無いと、開いた直後の
+    // タブでページ側のショートカット（Ctrl+T など）が効かない。
+    if let Some(wv) = tab_webview(app, plan.show) {
+        let _ = wv.set_focus();
+    }
+    Ok(())
+}
+
+/// タブ用のコンテンツ WebView を生成する。
+///
+/// 生成はメインスレッドの応答を待つ処理なので、`TabManager` のロックを
+/// 握ったまま呼んではいけない（メインスレッド側のハンドラと待ち合う）。
+fn build_tab_webview(app: &AppHandle, id: u32, url: &str) -> Result<(), String> {
     let parsed: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
-    webview.navigate(parsed).map_err(|e| e.to_string())
+    let window = app.get_window("main").ok_or("main window not found")?;
+    // 同じラベルの WebView が残っていると生成に失敗する。素早い切替で
+    // 破棄と生成が前後した場合に備えて掃除しておく。
+    if let Some(stale) = tab_webview(app, id) {
+        let _ = stale.close();
+    }
+    let (w, h, top) = {
+        let state = app.state::<Mutex<Layout>>();
+        let l = lock(&state);
+        (l.win_w, l.win_h, l.toolbar_height)
+    };
+    let webview = window
+        .add_child(
+            content_webview_builder(app, id, parsed),
+            LogicalPosition::new(0.0, top),
+            LogicalSize::new(w, (h - top).max(0.0)),
+        )
+        .map_err(|e| e.to_string())?;
+    // ズームは全タブ共通の設定なので、後から作ったタブにも適用する
+    let zoom = lock(&app.state::<Mutex<SettingsStore>>()).get().zoom;
+    if (zoom - 1.0).abs() > f64::EPSILON {
+        let _ = webview.set_zoom(zoom);
+    }
+    Ok(())
+}
+
+/// タブ 1 枚ぶんのコンテンツ WebView の作り方をまとめる。
+///
+/// 各ハンドラはタブ id を捕捉しているので、背景タブから届いた通知も
+/// 正しいタブへ振り分けられる（アクティブタブへ誤って書き込まない）。
+fn content_webview_builder(
+    app: &AppHandle,
+    id: u32,
+    url: url::Url,
+) -> WebviewBuilder<tauri::Wry> {
+    let app_nav = app.clone();
+    let app_popup = app.clone();
+    let app_dl = app.clone();
+
+    WebviewBuilder::new(tab_label(id), WebviewUrl::External(url))
+        .initialization_script(NAV_GUARD_SCRIPT)
+        .initialization_script(SHORTCUT_INIT_SCRIPT)
+        .initialization_script(PAGE_META_SCRIPT)
+        .initialization_script(FIND_SCRIPT)
+        .on_new_window(move |url, _features| {
+            // target="_blank" / window.open。別ウィンドウは作らず自前のタブとして開く。
+            if !matches!(url.scheme(), "http" | "https") {
+                log::warn!("blocked popup with unsupported scheme: {}", url);
+                return NewWindowResponse::Deny;
+            }
+            let gate = app_popup.state::<Mutex<PopupGate>>();
+            if !lock(&gate).0.allow(Instant::now()) {
+                log::warn!("popup throttled: {}", url);
+                return NewWindowResponse::Deny;
+            }
+            // ここは WebView2 のコールバック（メインスレッド）の中。
+            // WebView の生成はメインスレッドの処理を必要とするため、
+            // コールバックに入ったまま行わず別スレッドへ逃がす。
+            let target = url.to_string();
+            let app_open = app_popup.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = open_tab_now(&app_open, target) {
+                    log::error!("failed to open popup as tab: {e}");
+                }
+            });
+            NewWindowResponse::Deny
+        })
+        .on_download(move |_wv, event| match event {
+            DownloadEvent::Requested { url, destination } => {
+                let Ok(dir) = app_dl.path().download_dir() else {
+                    log::error!("download dir not available");
+                    return false;
+                };
+                // WebView2 が提案するファイル名（Content-Disposition 由来）を優先する。
+                // ただしサーバー由来の値なので必ず検証してから使う。
+                let suggested = destination
+                    .file_name()
+                    .map(|s| sanitize_file_name(&s.to_string_lossy()))
+                    .filter(|s| !s.is_empty());
+                let name = suggested.unwrap_or_else(|| file_name_from_url(&url));
+                let target = unique_path(&dir, &name);
+                let final_name = target
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| name.clone());
+                *destination = target.clone();
+
+                let item = lock(&app_dl.state::<Mutex<DownloadStore>>()).start(
+                    url.to_string(),
+                    final_name,
+                    target.to_string_lossy().into_owned(),
+                );
+                let _ =
+                    app_dl.emit_to(EventTarget::webview_window("main"), "download-started", item);
+                true
+            }
+            DownloadEvent::Finished { url, path, success } => {
+                let key = path
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                lock(&app_dl.state::<Mutex<DownloadStore>>()).finish(&key, success);
+                log::info!("download finished: {} success={}", url, success);
+                let _ = app_dl.emit_to(EventTarget::webview_window("main"), "downloads-updated", ());
+                true
+            }
+            _ => true,
+        })
+        .on_navigation(move |url| {
+            // ページ内容は信頼できない入力。fbcmd:// / fbmeta:// はいずれも
+            // 任意の Web ページが location.href で自由に発火できる点に注意。
+            if url.scheme() == "fbcmd" {
+                // キー操作は見えているタブにしか届かない。背景タブから来た
+                // ものはページが自分で発火させたものなので受け付けない。
+                if !is_active_tab(&app_nav, id) {
+                    log::warn!("ignored command from background tab {}: {}", id, url);
+                    return false;
+                }
+                // 実ユーザーのキー操作を装った連打（タブ・ブックマークの大量生成）を抑止
+                let gate = app_nav.state::<Mutex<PageCmdGate>>();
+                let allowed = lock(&gate).allow(Instant::now());
+                if !allowed {
+                    log::warn!("page-originated command throttled: {}", url);
+                    return false;
+                }
+                let cmd = url.host_str().unwrap_or("").to_string();
+                let _ = app_nav.emit_to(EventTarget::webview_window("main"), "shortcut", cmd);
+                return false; // ナビゲーションをキャンセル
+            }
+            // fbmeta:// は実ページタイトル・ファビコン通知。通知元のタブへ反映する。
+            if url.scheme() == "fbmeta" {
+                let mut title = String::new();
+                let mut favicon = String::new();
+                for (k, v) in url.query_pairs() {
+                    match &*k {
+                        "t" => title = v.into_owned(),
+                        "f" => favicon = v.into_owned(),
+                        _ => {}
+                    }
+                }
+                // ページ由来の文字列は必ず検証・切り詰めてから内部状態に取り込む
+                let title = sanitize_title(&title);
+                let favicon_opt = sanitize_favicon(&favicon);
+                if !title.is_empty() {
+                    let (snapshot, tab_url) = {
+                        let state = app_nav.state::<Mutex<TabManager>>();
+                        let mut mgr = lock(&state);
+                        mgr.set_meta(id, title.clone(), favicon_opt.clone());
+                        (mgr.snapshot(), mgr.url_of(id))
+                    };
+                    emit_tabs(&app_nav, &snapshot);
+                    // プライベートモード中は履歴へ書き戻さない
+                    if let Some(tab_url) = tab_url {
+                        if !lock(&app_nav.state::<Mutex<PrivateMode>>()).0 {
+                            lock(&app_nav.state::<Mutex<HistoryStore>>())
+                                .update_meta_for_url(&tab_url, title, favicon_opt);
+                        }
+                    }
+                }
+                return false; // ナビゲーションをキャンセル
+            }
+            // fbfind:// はページ内検索の結果件数。chrome 側の検索バーへ転送する。
+            if url.scheme() == "fbfind" {
+                // 検索バーが対象にしているのは見えているタブだけ
+                if !is_active_tab(&app_nav, id) {
+                    return false;
+                }
+                let mut total = 0usize;
+                let mut index = 0usize;
+                for (k, v) in url.query_pairs() {
+                    match &*k {
+                        "n" => total = v.parse().unwrap_or(0),
+                        "i" => index = v.parse().unwrap_or(0),
+                        _ => {}
+                    }
+                }
+                let _ = app_nav.emit_to(
+                    EventTarget::webview_window("main"),
+                    "find-result",
+                    (total, index),
+                );
+                return false; // ナビゲーションをキャンセル
+            }
+            true
+        })
+        .on_page_load(move |webview, payload| {
+            let app = webview.app_handle();
+            match payload.event() {
+                PageLoadEvent::Started => {
+                    let url = payload.url().to_string();
+                    let (snapshot, active) = {
+                        let state = app.state::<Mutex<TabManager>>();
+                        let mut mgr = lock(&state);
+                        mgr.on_navigate(id, &url);
+                        (mgr.snapshot(), mgr.active_id)
+                    };
+                    emit_tabs(app, &snapshot);
+                    // プライベートモード中は訪問を記録しない
+                    if !lock(&app.state::<Mutex<PrivateMode>>()).0 {
+                        let state = app.state::<Mutex<HistoryStore>>();
+                        lock(&state).visit(url.clone(), hostname_of(&url));
+                    }
+                    // アドレスバーが映すのは見えているタブだけ。背景タブの
+                    // 遷移で表示中の URL が書き換わらないようにする。
+                    if active == id {
+                        let _ =
+                            app.emit_to(EventTarget::webview_window("main"), "url-changed", url);
+                    }
+                }
+                PageLoadEvent::Finished => {
+                    let snapshot = {
+                        let state = app.state::<Mutex<TabManager>>();
+                        let mut mgr = lock(&state);
+                        mgr.on_load_finished(id);
+                        mgr.snapshot()
+                    };
+                    emit_tabs(app, &snapshot);
+                }
+            }
+        })
+}
+
+/// 新しいタブを開き、その WebView を生成して前面に出す。
+/// **メインスレッドから直接呼ばないこと**（`build_tab_webview` の注記を参照）。
+fn open_tab_now(app: &AppHandle, url: String) -> Result<(), String> {
+    let plan = {
+        let state = app.state::<Mutex<TabManager>>();
+        let mut mgr = lock(&state);
+        mgr.open_tab(url)
+    };
+    let res = apply_switch(app, plan);
+    emit_tabs_now(app);
+    res
 }
 
 // ─── タブ コマンド ────────────────────────────────────────────────
 
+// タブを触るコマンドはすべて async。WebView の生成・破棄はメインスレッドの
+// 応答を必要とするため、同期コマンド（＝メインスレッド実行）で行うと
+// 自己デッドロックしうる。
 #[tauri::command]
-fn navigate(url: String, app: AppHandle, tabs: State<'_, Mutex<TabManager>>) -> Result<(), String> {
+async fn navigate(url: String, app: AppHandle) -> Result<(), String> {
     let normalized = normalize_url(&url);
-    let snapshot = {
-        let mut mgr = lock(&tabs);
-        mgr.on_navigate(&normalized);
-        mgr.snapshot()
+    let active = {
+        let state = app.state::<Mutex<TabManager>>();
+        let mut mgr = lock(&state);
+        let id = mgr.active_id;
+        mgr.on_navigate(id, &normalized);
+        id
     };
-    navigate_webview(&app, &normalized)?;
-    emit_tabs(&app, &snapshot);
+    match tab_webview(&app, active) {
+        Some(wv) => {
+            let parsed: url::Url = normalized.parse().map_err(|e: url::ParseError| e.to_string())?;
+            wv.navigate(parsed).map_err(|e| e.to_string())?;
+        }
+        // 破棄済みのタブがアクティブになっている場合は、その URL で作り直す
+        None => build_tab_webview(&app, active, &normalized)?,
+    }
+    emit_tabs_now(&app);
     Ok(())
 }
 
 // 戻る/進むはページより先に退避した参照を使う（NAV_GUARD_SCRIPT 参照）。
 // `history.back()` を直接呼ぶとページ側の上書きで無効化されうる。
+// タブごとに WebView が分かれたので、戻る履歴もタブごとに独立している。
 #[tauri::command]
-fn go_back(app: AppHandle) -> Result<(), String> {
-    app.get_webview("browser-content")
-        .ok_or("not found")?
+async fn go_back(app: AppHandle) -> Result<(), String> {
+    active_webview(&app)?
         .eval("window.__fbNav&&window.__fbNav.back()")
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn go_forward(app: AppHandle) -> Result<(), String> {
-    app.get_webview("browser-content")
-        .ok_or("not found")?
+async fn go_forward(app: AppHandle) -> Result<(), String> {
+    active_webview(&app)?
         .eval("window.__fbNav&&window.__fbNav.forward()")
         .map_err(|e| e.to_string())
 }
@@ -1010,51 +1486,50 @@ fn go_forward(app: AppHandle) -> Result<(), String> {
 /// `location.reload()` の eval はページ側から差し替えられる可能性がある。
 #[tauri::command]
 async fn reload(app: AppHandle) -> Result<(), String> {
-    app.get_webview("browser-content")
-        .ok_or("not found")?
-        .reload()
-        .map_err(|e| e.to_string())
+    active_webview(&app)?.reload().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn new_tab(url: String, app: AppHandle, tabs: State<'_, Mutex<TabManager>>) -> Result<(), String> {
-    let normalized = normalize_url(&url);
-    let snapshot = {
-        let mut mgr = lock(&tabs);
-        mgr.open_tab(normalized.clone());
-        mgr.snapshot()
-    };
-    navigate_webview(&app, &normalized)?;
-    emit_tabs(&app, &snapshot);
-    Ok(())
+async fn new_tab(url: String, app: AppHandle) -> Result<(), String> {
+    open_tab_now(&app, normalize_url(&url))
 }
 
 #[tauri::command]
-fn close_tab(id: u32, app: AppHandle, tabs: State<'_, Mutex<TabManager>>) -> Result<(), String> {
-    let (snapshot, nav_url) = {
-        let mut mgr = lock(&tabs);
-        let nav = mgr.close_tab(id);
-        (mgr.snapshot(), nav)
+async fn close_tab(id: u32, app: AppHandle) -> Result<(), String> {
+    let plan = {
+        let state = app.state::<Mutex<TabManager>>();
+        let mut mgr = lock(&state);
+        mgr.close_tab(id)
     };
-    if let Some(url) = nav_url {
-        navigate_webview(&app, &url)?;
+    let Some(plan) = plan else {
+        return Ok(()); // 最後の1枚、または存在しない id
+    };
+    if let Some(dead) = plan.destroy {
+        if let Some(wv) = tab_webview(&app, dead) {
+            let _ = wv.close();
+        }
     }
-    emit_tabs(&app, &snapshot);
-    Ok(())
+    let res = match plan.activate {
+        Some(next) => apply_switch(&app, next),
+        None => Ok(()),
+    };
+    emit_tabs_now(&app);
+    res
 }
 
 #[tauri::command]
-fn switch_tab(id: u32, app: AppHandle, tabs: State<'_, Mutex<TabManager>>) -> Result<(), String> {
-    let (snapshot, url) = {
-        let mut mgr = lock(&tabs);
-        let url = mgr.switch_to(id);
-        (mgr.snapshot(), url)
+async fn switch_tab(id: u32, app: AppHandle) -> Result<(), String> {
+    let plan = {
+        let state = app.state::<Mutex<TabManager>>();
+        let mut mgr = lock(&state);
+        mgr.switch_to(id)
     };
-    if let Some(url) = url {
-        navigate_webview(&app, &url)?;
-    }
-    emit_tabs(&app, &snapshot);
-    Ok(())
+    let Some(plan) = plan else {
+        return Ok(()); // すでにアクティブ、または存在しない id
+    };
+    let res = apply_switch(&app, plan);
+    emit_tabs_now(&app);
+    res
 }
 
 #[tauri::command]
@@ -1147,8 +1622,15 @@ async fn set_zoom(
     } else {
         1.0
     };
-    let webview = app.get_webview("browser-content").ok_or("not found")?;
-    webview.set_zoom(f).map_err(|e| e.to_string())?;
+    // ズームはアプリ全体の設定。開いている全タブへ反映し、
+    // 後から作られるタブには build_tab_webview が適用する。
+    active_webview(&app)?.set_zoom(f).map_err(|e| e.to_string())?;
+    let ids = lock(&app.state::<Mutex<TabManager>>()).live_ids();
+    for id in ids {
+        if let Some(wv) = tab_webview(&app, id) {
+            let _ = wv.set_zoom(f);
+        }
+    }
     lock(&store).set_zoom(f);
     Ok(f)
 }
@@ -1158,8 +1640,7 @@ async fn set_zoom(
 /// 検索語は JSON 文字列リテラルとして埋め込む。
 /// 文字列連結で JS を組み立てると、引用符を含む検索語でスクリプトが壊れる。
 fn eval_find(app: &AppHandle, js: &str) -> Result<(), String> {
-    let webview = app.get_webview("browser-content").ok_or("not found")?;
-    webview.eval(js).map_err(|e| e.to_string())
+    active_webview(app)?.eval(js).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1253,13 +1734,7 @@ async fn set_webview_top(
         l.toolbar_height = y;
         (l.win_w, l.win_h)
     };
-    let webview = app.get_webview("browser-content").ok_or("not found")?;
-    webview
-        .set_position(LogicalPosition::new(0.0, y))
-        .map_err(|e| e.to_string())?;
-    webview
-        .set_size(LogicalSize::new(lw, (lh - y).max(0.0)))
-        .map_err(|e| e.to_string())?;
+    layout_tab_webviews(&app, lw, lh, y);
     Ok(())
 }
 
@@ -1350,215 +1825,30 @@ pub fn run() {
                 .parse()
                 .unwrap_or_else(|_| HOME_URL.parse().expect("HOME_URL は妥当な URL"));
 
-            let app_shortcuts = app.handle().clone();
-            let app_popup = app.handle().clone();
-            let app_dl = app.handle().clone();
-            let content_builder =
-                WebviewBuilder::new("browser-content", WebviewUrl::External(start_url))
-                    .initialization_script(NAV_GUARD_SCRIPT)
-                    .initialization_script(SHORTCUT_INIT_SCRIPT)
-                    .initialization_script(PAGE_META_SCRIPT)
-                    .initialization_script(FIND_SCRIPT)
-                    .on_new_window(move |url, _features| {
-                        // target="_blank" / window.open。単一 WebView 構成のため
-                        // 実際の別ウィンドウは作らず、自前のタブとして開く。
-                        if !matches!(url.scheme(), "http" | "https") {
-                            log::warn!("blocked popup with unsupported scheme: {}", url);
-                            return NewWindowResponse::Deny;
-                        }
-                        let gate = app_popup.state::<Mutex<PopupGate>>();
-                        if !lock(&gate).0.allow(Instant::now()) {
-                            log::warn!("popup throttled: {}", url);
-                            return NewWindowResponse::Deny;
-                        }
-                        let target = url.to_string();
-                        let snapshot = {
-                            let state = app_popup.state::<Mutex<TabManager>>();
-                            let mut mgr = lock(&state);
-                            mgr.open_tab(target.clone());
-                            mgr.snapshot()
-                        };
-                        let _ = navigate_webview(&app_popup, &target);
-                        emit_tabs(&app_popup, &snapshot);
-                        NewWindowResponse::Deny
-                    })
-                    .on_download(move |_wv, event| match event {
-                        DownloadEvent::Requested { url, destination } => {
-                            let Ok(dir) = app_dl.path().download_dir() else {
-                                log::error!("download dir not available");
-                                return false;
-                            };
-                            // WebView2 が提案するファイル名（Content-Disposition 由来）を優先する。
-                            // ただしサーバー由来の値なので必ず検証してから使う。
-                            let suggested = destination
-                                .file_name()
-                                .map(|s| sanitize_file_name(&s.to_string_lossy()))
-                                .filter(|s| !s.is_empty());
-                            let name = suggested.unwrap_or_else(|| file_name_from_url(&url));
-                            let target = unique_path(&dir, &name);
-                            let final_name = target
-                                .file_name()
-                                .map(|s| s.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| name.clone());
-                            *destination = target.clone();
-
-                            let item = lock(&app_dl.state::<Mutex<DownloadStore>>()).start(
-                                url.to_string(),
-                                final_name,
-                                target.to_string_lossy().into_owned(),
-                            );
-                            let _ = app_dl.emit_to(
-                                EventTarget::webview_window("main"),
-                                "download-started",
-                                item,
-                            );
-                            true
-                        }
-                        DownloadEvent::Finished { url, path, success } => {
-                            let key = path
-                                .map(|p| p.to_string_lossy().into_owned())
-                                .unwrap_or_default();
-                            lock(&app_dl.state::<Mutex<DownloadStore>>()).finish(&key, success);
-                            log::info!("download finished: {} success={}", url, success);
-                            let _ = app_dl.emit_to(
-                                EventTarget::webview_window("main"),
-                                "downloads-updated",
-                                (),
-                            );
-                            true
-                        }
-                        _ => true,
-                    })
-                    .on_navigation(move |url| {
-                        // ページ内容は信頼できない入力。fbcmd:// / fbmeta:// はいずれも
-                        // 任意の Web ページが location.href で自由に発火できる点に注意。
-                        if url.scheme() == "fbcmd" {
-                            // 実ユーザーのキー操作を装った連打（タブ・ブックマークの大量生成）を抑止
-                            let gate = app_shortcuts.state::<Mutex<PageCmdGate>>();
-                            let allowed = lock(&gate).allow(Instant::now());
-                            if !allowed {
-                                log::warn!("page-originated command throttled: {}", url);
-                                return false;
-                            }
-                            let cmd = url.host_str().unwrap_or("").to_string();
-                            let _ = app_shortcuts.emit_to(
-                                EventTarget::webview_window("main"),
-                                "shortcut",
-                                cmd,
-                            );
-                            return false; // ナビゲーションをキャンセル
-                        }
-                        // fbmeta:// は実ページタイトル・ファビコン通知。アクティブタブと履歴の最新エントリに反映。
-                        if url.scheme() == "fbmeta" {
-                            let mut title = String::new();
-                            let mut favicon = String::new();
-                            for (k, v) in url.query_pairs() {
-                                match &*k {
-                                    "t" => title = v.into_owned(),
-                                    "f" => favicon = v.into_owned(),
-                                    _ => {}
-                                }
-                            }
-                            // ページ由来の文字列は必ず検証・切り詰めてから内部状態に取り込む
-                            let title = sanitize_title(&title);
-                            let favicon_opt = sanitize_favicon(&favicon);
-                            if !title.is_empty() {
-                                let snapshot = {
-                                    let state = app_shortcuts.state::<Mutex<TabManager>>();
-                                    let mut mgr = lock(&state);
-                                    mgr.set_active_meta(title.clone(), favicon_opt.clone());
-                                    mgr.snapshot()
-                                };
-                                emit_tabs(&app_shortcuts, &snapshot);
-                                // プライベートモード中は履歴へ書き戻さない
-                                if !lock(&app_shortcuts.state::<Mutex<PrivateMode>>()).0 {
-                                    lock(&app_shortcuts.state::<Mutex<HistoryStore>>())
-                                        .update_latest_meta(title, favicon_opt);
-                                }
-                            }
-                            return false; // ナビゲーションをキャンセル
-                        }
-                        // fbfind:// はページ内検索の結果件数。chrome 側の検索バーへ転送する。
-                        if url.scheme() == "fbfind" {
-                            let mut total = 0usize;
-                            let mut index = 0usize;
-                            for (k, v) in url.query_pairs() {
-                                match &*k {
-                                    "n" => total = v.parse().unwrap_or(0),
-                                    "i" => index = v.parse().unwrap_or(0),
-                                    _ => {}
-                                }
-                            }
-                            let _ = app_shortcuts.emit_to(
-                                EventTarget::webview_window("main"),
-                                "find-result",
-                                (total, index),
-                            );
-                            return false; // ナビゲーションをキャンセル
-                        }
-                        true
-                    })
-                    .on_page_load(|webview, payload| {
-                        let app = webview.app_handle();
-                        match payload.event() {
-                            PageLoadEvent::Started => {
-                                let url = payload.url().to_string();
-                                let snapshot = {
-                                    let state = app.state::<Mutex<TabManager>>();
-                                    let mut mgr = lock(&state);
-                                    mgr.on_navigate(&url);
-                                    mgr.snapshot()
-                                };
-                                emit_tabs(app, &snapshot);
-                                // プライベートモード中は訪問を記録しない
-                                if !lock(&app.state::<Mutex<PrivateMode>>()).0 {
-                                    let state = app.state::<Mutex<HistoryStore>>();
-                                    lock(&state).visit(url.clone(), hostname_of(&url));
-                                }
-                                let _ = app.emit_to(
-                                    EventTarget::webview_window("main"),
-                                    "url-changed",
-                                    url,
-                                );
-                            }
-                            PageLoadEvent::Finished => {
-                                let snapshot = {
-                                    let state = app.state::<Mutex<TabManager>>();
-                                    let mut mgr = lock(&state);
-                                    mgr.on_load_finished();
-                                    mgr.snapshot()
-                                };
-                                emit_tabs(app, &snapshot);
-                            }
-                        }
-                    });
-
-            window.add_child(
-                content_builder,
-                LogicalPosition::new(0.0, BASE_TOOLBAR_HEIGHT),
-                LogicalSize::new(lw, lh - BASE_TOOLBAR_HEIGHT),
-            )?;
+            // 最初のタブ（id=1）の URL を設定のホームに合わせてから WebView を作る
+            {
+                let state = app.state::<Mutex<TabManager>>();
+                lock(&state).init_first_tab(start_url.to_string());
+            }
+            build_tab_webview(app.handle(), 1, start_url.as_str())?;
 
             let app_resize = app.handle().clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::Resized(size) = event {
-                    if let Some(wv) = app_resize.get_webview("browser-content") {
-                        if let Some(win) = app_resize.get_webview_window("main") {
-                            // このハンドラはイベントループ側で動くため scale_factor() は安全
-                            if let Ok(scale) = win.scale_factor() {
-                                let lw = size.width as f64 / scale;
-                                let lh = size.height as f64 / scale;
-                                // 新しいサイズをキャッシュへ反映し、現在の chrome 高さで再配置する
-                                let th = {
-                                    let state = app_resize.state::<Mutex<Layout>>();
-                                    let mut l = lock(&state);
-                                    l.win_w = lw;
-                                    l.win_h = lh;
-                                    l.toolbar_height
-                                };
-                                let _ = wv.set_position(LogicalPosition::new(0.0, th));
-                                let _ = wv.set_size(LogicalSize::new(lw, (lh - th).max(0.0)));
-                            }
+                    if let Some(win) = app_resize.get_webview_window("main") {
+                        // このハンドラはイベントループ側で動くため scale_factor() は安全
+                        if let Ok(scale) = win.scale_factor() {
+                            let lw = size.width as f64 / scale;
+                            let lh = size.height as f64 / scale;
+                            // 新しいサイズをキャッシュへ反映し、現在の chrome 高さで再配置する
+                            let th = {
+                                let state = app_resize.state::<Mutex<Layout>>();
+                                let mut l = lock(&state);
+                                l.win_w = lw;
+                                l.win_h = lh;
+                                l.toolbar_height
+                            };
+                            layout_tab_webviews(&app_resize, lw, lh, th);
                         }
                     }
                 }
@@ -1683,34 +1973,126 @@ mod tests {
         assert_eq!(m.tabs.len(), 1, "最後の1枚は閉じられない");
     }
 
-    #[test]
-    fn closing_active_tab_activates_neighbor() {
-        let mut m = TabManager::new();
-        m.open_tab("https://a.test/".into()); // id=2
-        m.open_tab("https://b.test/".into()); // id=3（アクティブ）
-        assert_eq!(m.active_id, 3);
-        let nav = m.close_tab(3);
-        assert_eq!(nav.as_deref(), Some("https://a.test/"));
-        assert_eq!(m.active_id, 2, "閉じたら隣のタブがアクティブになる");
+    // WebView を実際に作らずに TabManager を試すためのヘルパー。
+    // 生成指示（plan.create）が出たら「作れた」ことにして live のままにする。
+    fn open(m: &mut TabManager, url: &str) -> u32 {
+        let plan = m.open_tab(url.to_string());
+        assert!(plan.create.is_some(), "新しいタブは WebView の生成を要求する");
+        plan.show
     }
 
     #[test]
-    fn closing_inactive_tab_keeps_active_and_does_not_navigate() {
+    fn closing_active_tab_activates_neighbor() {
         let mut m = TabManager::new();
-        m.open_tab("https://a.test/".into()); // id=2（アクティブ）
-        let nav = m.close_tab(1);
-        assert!(nav.is_none(), "非アクティブを閉じても再ナビゲートしない");
+        open(&mut m, "https://a.test/"); // id=2
+        open(&mut m, "https://b.test/"); // id=3（アクティブ）
+        assert_eq!(m.active_id, 3);
+        let plan = m.close_tab(3).expect("閉じられる");
+        assert_eq!(plan.destroy, Some(3), "閉じたタブの WebView は破棄する");
+        let next = plan.activate.expect("アクティブが移るので切替指示が要る");
+        assert_eq!(next.show, 2, "閉じたら隣のタブがアクティブになる");
         assert_eq!(m.active_id, 2);
+        assert!(
+            next.create.is_none(),
+            "隣のタブは生きているので作り直さない（＝ページが再読込されない）"
+        );
+        assert!(next.hide.is_none(), "消えたタブを隠す必要はない");
+    }
+
+    #[test]
+    fn closing_inactive_tab_keeps_active_and_does_not_switch() {
+        let mut m = TabManager::new();
+        open(&mut m, "https://a.test/"); // id=2（アクティブ）
+        let plan = m.close_tab(1).expect("閉じられる");
+        assert_eq!(plan.destroy, Some(1));
+        assert!(
+            plan.activate.is_none(),
+            "非アクティブを閉じても表示中のタブは切り替えない"
+        );
+        assert_eq!(m.active_id, 2);
+    }
+
+    #[test]
+    fn switching_back_does_not_reload_a_live_tab() {
+        let mut m = TabManager::new();
+        open(&mut m, "https://a.test/"); // id=2（アクティブ）
+        let plan = m.switch_to(1).expect("切り替えられる");
+        assert_eq!(plan.hide, Some(2), "元のタブは隠すだけで破棄しない");
+        assert!(
+            plan.create.is_none(),
+            "WebView が生きているタブは作り直さない（状態が保たれる）"
+        );
+    }
+
+    #[test]
+    fn switching_to_the_active_tab_is_a_noop() {
+        let mut m = TabManager::new();
+        assert!(m.switch_to(1).is_none(), "同じタブへの切替は何もしない");
+        assert!(m.switch_to(999).is_none(), "存在しない id は無視する");
+    }
+
+    #[test]
+    fn discarded_tab_is_recreated_from_its_url_on_return() {
+        let mut m = TabManager::new();
+        // 起動時の 1 枚と合わせてちょうど上限まで開く（ここではまだ捨てない）
+        for i in 0..(MAX_LIVE_WEBVIEWS - 1) {
+            open(&mut m, &format!("https://{i}.test/"));
+        }
+        assert_eq!(m.live_ids().len(), MAX_LIVE_WEBVIEWS);
+
+        // もう 1 枚開くと、いちばん古いタブの WebView が捨てられる
+        let plan = m.open_tab("https://last.test/".into());
+        assert_eq!(plan.discard, vec![1], "最も古いタブが破棄される");
+        assert!(!m.is_live(1));
+        assert_eq!(
+            m.live_ids().len(),
+            MAX_LIVE_WEBVIEWS,
+            "生かす WebView は上限を超えない"
+        );
+
+        // 破棄されたタブへ戻ると、覚えている URL で作り直す
+        let back = m.switch_to(1).expect("切り替えられる");
+        assert_eq!(back.create.as_deref(), Some(HOME_URL));
+        assert!(m.is_live(1));
+    }
+
+    #[test]
+    fn the_active_tab_is_never_discarded() {
+        let mut m = TabManager::new();
+        for i in 0..(MAX_LIVE_WEBVIEWS * 2) {
+            let plan = m.open_tab(format!("https://{i}.test/"));
+            assert!(
+                !plan.discard.contains(&plan.show),
+                "今から表示するタブを捨ててはいけない"
+            );
+            assert!(!plan.discard.contains(&m.active_id));
+        }
     }
 
     #[test]
     fn navigating_clears_stale_favicon() {
         let mut m = TabManager::new();
-        m.set_active_meta("Old".into(), Some("https://a.test/f.ico".into()));
-        m.on_navigate("https://b.test/");
+        m.set_meta(1, "Old".into(), Some("https://a.test/f.ico".into()));
+        m.on_navigate(1, "https://b.test/");
         let tab = &m.snapshot().tabs[0];
         assert_eq!(tab.favicon, None, "前ページのファビコンが残ってはいけない");
         assert_eq!(tab.title, "b.test");
+    }
+
+    #[test]
+    fn background_tab_updates_do_not_touch_the_active_tab() {
+        let mut m = TabManager::new();
+        let bg = 1; // 最初のタブを背景に回す
+        open(&mut m, "https://front.test/"); // id=2（アクティブ）
+        m.on_navigate(bg, "https://background.test/");
+        m.set_meta(bg, "Background".into(), None);
+
+        let snap = m.snapshot();
+        let front = snap.tabs.iter().find(|t| t.id == 2).expect("存在する");
+        assert_eq!(front.url, "https://front.test/", "表示中のタブは影響を受けない");
+        assert_eq!(front.title, "front.test");
+        let back = snap.tabs.iter().find(|t| t.id == bg).expect("存在する");
+        assert_eq!(back.title, "Background");
     }
 
     // --- 履歴 ---
@@ -1745,19 +2127,35 @@ mod tests {
     }
 
     #[test]
-    fn update_latest_meta_is_noop_when_unchanged() {
+    fn update_meta_is_noop_when_unchanged() {
         let tmp = std::env::temp_dir().join("fb_test_hist_meta");
         let _ = std::fs::remove_dir_all(&tmp);
         let mut h = history_in(&tmp);
         h.visit("https://a.test/".into(), "a.test".into());
         h.flush();
-        h.update_latest_meta("Title".into(), None);
+        h.update_meta_for_url("https://a.test/", "Title".into(), None);
         assert!(h.dirty || h.last_saved.is_some());
         h.flush();
         assert!(!h.dirty);
         // 同じ値での再更新は dirty を立てない
-        h.update_latest_meta("Title".into(), None);
+        h.update_meta_for_url("https://a.test/", "Title".into(), None);
         assert!(!h.dirty, "内容が同じなら再保存しない");
+    }
+
+    #[test]
+    fn background_tab_meta_updates_its_own_history_entry() {
+        let tmp = std::env::temp_dir().join("fb_test_hist_meta_bg");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let mut h = history_in(&tmp);
+        h.visit("https://background.test/".into(), "background.test".into());
+        h.visit("https://front.test/".into(), "front.test".into());
+
+        // 背景タブが遅れてタイトルを通知してきた場面。
+        // 先頭（＝表示中のページ）ではなく、URL が一致するエントリが更新される。
+        h.update_meta_for_url("https://background.test/", "Background".into(), None);
+        let all = h.all();
+        assert_eq!(all[0].title, "front.test", "表示中の履歴は書き換えない");
+        assert_eq!(all[1].title, "Background");
     }
 
     #[test]
