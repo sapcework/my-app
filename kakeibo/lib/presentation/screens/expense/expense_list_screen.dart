@@ -19,7 +19,6 @@ class ExpenseListScreen extends ConsumerStatefulWidget {
 
 class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
   final _searchController = TextEditingController();
-  bool _showSearch = false;
 
   @override
   void dispose() {
@@ -37,33 +36,34 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _showSearch
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'キーワードで検索...',
-                  border: InputBorder.none,
-                ),
-                onChanged: (v) => ref.read(expenseSearchQueryProvider.notifier).state = v,
-              )
-            : const Text('支出一覧'),
-        actions: [
-          IconButton(
-            icon: Icon(_showSearch ? Icons.close : Icons.search),
-            onPressed: () {
-              setState(() => _showSearch = !_showSearch);
-              if (!_showSearch) {
-                _searchController.clear();
-                ref.read(expenseSearchQueryProvider.notifier).state = '';
-              }
-            },
-          ),
-        ],
+        title: const Text('支出一覧'),
         bottom: const MonthSwitcherBar(),
       ),
       body: Column(
         children: [
+          // 検索バー（Web版と同じく常時表示）
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'キーワードで検索...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          ref.read(expenseSearchQueryProvider.notifier).state = '';
+                        },
+                      ),
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (v) => ref.read(expenseSearchQueryProvider.notifier).state = v,
+            ),
+          ),
           // カテゴリフィルターチップ
           if (categories.isNotEmpty)
             SizedBox(
@@ -221,6 +221,7 @@ class _ExpenseListBody extends StatelessWidget {
                       expense: expense,
                       category: categoryMap[expense.categoryId],
                       onTap: () => context.push('/expenses/${expense.id}/edit'),
+                      showDeleteButton: true,
                     ),
                   ),
                 ],

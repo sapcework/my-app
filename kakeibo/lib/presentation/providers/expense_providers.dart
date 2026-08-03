@@ -24,12 +24,6 @@ final getMonthlyExpensesUseCaseProvider = Provider<GetMonthlyExpensesUseCase>((r
   return GetMonthlyExpensesUseCase(ref.watch(expenseRepositoryProvider));
 });
 
-// ホーム画面用：今月の支出をリアルタイム監視
-final currentMonthExpensesProvider = StreamProvider<List<Expense>>((ref) {
-  final now = DateTime.now();
-  return ref.watch(getMonthlyExpensesUseCaseProvider).call(now.year, now.month);
-});
-
 // 支出一覧画面の選択月（初期値：今月の1日）
 final selectedMonthProvider = StateProvider<DateTime>((ref) {
   final now = DateTime.now();
@@ -40,6 +34,13 @@ final selectedMonthProvider = StateProvider<DateTime>((ref) {
 final selectedMonthExpensesProvider = StreamProvider<List<Expense>>((ref) {
   final month = ref.watch(selectedMonthProvider);
   return ref.watch(getMonthlyExpensesUseCaseProvider).call(month.year, month.month);
+});
+
+// ホーム画面用：選択月の前月の支出（サマリーカードの前月比表示用。Web版と同じく選択中の月を基準にする）
+final previousMonthExpensesProvider = StreamProvider<List<Expense>>((ref) {
+  final month = ref.watch(selectedMonthProvider);
+  final prev = DateTime(month.year, month.month - 1); // Dartは月アンダーフローを自動処理（1月→前年12月）
+  return ref.watch(getMonthlyExpensesUseCaseProvider).call(prev.year, prev.month);
 });
 
 // 検索キーワードフィルター

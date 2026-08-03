@@ -14,13 +14,7 @@ final getBudgetUseCaseProvider = Provider<GetBudgetUseCase>(
   (ref) => GetBudgetUseCase(ref.watch(budgetRepositoryProvider)),
 );
 
-// ホーム画面用：今月の予算
-final currentMonthBudgetProvider = FutureProvider<Budget?>((ref) {
-  final now = DateTime.now();
-  return ref.watch(getBudgetUseCaseProvider).call(now.year, now.month);
-});
-
-// 支出一覧・統計画面用：選択月の予算
+// ホーム・支出一覧・統計画面用：選択月の予算
 final selectedMonthBudgetProvider = FutureProvider<Budget?>((ref) {
   final month = ref.watch(selectedMonthProvider);
   return ref.watch(getBudgetUseCaseProvider).call(month.year, month.month);

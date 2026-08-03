@@ -68,8 +68,8 @@ final expenseTableDataProvider = FutureProvider.autoDispose<ExpenseTableData>((r
     monthSet.add(DateTime(e.date.year, e.date.month));
   }
   final months = (monthSet.toList()..sort());
-  // 最大24ヶ月
-  final displayMonths = months.length > 24 ? months.sublist(months.length - 24) : months;
+  // 直近12ヶ月（Web版 TablePage と同じ表示範囲）
+  final displayMonths = months.length > 12 ? months.sublist(months.length - 12) : months;
 
   // カテゴリ×月の集計
   final amounts = <String, double>{};

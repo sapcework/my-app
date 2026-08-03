@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
+import '../../../core/constants/category_icons.dart';
 import '../../../domain/entities/category.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/expense_providers.dart';
@@ -33,6 +34,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   int? _selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
+  bool _notFound = false; // 編集対象の支出が存在しない（削除済み・不正ID）
 
   // 過去の項目名一覧（画面表示時に一度だけ取得）
   late final Future<List<String>> _pastItemNamesFuture;
@@ -70,7 +72,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
 
   Future<void> _loadExpense() async {
     final expense = await ref.read(expenseRepositoryProvider).findById(_editIdInt!);
-    if (expense == null || !mounted) return;
+    if (!mounted) return;
+    if (expense == null) { // 削除済み・不正IDならnot-found表示に切り替え
+      setState(() => _notFound = true);
+      return;
+    }
     setState(() {
       _amountController.text = expense.amount % 1 == 0
           ? expense.amount.toInt().toString()
@@ -153,8 +159,23 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       ),
     );
     if (confirmed == true && mounted) {
+      final repo = ref.read(expenseRepositoryProvider);
+      final messenger = ScaffoldMessenger.of(context); // pop後も使えるようpop前に取得
+      final deleted = await repo.findById(_editIdInt!); // Undo用に削除前の内容を退避
       await ref.read(deleteExpenseUseCaseProvider).call(_editIdInt!);
       if (mounted) context.pop();
+      if (deleted != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('支出を削除しました'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: '元に戻す',
+              onPressed: () => repo.save(deleted), // IDを保持したまま再登録して復元
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -203,9 +224,27 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   Widget build(BuildContext context) {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
 
-    // Dropdownのvalueがitemsにないとエラーになるため、一覧に存在するIDのみ許可
-    final validCategoryId =
-        categories.any((c) => c.id == _selectedCategoryId) ? _selectedCategoryId : null;
+    if (_notFound) { // 編集対象が見つからない場合の表示（Web版のnot-found画面に対応）
+      return Scaffold(
+        appBar: AppBar(title: const Text('支出を編集')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off,
+                  size: 48, color: Theme.of(context).colorScheme.outline),
+              const SizedBox(height: 16),
+              const Text('この支出は見つかりませんでした'),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => context.go('/expenses'),
+                child: const Text('支出一覧へ戻る'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -285,31 +324,79 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                // ignore: deprecated_member_use
-                value: validCategoryId, // initialValueは外部state変化に追随しないため維持
-                decoration: const InputDecoration(
-                  labelText: 'カテゴリ',
-                  border: OutlineInputBorder(),
-                ),
-                hint: const Text('カテゴリを選択'),
-                validator: (value) => value == null ? 'カテゴリを選択してください' : null,
-                items: categories.map((category) {
-                  return DropdownMenuItem<int>(
-                    value: category.id,
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 10,
-                          backgroundColor: Color(category.colorValue),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(category.name),
-                      ],
+              // カテゴリ選択：Web版に合わせた4列グリッド（ドロップダウンから置換）
+              FormField<int>(
+                validator: (_) =>
+                    _selectedCategoryId == null ? 'カテゴリを選択してください' : null,
+                builder: (field) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('カテゴリ', style: Theme.of(context).textTheme.labelMedium),
+                    const SizedBox(height: 8),
+                    GridView.count(
+                      crossAxisCount: 4,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(), // 外側のScrollViewに任せる
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.15,
+                      children: categories.map((category) {
+                        final isSelected = category.id == _selectedCategoryId;
+                        final color = Color(category.colorValue);
+                        return InkWell(
+                          onTap: () {
+                            setState(() => _selectedCategoryId = category.id);
+                            field.didChange(category.id); // FormFieldのエラー表示を解消
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isSelected ? color.withValues(alpha: 0.15) : null,
+                              border: Border.all(
+                                color: isSelected
+                                    ? color
+                                    : Theme.of(context).colorScheme.outlineVariant,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  kCategoryIconMap[category.iconName] ?? Icons.category,
+                                  color: color,
+                                  size: 22,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  category.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        fontWeight:
+                                            isSelected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => _selectedCategoryId = value),
+                    if (field.hasError)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, left: 4),
+                        child: Text(
+                          field.errorText!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
               GestureDetector(

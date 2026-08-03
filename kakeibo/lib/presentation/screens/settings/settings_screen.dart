@@ -7,14 +7,17 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../data/backup/backup_parser.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/expense_model.dart';
 import '../../../data/models/recurring_expense_model.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/isar_provider.dart';
+import '../../providers/passcode_provider.dart';
 import '../../providers/recurring_expense_providers.dart';
 import '../../providers/repository_providers.dart';
+import '../../widgets/pin_pad.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -31,6 +34,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ============================================================
   Future<void> _backup() async {
     if (_working) return;
+
+    // Web版と同じく書き出し前に対象ファイル名を見せて確認する
+    final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final fileName = 'kakeibo_backup_$ts.json';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('バックアップ'),
+        content: Text('「$fileName」として全データを書き出します。よろしいですか？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('書き出す'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() => _working = true);
     try {
       final expenseRepo = ref.read(expenseRepositoryProvider);
@@ -80,8 +103,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       };
 
       final dir = await getApplicationDocumentsDirectory();
-      final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final file = File('${dir.path}/kakeibo_backup_$ts.json');
+      final file = File('${dir.path}/$fileName');
       await file.writeAsString(jsonEncode(data));
 
       if (mounted) {
@@ -153,11 +175,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (picked == null || !mounted) return;
 
+    // 復元前に全行を型検証（Web版 parseBackup 相当）。不正なファイルはここで拒否する
+    final BackupData data;
+    try {
+      data = parseBackup(await picked.readAsString());
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('復元できません: ${e.message}')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('データを復元しますか？'),
-        content: const Text('現在のすべてのデータが上書きされます。'),
+        content: Text('現在のすべてのデータが上書きされます。\n\n'
+            '支出: ${data.expenses.length}件\n'
+            'カテゴリ: ${data.categories.length}件\n'
+            '予算: ${data.budgets.length}件\n'
+            '定期支出: ${data.recurring.length}件'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
           FilledButton(
@@ -172,9 +212,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     setState(() => _working = true);
     try {
-      final jsonStr = await picked.readAsString();
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-
       final isar = ref.read(isarProvider).requireValue;
 
       await isar.writeTxn(() async {
@@ -183,56 +220,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         await isar.budgetModels.clear();
         await isar.recurringExpenseModels.clear();
 
-        // カテゴリ（IDを保持して復元）
-        final catModels = (data['categories'] as List).map((c) {
-          final m = CategoryModel()
-            ..id = c['id'] as int
-            ..name = c['name'] as String
-            ..colorValue = c['colorValue'] as int
-            ..iconName = c['iconName'] as String
-            ..sortOrder = (c['sortOrder'] as num?)?.toInt() ?? 0
-            ..createdAt = DateTime.parse(c['createdAt'] as String);
-          return m;
-        }).toList();
-        await isar.categoryModels.putAll(catModels);
-
-        // 支出
-        final expModels = (data['expenses'] as List).map((e) {
-          final m = ExpenseModel()
-            ..id = e['id'] as int
-            ..amount = (e['amount'] as num).toDouble()
-            ..categoryId = e['categoryId'] as int
-            ..itemName = e['itemName'] as String?
-            ..memo = e['memo'] as String?
-            ..date = DateTime.parse(e['date'] as String)
-            ..createdAt = DateTime.parse(e['createdAt'] as String);
-          return m;
-        }).toList();
-        await isar.expenseModels.putAll(expModels);
-
-        // 予算
-        final budgetModels = (data['budgets'] as List).map((b) {
-          final m = BudgetModel()
-            ..id = b['id'] as int
-            ..year = b['year'] as int
-            ..month = b['month'] as int
-            ..amount = (b['amount'] as num).toDouble();
-          return m;
-        }).toList();
-        await isar.budgetModels.putAll(budgetModels);
-
-        // 定期支出
-        final recurModels = (data['recurring'] as List).map((r) {
-          final m = RecurringExpenseModel()
-            ..id = r['id'] as int
-            ..name = r['name'] as String
-            ..amount = (r['amount'] as num).toDouble()
-            ..categoryId = r['categoryId'] as int
-            ..dayOfMonth = r['dayOfMonth'] as int
-            ..isActive = r['isActive'] as bool;
-          return m;
-        }).toList();
-        await isar.recurringExpenseModels.putAll(recurModels);
+        await isar.categoryModels.putAll(data.categories); // IDを保持して復元
+        await isar.expenseModels.putAll(data.expenses);
+        await isar.budgetModels.putAll(data.budgets);
+        await isar.recurringExpenseModels.putAll(data.recurring);
       });
 
       if (mounted) {
@@ -256,21 +247,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ============================================================
   Future<void> _exportAllCsv() async {
     if (_working) return;
+    final expenseRepo = ref.read(expenseRepositoryProvider);
+    final categoryRepo = ref.read(categoryRepositoryProvider);
+
+    final expenses = await expenseRepo.watchAll().first;
+    if (expenses.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('支出データがありません')),
+        );
+      }
+      return;
+    }
+
+    // Web版と同じく書き出し前に対象ファイル名を見せて確認する
+    final fileName = 'kakeibo_all_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('全明細CSV出力'),
+        content: Text('「$fileName」として全期間の支出明細を書き出します。よろしいですか？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('書き出す')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() => _working = true);
     try {
-      final expenseRepo = ref.read(expenseRepositoryProvider);
-      final categoryRepo = ref.read(categoryRepositoryProvider);
-
-      final expenses = await expenseRepo.watchAll().first;
-      if (expenses.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('支出データがありません')),
-          );
-        }
-        return;
-      }
-
       final categories = await categoryRepo.watchAll().first;
       final catMap = {for (final c in categories) if (c.id != null) c.id!: c};
 
@@ -292,8 +299,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
 
       final dir = await getApplicationDocumentsDirectory();
-      final ts = DateFormat('yyyyMMdd').format(DateTime.now());
-      final file = File('${dir.path}/kakeibo_all_$ts.csv');
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buf.toString())]);
 
       if (mounted) {
@@ -317,21 +323,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ============================================================
   Future<void> _exportMonthlyCsv() async {
     if (_working) return;
+    final expenseRepo = ref.read(expenseRepositoryProvider);
+    final categoryRepo = ref.read(categoryRepositoryProvider);
+
+    final expenses = await expenseRepo.watchAll().first;
+    if (expenses.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('支出データがありません')),
+        );
+      }
+      return;
+    }
+
+    // Web版と同じく書き出し前に対象ファイル名を見せて確認する
+    final fileName = 'kakeibo_monthly_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('月別支出表CSV出力'),
+        content: Text('「$fileName」として月別支出表を書き出します。よろしいですか？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('書き出す')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() => _working = true);
     try {
-      final expenseRepo = ref.read(expenseRepositoryProvider);
-      final categoryRepo = ref.read(categoryRepositoryProvider);
-
-      final expenses = await expenseRepo.watchAll().first;
-      if (expenses.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('支出データがありません')),
-          );
-        }
-        return;
-      }
-
       final categories = await categoryRepo.watchAll().first;
       final usedCatIds = expenses.map((e) => e.categoryId).toSet();
       final cols = categories.where((c) => c.id != null && usedCatIds.contains(c.id)).toList();
@@ -357,8 +379,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
 
       final dir = await getApplicationDocumentsDirectory();
-      final ts = DateFormat('yyyyMMdd').format(DateTime.now());
-      final file = File('${dir.path}/kakeibo_monthly_$ts.csv');
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buf.toString())]);
 
       if (mounted) {
@@ -385,12 +406,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // ============================================================
+  // パスコードロック
+  // ============================================================
+  Future<String?> _promptPin(String title) {
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+              child: Text(title, style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+            PinPad(onCompleted: (pin) => Navigator.pop(ctx, pin)),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _togglePasscode() async {
+    final controller = ref.read(passcodeControllerProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (controller.enabled) { // 有効→現在のPINを検証してから解除
+      if (controller.isLocked) {
+        messenger.showSnackBar(SnackBar(
+            content: Text('ロック中です。${controller.lockRemainingSeconds}秒後に再試行してください')));
+        return;
+      }
+      final pin = await _promptPin('現在のパスコードを入力');
+      if (pin == null || !mounted) return;
+      setState(() => _working = true);
+      final ok = await controller.verify(pin);
+      if (!mounted) return;
+      setState(() => _working = false);
+      if (!ok) {
+        messenger.showSnackBar(SnackBar(
+            content: Text(controller.isLocked
+                ? '5回連続で間違えたため30秒間ロックされました'
+                : 'パスコードが違います')));
+        return;
+      }
+      await controller.removePasscode();
+      messenger.showSnackBar(const SnackBar(content: Text('パスコードロックを解除しました')));
+    } else { // 無効→新しいPINを2回入力して設定
+      final pin1 = await _promptPin('新しいパスコードを入力');
+      if (pin1 == null || !mounted) return;
+      final pin2 = await _promptPin('確認のためもう一度入力');
+      if (pin2 == null || !mounted) return;
+      if (pin1 != pin2) {
+        messenger.showSnackBar(const SnackBar(content: Text('パスコードが一致しません')));
+        return;
+      }
+      setState(() => _working = true);
+      await controller.setPasscode(pin1);
+      if (!mounted) return;
+      setState(() => _working = false);
+      messenger.showSnackBar(const SnackBar(content: Text('パスコードロックを設定しました')));
+    }
+  }
+
+  // ============================================================
   // UI
   // ============================================================
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
     final recurring = ref.watch(recurringExpensesProvider).valueOrNull ?? const [];
+    final passcode = ref.watch(passcodeControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
@@ -494,6 +580,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // ── セキュリティセクション ──
+                const _SectionLabel('セキュリティ'),
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _SettingsTile(
+                    icon: passcode.enabled ? Icons.lock : Icons.lock_open_outlined,
+                    iconBgColor: const Color(0xFFFEF2F2), // rose-50
+                    iconColor: const Color(0xFFE11D48), // rose-600
+                    title: 'パスコードロック',
+                    subtitle: passcode.enabled
+                        ? '有効（タップで解除）'
+                        : '無効（タップで4桁PINを設定）',
+                    onTap: _togglePasscode,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // ── バージョン情報セクション ──
                 const _SectionLabel('バージョン情報'),
                 Card(
@@ -552,8 +661,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         const SizedBox(height: 16),
                         const Divider(),
                         ...[
-                          ('バージョン', '1.0.0'),
-                          ('ビルド', '2025.05'),
+                          ('バージョン', '1.1.0'),
+                          ('ビルド', '2026.07'),
                           ('プラットフォーム', 'Flutter'),
                           ('データ保存', 'Isar（ローカル）'),
                         ].map(

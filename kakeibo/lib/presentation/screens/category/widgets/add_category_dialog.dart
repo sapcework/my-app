@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/constants/category_icons.dart';
+import '../../../../../domain/entities/category.dart';
 import '../../../providers/category_providers.dart';
 
 class AddCategoryDialog extends ConsumerStatefulWidget {
-  const AddCategoryDialog({super.key});
+  final Category? initial; // nullなら新規追加、非nullならそのカテゴリを編集
+  const AddCategoryDialog({super.key, this.initial});
 
   @override
   ConsumerState<AddCategoryDialog> createState() => _AddCategoryDialogState();
@@ -16,6 +18,21 @@ class _AddCategoryDialogState extends ConsumerState<AddCategoryDialog> {
   int _selectedColor = kCategoryColors.first; // デフォルトはリスト先頭の色
   String _selectedIcon = kCategoryIconMap.keys.first; // デフォルトはリスト先頭のアイコン
 
+  bool get _isEditMode => widget.initial != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial != null) { // 編集時は既存カテゴリの内容をフォームへ反映
+      _nameController.text = initial.name;
+      _selectedColor = initial.colorValue;
+      if (kCategoryIconMap.containsKey(initial.iconName)) {
+        _selectedIcon = initial.iconName;
+      }
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -25,18 +42,28 @@ class _AddCategoryDialogState extends ConsumerState<AddCategoryDialog> {
   Future<void> _submit() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
-    await ref.read(addCategoryUseCaseProvider).call(
-      name: name,
-      colorValue: _selectedColor,
-      iconName: _selectedIcon,
-    );
+    if (_isEditMode) {
+      await ref.read(updateCategoryUseCaseProvider).call(
+            widget.initial!.copyWith(
+              name: name,
+              colorValue: _selectedColor,
+              iconName: _selectedIcon,
+            ),
+          );
+    } else {
+      await ref.read(addCategoryUseCaseProvider).call(
+        name: name,
+        colorValue: _selectedColor,
+        iconName: _selectedIcon,
+      );
+    }
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('カテゴリを追加'),
+      title: Text(_isEditMode ? 'カテゴリを編集' : 'カテゴリを追加'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -74,7 +101,7 @@ class _AddCategoryDialogState extends ConsumerState<AddCategoryDialog> {
         ),
         FilledButton(
           onPressed: _submit,
-          child: const Text('追加'),
+          child: Text(_isEditMode ? '更新' : '追加'),
         ),
       ],
     );
@@ -89,10 +116,13 @@ class _ColorGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = kCategoryColors.contains(selected)
+        ? kCategoryColors
+        : [selected, ...kCategoryColors]; // 定義済みリスト外の色は先頭に追加して選択状態を維持
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: kCategoryColors.map((color) {
+      children: colors.map((color) {
         final isSelected = color == selected;
         return GestureDetector(
           onTap: () => onSelect(color),

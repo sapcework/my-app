@@ -1,8 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../../../core/utils/format.dart';
 import '../../../../domain/entities/category.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/expense_providers.dart';
@@ -74,18 +74,12 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     final selectedMonth = ref.watch(selectedMonthProvider);
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
     final categoryMap = {for (final c in categories) if (c.id != null) c.id!: c};
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('統計'),
         bottom: const MonthSwitcherBar(),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download_outlined),
-            tooltip: 'CSVエクスポート',
-            onPressed: () => _exportCsv(context, ref, selectedMonth),
-          ),
-        ],
       ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -103,121 +97,149 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
           final sorted = totals.entries.toList()
             ..sort((a, b) => b.value.compareTo(a.value));
 
-          return Column(
+          return ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              // 合計カード
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('合計支出', style: Theme.of(context).textTheme.titleSmall),
-                        Text(
-                          '¥${NumberFormat('#,##0').format(total)}',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+              // 合計カード + CSV出力ボタン（Web版と同じくカード内に配置）
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '今月の合計',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  letterSpacing: 0.5,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            formatWan(total), // Web版と同じく1万円以上は「¥1.7万」のように省略表示
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ],
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _exportCsv(context, ref, selectedMonth),
+                        icon: const Icon(Icons.download_outlined, size: 16),
+                        label: const Text('CSV出力'),
+                        style: TextButton.styleFrom(
+                          backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.5),
+                          foregroundColor: colorScheme.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              // 円グラフ + 吹き出し（Stackで重ねる）
-              SizedBox(
-                height: 240,
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: CategoryPieChart(
-                        data: sorted,
-                        categoryMap: categoryMap,
-                        total: total,
-                        touchedIndex: _touchedIndex,
-                        onTouch: (event, response) =>
-                            _handlePieTouch(event, response, sorted, categoryMap),
-                      ),
-                    ),
-                    // 吹き出し（タッチ中のみ表示）
-                    if (_touchedIndex != null && _touchedIndex! < sorted.length)
-                      Center(
-                        child: _buildCallout(
-                          sorted[_touchedIndex!],
-                          categoryMap,
-                          total,
+              const SizedBox(height: 16),
+
+              // 円グラフ + カテゴリ凡例（Web版と同じくグラフの直下に凡例グリッドを表示）
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 220,
+                        child: CategoryPieChart(
+                          data: sorted,
+                          categoryMap: categoryMap,
+                          total: total,
+                          touchedIndex: _touchedIndex,
+                          onTouch: (event, response) =>
+                              _handlePieTouch(event, response, sorted, categoryMap),
                         ),
                       ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: sorted.length,
-                  itemBuilder: (context, index) {
-                    final entry = sorted[index];
-                    final pct = total > 0 ? entry.value / total * 100 : 0.0;
-                    return InkWell(
-                      onTap: () => _navigateToCategoryList(entry, categoryMap),
-                      child: CategoryBreakdownTile(
-                        category: categoryMap[entry.key],
-                        amount: entry.value,
-                        percentage: pct,
+                      const SizedBox(height: 16),
+                      // 2列凡例グリッド（カード内の実幅を基準に算出。デスクトップの広いウィンドウでも崩れないようLayoutBuilderを使用）
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          const spacing = 16.0;
+                          final itemWidth = (constraints.maxWidth - spacing) / 2;
+                          return Wrap(
+                            spacing: spacing,
+                            runSpacing: 8,
+                            children: sorted.map((entry) {
+                              final category = categoryMap[entry.key];
+                              final pct = total > 0 ? entry.value / total * 100 : 0.0;
+                              return SizedBox(
+                                width: itemWidth,
+                                child: InkWell(
+                                  onTap: () => _navigateToCategoryList(entry, categoryMap),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Color(category?.colorValue ?? 0xFF9E9E9E),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          category?.name ?? '不明',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${pct.toStringAsFixed(0)}%',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              color: colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          );
+                        },
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // カテゴリ別カードリスト
+              ...sorted.map((entry) {
+                final pct = total > 0 ? entry.value / total * 100 : 0.0;
+                return CategoryBreakdownTile(
+                  category: categoryMap[entry.key],
+                  amount: entry.value,
+                  percentage: pct,
+                  onTap: () => _navigateToCategoryList(entry, categoryMap),
+                );
+              }),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildCallout(MapEntry<int, double> entry, Map<int, Category> categoryMap, double total) {
-    final category = categoryMap[entry.key];
-    final color = Color(category?.colorValue ?? 0xFF9E9E9E);
-    final pct = total > 0 ? entry.value / total * 100 : 0.0;
-    final fmt = NumberFormat('#,##0');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            category?.name ?? '不明',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '¥${fmt.format(entry.value)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-          Text(
-            '${pct.toStringAsFixed(1)}%',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-        ],
       ),
     );
   }

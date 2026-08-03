@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/utils/format.dart';
+
 class MonthlySummaryCard extends StatelessWidget {
   final double total;
   final int count;
   final DateTime month;
   final double? budget;
+  final double? prevTotal; // 前月の支出合計（nullなら前月比を表示しない）
 
   const MonthlySummaryCard({
     super.key,
@@ -13,6 +16,7 @@ class MonthlySummaryCard extends StatelessWidget {
     required this.count,
     required this.month,
     this.budget,
+    this.prevTotal,
   });
 
   @override
@@ -66,18 +70,40 @@ class MonthlySummaryCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '¥${fmt.format(total)}',
+                            formatWan(total), // Web版と同じく1万円以上は「¥1.7万」のように省略表示
                             style: textTheme.headlineLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5,
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            '$count件の取引',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                '$count件の取引',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (prevTotal != null) ...[
+                                const SizedBox(width: 8),
+                                Builder(builder: (context) {
+                                  final diff = total - prevTotal!;
+                                  final diffColor = diff > 0
+                                      ? Colors.red.shade600 // 増加は赤
+                                      : diff < 0
+                                          ? Colors.green.shade600 // 減少は緑
+                                          : colorScheme.onSurfaceVariant;
+                                  return Text(
+                                    '前月${diff >= 0 ? '+' : '-'}¥${fmt.format(diff.abs())}',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: diffColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ],
                           ),
                         ],
                       ),

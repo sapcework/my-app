@@ -6,6 +6,7 @@ import '../../../domain/entities/category.dart';
 import '../../providers/budget_providers.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/expense_providers.dart';
+import '../../widgets/month_switcher_bar.dart';
 import '../expense/widgets/expense_list_tile.dart';
 import 'widgets/monthly_summary_card.dart';
 
@@ -14,23 +15,29 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expensesAsync = ref.watch(currentMonthExpensesProvider);
-    final budgetAsync = ref.watch(currentMonthBudgetProvider);
+    // Web版と同じく他画面と共有の選択月（selectedMonthProvider）で表示・切り替えできる
+    final expensesAsync = ref.watch(selectedMonthExpensesProvider);
+    final budgetAsync = ref.watch(selectedMonthBudgetProvider);
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
     final categoryMap = {for (final c in categories) if (c.id != null) c.id!: c};
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ホーム'),
+        title: const Text('家計簿'), // Web版のホーム画面と同じくアプリ名を見出しに表示
+        bottom: const MonthSwitcherBar(),
       ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('エラー: $e')),
         data: (expenses) {
-          final now = DateTime.now();
+          final selectedMonth = ref.watch(selectedMonthProvider);
           final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
           final recent = expenses.take(5).toList();
           final budget = budgetAsync.valueOrNull?.amount;
+          final prevExpenses = ref.watch(previousMonthExpensesProvider).valueOrNull;
+          final prevTotal = (prevExpenses == null || prevExpenses.isEmpty)
+              ? null // 前月に支出がない場合は前月比を表示しない（Web版と同じ）
+              : prevExpenses.fold<double>(0, (sum, e) => sum + e.amount);
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -38,8 +45,9 @@ class HomeScreen extends ConsumerWidget {
               MonthlySummaryCard(
                 total: total,
                 count: expenses.length,
-                month: now,
+                month: selectedMonth,
                 budget: budget,
+                prevTotal: prevTotal,
               ),
               const SizedBox(height: 24),
               Row(
@@ -56,7 +64,7 @@ class HomeScreen extends ConsumerWidget {
               if (recent.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: Text('今月の支出はありません')),
+                  child: Center(child: Text('支出がありません')),
                 )
               else
                 ...recent.map(

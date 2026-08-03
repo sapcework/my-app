@@ -20,6 +20,7 @@ class ExpenseTableScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dataAsync = ref.watch(expenseTableDataProvider);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('月別支出表')),
@@ -28,7 +29,32 @@ class ExpenseTableScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('エラー: $e')),
         data: (data) => data.categories.isEmpty || data.months.isEmpty
             ? const Center(child: Text('データがありません'))
-            : _TableBody(data: data),
+            : Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Web版と同じ角丸カード枠で表全体を囲む
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: _TableBody(data: data),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '直近${data.months.length}ヶ月 · 金額をタップで詳細',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -133,9 +159,14 @@ class _TableBodyState extends ConsumerState<_TableBody> {
     final fmt = NumberFormat('#,##0');
     final cs = Theme.of(context).colorScheme;
 
-    final totalCols = data.months.length + 2; // 月 + 予算 + 平均
+    // 予算行はWeb版と同じく「表示範囲内のどこかの月に予算が設定されている場合のみ」表示する
+    final hasBudgetRow = data.months.any((m) => data.budget(m) != null);
+    final totalCols = data.months.length + 1; // 月 + 平均（予算は列ではなく行）
     final totalDataWidth = totalCols * _cellW;
-    final totalRows = data.categories.length + 1; // カテゴリ + 合計行
+    final totalRows = data.categories.length + 1 + (hasBudgetRow ? 1 : 0); // カテゴリ + 合計行 + 予算行
+
+    bool isTotalRow(int i) => i == data.categories.length;
+    bool isBudgetRow(int i) => hasBudgetRow && i == data.categories.length + 1;
 
     return Column(
       children: [
@@ -168,13 +199,6 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                             )),
                         _cell(
                           w: _cellW, h: _headerH,
-                          color: cs.secondaryContainer,
-                          child: Text('予算',
-                              style: _headerStyle(cs,
-                                  color: cs.onSecondaryContainer)),
-                        ),
-                        _cell(
-                          w: _cellW, h: _headerH,
                           color: cs.tertiaryContainer,
                           child: Text('平均',
                               style: _headerStyle(cs,
@@ -205,9 +229,11 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                     itemCount: totalRows,
                     itemExtent: _cellH,
                     itemBuilder: (_, i) {
-                      final isTotal = i == data.categories.length;
-                      final cat = isTotal ? null : data.categories[i];
-                      final bg = _rowBg(cs, i, isTotal);
+                      final isTotal = isTotalRow(i);
+                      final isBudget = isBudgetRow(i);
+                      final cat = (!isTotal && !isBudget) ? data.categories[i] : null;
+                      final bg = _rowBg(cs, i, isTotal, isBudget);
+                      final label = isBudget ? '予算' : (isTotal ? '合計' : (cat?.name ?? ''));
                       return _cell(
                         w: _catWidth, h: _cellH,
                         color: bg,
@@ -219,12 +245,14 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 6),
                                 child: Text(
-                                  isTotal ? '合計' : (cat?.name ?? ''),
+                                  label,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 11,
-                                    fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                                    fontWeight:
+                                        (isTotal || isBudget) ? FontWeight.bold : FontWeight.normal,
+                                    color: isBudget ? cs.primary : null,
                                   ),
                                 ),
                               ),
@@ -252,9 +280,39 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                           itemCount: totalRows,
                           itemExtent: _cellH,
                           itemBuilder: (context, rowIdx) {
-                            final isTotal = rowIdx == data.categories.length;
-                            final cat = isTotal ? null : data.categories[rowIdx];
-                            final bg = _rowBg(cs, rowIdx, isTotal);
+                            final isTotal = isTotalRow(rowIdx);
+                            final isBudget = isBudgetRow(rowIdx);
+                            final cat = (!isTotal && !isBudget) ? data.categories[rowIdx] : null;
+                            final bg = _rowBg(cs, rowIdx, isTotal, isBudget);
+
+                            if (isBudget) {
+                              // 予算行：月ごとの予算額を表示（タップ不可・Web版と同じ配色）
+                              return Row(
+                                children: [
+                                  ...data.months.map((m) {
+                                    final budget = data.budget(m);
+                                    return _cell(
+                                      w: _cellW, h: _cellH,
+                                      color: bg,
+                                      child: Text(
+                                        budget != null ? '¥${fmt.format(budget)}' : '—',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: budget != null
+                                              ? cs.primary
+                                              : cs.onSurface.withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  _cell(
+                                    w: _cellW, h: _cellH,
+                                    color: cs.primaryContainer.withValues(alpha: 0.6),
+                                    child: _BudgetAverageCell(data: data, cs: cs, fmt: fmt),
+                                  ),
+                                ],
+                              );
+                            }
 
                             return Row(
                               children: [
@@ -286,12 +344,6 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                                         : null,
                                   );
                                 }),
-                                // 予算列
-                                _cell(
-                                  w: _cellW, h: _cellH,
-                                  color: cs.secondaryContainer.withValues(alpha: isTotal ? 1.0 : 0.25),
-                                  child: _BudgetCell(data: data, cat: cat, isTotal: isTotal, cs: cs, fmt: fmt),
-                                ),
                                 // 平均列
                                 _cell(
                                   w: _cellW, h: _cellH,
@@ -314,7 +366,8 @@ class _TableBodyState extends ConsumerState<_TableBody> {
     );
   }
 
-  Color _rowBg(ColorScheme cs, int i, bool isTotal) {
+  Color _rowBg(ColorScheme cs, int i, bool isTotal, bool isBudget) {
+    if (isBudget) return cs.primaryContainer.withValues(alpha: 0.25);
     if (isTotal) return cs.surfaceContainerHigh;
     return i.isEven ? cs.surface : cs.surfaceContainerLowest;
   }
@@ -379,7 +432,7 @@ class _DataCell extends StatelessWidget {
         onTap: onTap,
         child: Center(
           child: Text(
-            amount > 0 ? '¥${fmt.format(amount)}' : '---',
+            amount > 0 ? '¥${fmt.format(amount)}' : '—',
             style: TextStyle(
               fontSize: 11,
               fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
@@ -394,32 +447,23 @@ class _DataCell extends StatelessWidget {
   }
 }
 
-class _BudgetCell extends StatelessWidget {
+class _BudgetAverageCell extends StatelessWidget {
   final ExpenseTableData data;
-  final Category? cat;
-  final bool isTotal;
   final ColorScheme cs;
   final NumberFormat fmt;
 
-  const _BudgetCell({
-    required this.data, required this.cat,
-    required this.isTotal, required this.cs, required this.fmt,
-  });
+  const _BudgetAverageCell({required this.data, required this.cs, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
-    if (!isTotal) {
-      return Text('---', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.3)));
-    }
-    // 合計行：設定済み月の予算平均を表示
     final budgetMonths = data.months.where((m) => data.budget(m) != null).toList();
     if (budgetMonths.isEmpty) {
-      return Text('未設定', style: TextStyle(fontSize: 10, color: cs.onSecondaryContainer));
+      return Text('—', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.3)));
     }
     final avg = budgetMonths.fold<double>(0, (s, m) => s + data.budget(m)!) / budgetMonths.length;
     return Text(
       '¥${fmt.format(avg)}',
-      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: cs.onSecondaryContainer),
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: cs.primary),
     );
   }
 }
@@ -442,7 +486,7 @@ class _AverageCell extends StatelessWidget {
         ? data.totalAverage()
         : (cat?.id != null ? data.categoryAverage(cat!.id!) : 0);
     if (avg == 0) {
-      return Text('---', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.3)));
+      return Text('—', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.3)));
     }
     return Text(
       '¥${fmt.format(avg)}',

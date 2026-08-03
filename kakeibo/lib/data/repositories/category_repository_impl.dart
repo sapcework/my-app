@@ -42,44 +42,34 @@ class CategoryRepositoryImpl implements CategoryRepository {
     final count = await _isar.categoryModels.count();
     if (count > 0) return; // 既存カテゴリがあれば初期投入をスキップ
 
+    // Web版 DEFAULT_CATEGORIES（16件）に対応する初期カテゴリ
+    const seeds = [
+      ('食費', 0xFFFF9800, 'restaurant'),
+      ('外食', 0xFFFF5722, 'ramen_dining'),
+      ('住居', 0xFF009688, 'home'),
+      ('光熱費', 0xFFFFC107, 'lightbulb'),
+      ('通信費', 0xFF03A9F4, 'smartphone'),
+      ('交通費', 0xFF2196F3, 'directions_car'),
+      ('日用品', 0xFF4CAF50, 'shopping_cart'),
+      ('衣服・美容', 0xFFE91E63, 'checkroom'),
+      ('医療', 0xFFF44336, 'local_hospital'),
+      ('保険', 0xFF607D8B, 'shield'),
+      ('教育', 0xFF3F51B5, 'menu_book'),
+      ('サブスク', 0xFF9C27B0, 'credit_card'),
+      ('娯楽', 0xFF8BC34A, 'sports_esports'),
+      ('旅行', 0xFF00BCD4, 'flight'),
+      ('貯蓄・投資', 0xFF795548, 'savings'),
+      ('その他', 0xFF9E9E9E, 'inventory_2'),
+    ];
     final now = DateTime.now();
     final defaults = [
-      CategoryModel()
-        ..name = '食費'
-        ..colorValue = 0xFFFF9800 // Orange
-        ..iconName = 'restaurant'
-        ..sortOrder = 0
-        ..createdAt = now,
-      CategoryModel()
-        ..name = '交通費'
-        ..colorValue = 0xFF2196F3 // Blue
-        ..iconName = 'directions_car'
-        ..sortOrder = 1
-        ..createdAt = now,
-      CategoryModel()
-        ..name = '日用品'
-        ..colorValue = 0xFF4CAF50 // Green
-        ..iconName = 'shopping_cart'
-        ..sortOrder = 2
-        ..createdAt = now,
-      CategoryModel()
-        ..name = '娯楽'
-        ..colorValue = 0xFF9C27B0 // Purple
-        ..iconName = 'sports_esports'
-        ..sortOrder = 3
-        ..createdAt = now,
-      CategoryModel()
-        ..name = '医療'
-        ..colorValue = 0xFFF44336 // Red
-        ..iconName = 'local_hospital'
-        ..sortOrder = 4
-        ..createdAt = now,
-      CategoryModel()
-        ..name = 'その他'
-        ..colorValue = 0xFF9E9E9E // Grey
-        ..iconName = 'more_horiz'
-        ..sortOrder = 5
-        ..createdAt = now,
+      for (var i = 0; i < seeds.length; i++)
+        CategoryModel()
+          ..name = seeds[i].$1
+          ..colorValue = seeds[i].$2
+          ..iconName = seeds[i].$3
+          ..sortOrder = i
+          ..createdAt = now,
     ];
     await _isar.writeTxn(() => _isar.categoryModels.putAll(defaults));
   }

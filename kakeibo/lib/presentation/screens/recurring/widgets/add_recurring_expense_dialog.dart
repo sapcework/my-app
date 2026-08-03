@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../domain/entities/category.dart';
 import '../../../../domain/entities/recurring_expense.dart';
@@ -42,6 +43,17 @@ class _AddRecurringExpenseDialogState extends ConsumerState<AddRecurringExpenseD
     _nameController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openCalculator() async {
+    final current = double.tryParse(_amountController.text) ?? 0;
+    final result = await context.push<double>(
+      '/calculator',
+      extra: current > 0 ? current : null,
+    );
+    if (result != null && mounted) {
+      setState(() => _amountController.text = result > 0 ? result.round().toString() : '');
+    }
   }
 
   Future<void> _submit() async {
@@ -102,19 +114,28 @@ class _AddRecurringExpenseDialogState extends ConsumerState<AddRecurringExpenseD
                 validator: (v) => (v == null || v.trim().isEmpty) ? '支出名を入力してください' : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                decoration: const InputDecoration(
-                  labelText: '金額',
-                  suffixText: '円',
-                  border: OutlineInputBorder(),
+              GestureDetector(
+                onTap: _openCalculator,
+                child: AbsorbPointer(
+                  child: TextFormField(
+                    controller: _amountController,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: '金額',
+                      suffixText: '円',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: Icon(
+                        Icons.calculate_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    validator: (v) {
+                      final n = double.tryParse(v?.trim() ?? '');
+                      if (n == null || n <= 0) return '正の金額を入力してください';
+                      return null;
+                    },
+                  ),
                 ),
-                validator: (v) {
-                  final n = double.tryParse(v?.trim() ?? '');
-                  if (n == null || n <= 0) return '正の金額を入力してください';
-                  return null;
-                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
