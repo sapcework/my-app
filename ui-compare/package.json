@@ -1,0 +1,13 @@
+{
+  "name": "ui-compare",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "login": "node login-setup.mjs",
+    "shots": "node screenshot-web.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
