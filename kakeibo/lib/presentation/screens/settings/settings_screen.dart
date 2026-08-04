@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/utils/file_export.dart';
 import '../../../data/backup/backup_parser.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
@@ -107,9 +108,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await file.writeAsString(jsonEncode(data));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('バックアップ完了: ${file.path}')),
-        );
+        await notifyExported(context, file.path,
+            label: 'バックアップ完了', subject: fileName);
       }
     } catch (e) {
       if (mounted) {
@@ -303,9 +303,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buf.toString())]);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('出力完了: ${file.path}')),
-        );
+        await notifyExported(context, file.path, subject: fileName);
       }
     } catch (e) {
       if (mounted) {
@@ -383,9 +381,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buf.toString())]);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('出力完了: ${file.path}')),
-        );
+        await notifyExported(context, file.path, subject: fileName);
       }
     } catch (e) {
       if (mounted) {

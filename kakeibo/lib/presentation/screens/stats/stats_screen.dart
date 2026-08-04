@@ -2,7 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/utils/format.dart';
+import '../../../core/utils/file_export.dart';
+import '../../../core/utils/format.dart';
 import '../../../../domain/entities/category.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/expense_providers.dart';
@@ -248,12 +249,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final path = await ref.read(exportCsvUseCaseProvider).call(month.year, month.month);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('保存しました:\n$path'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      if (!context.mounted) return;
+      await notifyExported(context, path);
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text('エクスポートに失敗しました: $e')),
