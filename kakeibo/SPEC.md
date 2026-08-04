@@ -21,6 +21,7 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 | 日付・数値整形 | intl ^0.19.0 |
 | ファイルパス取得 | path_provider ^2.1.3 |
 | ハッシュ | crypto ^3.0.3（パスコードのPBKDF2-SHA256） |
+| ファイル共有 | share_plus ^13.3.0（モバイルのエクスポート） |
 | アーキテクチャ | Clean Architecture（Presentation / Domain / Data） |
 
 ### テーマ
@@ -223,6 +224,14 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 - 月別支出表CSV: 表画面と同じカテゴリ×月のマトリクスを `kakeibo_monthly_yyyy-MM-dd.csv` に出力
 - CSV は Excel 対応のため BOM 付き UTF-8
 
+**書き出し後の受け渡し**（`core/utils/file_export.dart`）
+- 保存先はどのプラットフォームでも `getApplicationDocumentsDirectory()`
+- **Android / iOS**: 保存先がアプリ専用の非公開領域でファイルマネージャから見えないため、
+  書き出し直後に共有シート（share_plus）を開いて任意のアプリへ渡せるようにする。
+  共有をキャンセルしてもファイルは保存済みで、アプリ内の復元からは読める
+- **デスクトップ**: `Documents` 直下に保存されそのまま開けるため、SnackBar に保存先パスを表示
+- 統計画面の選択月CSV（`export_csv_usecase.dart`）も同じ扱い
+
 **管理**
 - カテゴリ（件数表示）→ `/categories`
 - 予算設定 → `/budget`
@@ -248,7 +257,8 @@ lib/
   core/
     constants/      app_strings.dart, category_icons.dart
     theme/          app_theme.dart
-    utils/          passcode_hash.dart（PBKDF2-SHA256）, format.dart（formatWan）
+    utils/          passcode_hash.dart（PBKDF2-SHA256）, format.dart（formatWan）,
+                    file_export.dart（書き出し後の共有シート／パス表示の出し分け）
   domain/
     entities/       expense.dart, category.dart, budget.dart, recurring_expense.dart
     repositories/   expense_repository.dart, category_repository.dart,
@@ -278,7 +288,9 @@ lib/
 ## 6. 実装メモ
 
 - **Isar 初期化**: `Isar.open([ExpenseModelSchema, CategoryModelSchema, BudgetModelSchema, RecurringExpenseModelSchema])`。DBパスは `path_provider` で取得
-- **ファイル保存先**: `getApplicationDocumentsDirectory()`（Windows では `C:\Users\<user>\Documents\`）
+- **ファイル保存先**: `getApplicationDocumentsDirectory()`（Windows では `C:\Users\<user>\Documents\`。
+  Android では `/data/data/com.sapcework.kakeibo/app_flutter/` というアプリ専用の非公開領域になり、
+  ファイルマネージャから見えないため書き出し後に共有シートを開く。詳細は `docs/android-setup.md`）
 - **fl_chart の注意**: `touchedSectionIndex` が `-1` を返すことがあるため `>= 0` ガードが必要
 - **DropdownButtonFormField.value の deprecated 警告**: 支出フォームはグリッド選択化で解消。add_recurring_expense_dialog.dart は `// ignore: deprecated_member_use` で抑制中
 - **パスコードのハッシュ計算**: 20万回イテレーションは重いため `compute()`（isolate）で実行し、UIのジャンクを防ぐ
@@ -312,9 +324,39 @@ Playwrightはブラウザ専用でネイティブWindowsアプリを操作でき
 
 ---
 
-## 8. 今後の候補
+## 8. Android ビルド
 
-1. Android 実機での動作確認（USBデバッグ → `flutter run`）
+| 項目 | 値 |
+|---|---|
+| applicationId | `com.sapcework.kakeibo` |
+| アプリ表示名 | 家計簿 |
+| minSdk / targetSdk | 24（Android 7.0）/ 36 |
+| 対応 ABI | arm64-v8a / armeabi-v7a / x86_64 |
+| リリース署名 | `android/key.properties` があれば使用、無ければデバッグ署名にフォールバック |
+
+セットアップと配布の全手順は `docs/android-setup.md` を参照。
+
+### Isar 3.1.0 に対する回避策（`android/build.gradle.kts`）
+
+Isar 3.1.0 は 2023 年以降メンテされておらず、そのままでは Android ビルドが通らない。
+root の `subprojects` ブロックで次の2点を補っている。
+
+1. AGP 8 以降で必須の `namespace` を宣言していない → プラグインの `group` から補完
+2. `compileSdk 30` 固定で、依存する androidx（fragment 1.7.1 等）が要求する 34+ を満たさない → 36 に引き上げ
+
+**このブロックは `evaluationDependsOn(":app")` より前に置くこと。**
+後ろだと `Cannot run Project.afterEvaluate(Action) when the project is already evaluated` で落ちる。
+
+また Windows では Kotlin のインクリメンタルコンパイルのキャッシュを閉じられずビルドが落ちるため、
+`android/gradle.properties` に `kotlin.incremental=false` を設定している。
+
+長期的にはメンテされている fork（isar_community 等）への移行を検討する価値がある。
+
+---
+
+## 9. 今後の候補
+
+1. Android 実機での動作確認（USBデバッグ → `flutter install`。共有シートの実挙動確認が主目的）
 2. 定期支出フォームのカテゴリ選択もグリッド化（deprecated警告の完全解消）
 3. グラフ強化（月別推移など）
 4. 通知（定期支出の登録通知等）
