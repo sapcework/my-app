@@ -20,9 +20,8 @@ class StatsScreen extends ConsumerStatefulWidget {
 }
 
 class _StatsScreenState extends ConsumerState<StatsScreen> {
-  int? _touchedIndex;
-  // タップ開始時のインデックスを記録し、離した時にナビゲート
-  int? _tapStartIndex;
+  int? _touchedIndex; // 強調表示中のセクション
+  int? _pressedIndex; // 押し始めたセクション（離した時の遷移先）
 
   void _handlePieTouch(
     FlTouchEvent event,
@@ -30,26 +29,42 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     List<MapEntry<int, double>> sorted,
     Map<int, Category> categoryMap,
   ) {
-    final sectionIndex = response?.touchedSection?.touchedSectionIndex;
+    final index = response?.touchedSection?.touchedSectionIndex;
+    final touched = (index != null && index >= 0 && index < sorted.length) ? index : null;
 
-    if (event is FlTapDownEvent && sectionIndex != null && sectionIndex >= 0) {
+    // 押し始め・長押し中: 強調しつつ、離した時の遷移先として覚える
+    if (event is FlTapDownEvent || event is FlLongPressStart || event is FlLongPressMoveUpdate) {
       setState(() {
-        _touchedIndex = sectionIndex;
-        _tapStartIndex = sectionIndex;
+        _touchedIndex = touched;
+        _pressedIndex = touched;
       });
-    } else if (event is FlTapUpEvent) {
-      final idx = _tapStartIndex;
+      return;
+    }
+
+    // 離した時: 明細へ遷移する。長押しで離した場合もここに来る
+    // 注意: 押下から離すまでの間に FlPanCancelEvent が割り込むため、
+    // 「関心の無いイベントで状態をクリアする」書き方にすると遷移先を見失う
+    if (event is FlTapUpEvent || event is FlLongPressEnd) {
+      final target = _pressedIndex ?? touched;
       setState(() {
         _touchedIndex = null;
-        _tapStartIndex = null;
+        _pressedIndex = null;
       });
-      if (idx != null && idx >= 0 && idx < sorted.length) {
-        _navigateToCategoryList(sorted[idx], categoryMap);
-      }
-    } else if (!event.isInterestedForInteractions) {
+      if (target != null) _navigateToCategoryList(sorted[target], categoryMap);
+      return;
+    }
+
+    // デスクトップのホバーは強調のみ（Web版と同じ挙動）
+    if (event is FlPointerHoverEvent) {
+      if (_touchedIndex != touched) setState(() => _touchedIndex = touched);
+      return;
+    }
+
+    // タップ取り消し・ドラッグ終了・カーソルが外れた時は強調を解除する
+    if (event is FlTapCancelEvent || event is FlPanEndEvent || event is FlPointerExitEvent) {
       setState(() {
         _touchedIndex = null;
-        _tapStartIndex = null;
+        _pressedIndex = null;
       });
     }
   }

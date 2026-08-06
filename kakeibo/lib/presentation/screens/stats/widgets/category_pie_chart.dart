@@ -35,7 +35,10 @@ class CategoryPieChart extends StatelessWidget {
       return PieChartSectionData(
         value: e.value,
         color: color,
-        radius: isTouched ? 95 : 80, // タッチ時に拡大
+        // fl_chart の radius はリングの「太さ」。centerSpaceRadius(52) と足した外径が
+        // 高さ220の枠の半分(110)を超えると上下が切れて凡例に重なるため 42 までに収める
+        // （Web版の outerRadius 88 / innerRadius 52 と同じ見た目）
+        radius: isTouched ? 42 : 36,
         title: pct >= 5 ? '${pct.toStringAsFixed(0)}%' : '',
         titleStyle: TextStyle(
           color: Colors.white,
@@ -55,8 +58,8 @@ class CategoryPieChart extends StatelessWidget {
         PieChart(
           PieChartData(
             sections: sections,
-            centerSpaceRadius: 50,
-            sectionsSpace: 3,
+            centerSpaceRadius: 52, // Web版の innerRadius と同値
+            sectionsSpace: 2, // Web版の paddingAngle と同値
             pieTouchData: PieTouchData(touchCallback: onTouch),
           ),
         ),
