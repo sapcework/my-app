@@ -36,8 +36,24 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   bool _submitting = false;
   bool _notFound = false; // 編集対象の支出が存在しない（削除済み・不正ID）
 
-  // 過去の項目名一覧（画面表示時に一度だけ取得）
-  late final Future<List<String>> _pastItemNamesFuture;
+  // 選択中カテゴリで使った項目名の履歴（使用回数の多い順）。カテゴリを選び直すたびに取り直す
+  List<String> _pastItemNames = const [];
+  final _itemNameFocus = FocusNode();
+  final _itemNameLink = LayerLink();
+  final _suggestionsController = OverlayPortalController();
+
+  // 入力中の文字を含む候補だけに絞る（Web版と同じ・大文字小文字は無視）
+  List<String> get _matchedItemNames {
+    final input = _itemNameController.text.toLowerCase();
+    return _pastItemNames.where((n) => n.toLowerCase().contains(input)).toList();
+  }
+
+  void _updateSuggestionVisibility() {
+    final show = _itemNameFocus.hasFocus && _matchedItemNames.isNotEmpty;
+    if (show != _suggestionsController.isShowing) {
+      show ? _suggestionsController.show() : _suggestionsController.hide();
+    }
+  }
 
   int? get _editIdInt => widget.editId != null ? int.tryParse(widget.editId!) : null;
   bool get _isEditMode => _editIdInt != null;
@@ -54,7 +70,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       }
     }
     _dateController = TextEditingController(text: _formatDate(_selectedDate));
-    _pastItemNamesFuture = ref.read(expenseRepositoryProvider).getUniqueItemNames();
+    _itemNameFocus.addListener(_updateSuggestionVisibility);
+    _reloadPastItemNames();
     if (_isEditMode) {
       // build完了後に既存データをロード（initState中のref.read保証のため）
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadExpense());
@@ -67,6 +84,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _itemNameController.dispose();
     _memoController.dispose();
     _dateController.dispose();
+    _itemNameFocus.dispose();
     super.dispose();
   }
 
@@ -87,6 +105,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       _dateController.text = _formatDate(expense.date);
       _memoController.text = expense.memo ?? '';
     });
+    _reloadPastItemNames(); // 読み込んだカテゴリの履歴に切り替える
   }
 
   Future<void> _selectDate() async {
@@ -104,36 +123,21 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     }
   }
 
-  // 過去の項目名をボトムシートで選択する
-  Future<void> _showItemNamePicker(List<String> names) async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('過去の項目名', style: Theme.of(ctx).textTheme.titleMedium),
-          ),
-          const Divider(height: 1),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: names.length,
-              itemBuilder: (_, i) => ListTile(
-                title: Text(names[i]),
-                onTap: () => Navigator.pop(ctx, names[i]),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-    if (selected != null) {
-      _itemNameController.text = selected;
-    }
+  // 選択中のカテゴリで使った項目名だけを読み直す（カテゴリを変えたら履歴も変わる）
+  Future<void> _reloadPastItemNames() async {
+    final names = await ref
+        .read(expenseRepositoryProvider)
+        .getUniqueItemNames(categoryId: _selectedCategoryId);
+    if (!mounted) return;
+    setState(() => _pastItemNames = names);
+    _updateSuggestionVisibility();
+  }
+
+  // 候補を選んだら入力欄に反映して閉じる
+  void _applySuggestion(String name) {
+    _itemNameController.text = name;
+    _suggestionsController.hide();
+    _itemNameFocus.unfocus();
   }
 
   Future<void> _delete() async {
@@ -302,26 +306,30 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // 項目名フィールド（右端に過去の項目名選択ボタン）
-              FutureBuilder<List<String>>(
-                future: _pastItemNamesFuture,
-                builder: (context, snapshot) {
-                  final pastNames = snapshot.data ?? [];
-                  return TextFormField(
-                    controller: _itemNameController,
-                    decoration: InputDecoration(
-                      labelText: '項目名（任意）',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: pastNames.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.arrow_drop_down_circle_outlined),
-                              tooltip: '過去の項目名から選択',
-                              onPressed: () => _showItemNamePicker(pastNames),
-                            ),
+              // 項目名フィールド（入力欄の下に候補を重ねて出す。Web版と同じ挙動）
+              LayoutBuilder(
+                builder: (context, constraints) => CompositedTransformTarget(
+                  link: _itemNameLink,
+                  child: OverlayPortal(
+                    controller: _suggestionsController,
+                    overlayChildBuilder: (_) => _ItemNameSuggestions(
+                      link: _itemNameLink,
+                      width: constraints.maxWidth,
+                      names: _matchedItemNames,
+                      onSelected: _applySuggestion,
                     ),
-                  );
-                },
+                    child: TextFormField(
+                      controller: _itemNameController,
+                      focusNode: _itemNameFocus,
+                      onChanged: (_) => setState(_updateSuggestionVisibility),
+                      decoration: const InputDecoration(
+                        labelText: '項目名（任意）',
+                        border: OutlineInputBorder(),
+                        hintText: '例：スーパーABC',
+                      ),
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               // カテゴリ選択：Web版に合わせた4列グリッド（ドロップダウンから置換）
@@ -347,6 +355,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                           onTap: () {
                             setState(() => _selectedCategoryId = category.id);
                             field.didChange(category.id); // FormFieldのエラー表示を解消
+                            _reloadPastItemNames(); // 項目名の履歴を選んだカテゴリのものに切り替える
                           },
                           borderRadius: BorderRadius.circular(12),
                           child: Container(
@@ -433,6 +442,62 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                     : const Text('保存'),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 項目名の入力欄の下に重ねて出す候補リスト（Web版のドロップダウン相当）
+class _ItemNameSuggestions extends StatelessWidget {
+  final LayerLink link;
+  final double width;
+  final List<String> names;
+  final ValueChanged<String> onSelected;
+
+  const _ItemNameSuggestions({
+    required this.link,
+    required this.width,
+    required this.names,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (names.isEmpty) return const SizedBox.shrink(); // 空の枠が一瞬出るのを防ぐ
+    final colorScheme = Theme.of(context).colorScheme;
+    return Positioned(
+      width: width,
+      child: CompositedTransformFollower(
+        link: link,
+        targetAnchor: Alignment.bottomLeft,
+        followerAnchor: Alignment.topLeft,
+        offset: const Offset(0, 4),
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 176), // Web版の max-h-44 と同じ
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: names.length,
+                itemBuilder: (_, i) => InkWell(
+                  onTap: () => onSelected(names[i]),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Text(names[i], style: Theme.of(context).textTheme.bodyMedium),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

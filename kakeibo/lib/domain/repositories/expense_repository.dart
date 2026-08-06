@@ -6,6 +6,8 @@ abstract interface class ExpenseRepository {
   Future<Expense?> findById(int id); // 1件取得
   Future<void> save(Expense expense); // 追加・更新（idの有無で分岐）
   Future<void> delete(int id); // 削除
-  Future<List<String>> getUniqueItemNames(); // 過去に入力した項目名の一覧（重複除去・昇順）
+  // 過去に入力した項目名の一覧（重複除去・使用回数の多い順）。
+  // categoryId を渡すとそのカテゴリで使った項目名だけを返す（Web版と同じくカテゴリ別の履歴にするため）
+  Future<List<String>> getUniqueItemNames({int? categoryId});
   Future<List<DateTime>> getAvailableMonths(); // 支出が存在する年月一覧（降順）
 }

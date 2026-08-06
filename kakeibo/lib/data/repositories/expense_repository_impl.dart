@@ -53,16 +53,24 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
   }
 
   @override
-  Future<List<String>> getUniqueItemNames() async {
+  Future<List<String>> getUniqueItemNames({int? categoryId}) async {
     final all = await _isar.expenseModels.where().findAll();
-    final names = all
-        .map((m) => m.itemName)
-        .whereType<String>()
-        .where((name) => name.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    return names;
+
+    final counts = <String, int>{};
+    final firstSeen = <String, int>{}; // 同数のときの並びを安定させる
+    for (final m in all) {
+      if (categoryId != null && m.categoryId != categoryId) continue; // カテゴリ別の履歴にする
+      final name = m.itemName?.trim();
+      if (name == null || name.isEmpty) continue;
+      counts[name] = (counts[name] ?? 0) + 1;
+      firstSeen.putIfAbsent(name, () => firstSeen.length);
+    }
+
+    return counts.keys.toList()
+      ..sort((a, b) {
+        final byCount = counts[b]!.compareTo(counts[a]!); // 使用回数の多い順（Web版と同じ）
+        return byCount != 0 ? byCount : firstSeen[a]!.compareTo(firstSeen[b]!);
+      });
   }
 
   @override
