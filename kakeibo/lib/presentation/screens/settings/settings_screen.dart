@@ -1,14 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/utils/file_export.dart';
 import '../../../data/backup/backup_parser.dart';
+import '../../../data/backup/backup_serializer.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/expense_model.dart';
@@ -60,48 +63,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final expenseRepo = ref.read(expenseRepositoryProvider);
       final categoryRepo = ref.read(categoryRepositoryProvider);
       final budgetRepo = ref.read(budgetRepositoryProvider);
-      final recurringRepo = ref.read(recurringExpenseRepositoryProvider);
+      final isar = ref.read(isarProvider).requireValue;
 
       final expenses = await expenseRepo.watchAll().first;
       final categories = await categoryRepo.watchAll().first;
       final budgets = await budgetRepo.getAll();
-      final recurring = await recurringRepo.watchAll().first;
+      // 定期支出は「最後に自動登録した年月」まで書き出すためモデルのまま取得する
+      final recurring = await isar.recurringExpenseModels.where().findAll();
 
-      final data = {
-        'version': '1',
-        'exportedAt': DateTime.now().toIso8601String(),
-        'expenses': expenses.map((e) => {
-              'id': e.id,
-              'amount': e.amount,
-              'categoryId': e.categoryId,
-              'itemName': e.itemName,
-              'memo': e.memo,
-              'date': e.date.toIso8601String(),
-              'createdAt': e.createdAt.toIso8601String(),
-            }).toList(),
-        'categories': categories.map((c) => {
-              'id': c.id,
-              'name': c.name,
-              'colorValue': c.colorValue,
-              'iconName': c.iconName,
-              'sortOrder': c.sortOrder,
-              'createdAt': c.createdAt.toIso8601String(),
-            }).toList(),
-        'budgets': budgets.map((b) => {
-              'id': b.id,
-              'year': b.year,
-              'month': b.month,
-              'amount': b.amount,
-            }).toList(),
-        'recurring': recurring.map((r) => {
-              'id': r.id,
-              'name': r.name,
-              'amount': r.amount,
-              'categoryId': r.categoryId,
-              'dayOfMonth': r.dayOfMonth,
-              'isActive': r.isActive,
-            }).toList(),
-      };
+      // Web版でもそのまま復元できる共通形式（v2）で書き出す
+      final data = buildBackup(
+        expenses: expenses,
+        categories: categories,
+        budgets: budgets,
+        recurring: recurring,
+      );
 
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$fileName');
@@ -136,49 +112,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (!mounted) return;
 
-    if (backups.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('バックアップファイルが見つかりません')),
-      );
-      return;
-    }
-
-    final picked = await showModalBottomSheet<File>(
+    // File を選べば端末内のバックアップ、'pick' ならファイル選択ダイアログを開く
+    final picked = await showModalBottomSheet<Object>(
       context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('復元するバックアップを選択',
-                style: Theme.of(ctx).textTheme.titleMedium),
-          ),
-          const Divider(height: 1),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: backups.length,
-              itemBuilder: (_, i) {
-                final name = backups[i].uri.pathSegments.last;
-                return ListTile(
-                  leading: const Icon(Icons.restore),
-                  title: Text(name, style: const TextStyle(fontSize: 13)),
-                  onTap: () => Navigator.pop(ctx, backups[i]),
-                );
-              },
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('復元するバックアップを選択',
+                  style: Theme.of(ctx).textTheme.titleMedium),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('ファイルを選ぶ…', style: TextStyle(fontSize: 13)),
+              subtitle: const Text('Web版から書き出したJSONも取り込めます',
+                  style: TextStyle(fontSize: 11)),
+              onTap: () => Navigator.pop(ctx, 'pick'),
+            ),
+            if (backups.isNotEmpty) const Divider(height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: backups.length,
+                itemBuilder: (_, i) {
+                  final name = backups[i].uri.pathSegments.last;
+                  return ListTile(
+                    leading: const Icon(Icons.restore),
+                    title: Text(name, style: const TextStyle(fontSize: 13)),
+                    onTap: () => Navigator.pop(ctx, backups[i]),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
 
     if (picked == null || !mounted) return;
 
-    // 復元前に全行を型検証（Web版 parseBackup 相当）。不正なファイルはここで拒否する
+    final String source; // 表示用のファイル名
+    final String content;
+    try {
+      if (picked == 'pick') {
+        // Android では他アプリの保存先（ダウンロード等）を直接見られないため、選択ダイアログ経由で読む
+        const typeGroup = XTypeGroup(
+          label: 'バックアップ(JSON)',
+          extensions: ['json'],
+          mimeTypes: ['application/json', 'text/plain', 'application/octet-stream'],
+          uniformTypeIdentifiers: ['public.json'],
+        );
+        final file = await openFile(acceptedTypeGroups: const [typeGroup]);
+        if (file == null) return;
+        source = file.name;
+        content = await file.readAsString();
+      } else {
+        final file = picked as File;
+        source = file.uri.pathSegments.last;
+        content = await file.readAsString();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ファイルを読み込めませんでした: $e')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    // 復元前に全行を型検証。不正なファイルはここで拒否する
     final BackupData data;
     try {
-      data = parseBackup(await picked.readAsString());
+      data = parseBackup(content);
     } on FormatException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -193,7 +203,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('データを復元しますか？'),
-        content: Text('現在のすべてのデータが上書きされます。\n\n'
+        content: Text('$source で復元します。現在のすべてのデータが上書きされます。\n\n'
             '支出: ${data.expenses.length}件\n'
             'カテゴリ: ${data.categories.length}件\n'
             '予算: ${data.budgets.length}件\n'
@@ -498,7 +508,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         iconBgColor: const Color(0xFFEEF2FF), // indigo-50
                         iconColor: const Color(0xFF4F46E5), // indigo-600
                         title: 'バックアップ',
-                        subtitle: '全データをJSONファイルに書き出す',
+                        subtitle: '全データをJSONに書き出す（Web版でも復元可）',
                         onTap: _backup,
                       ),
                       const Divider(height: 1, indent: 56),
@@ -507,7 +517,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         iconBgColor: const Color(0xFFF0FDF4), // emerald-50
                         iconColor: const Color(0xFF16A34A), // emerald-600
                         title: '復元',
-                        subtitle: 'バックアップファイルから復元する',
+                        subtitle: 'バックアップから復元（Web版のJSONも可）',
                         onTap: _restore,
                       ),
                       const Divider(height: 1, indent: 56),

@@ -310,22 +310,30 @@ Android のバックボタン・ブラウザの戻る・画面端スワイプに
 
 | 機能 | 説明 |
 |------|------|
-| バックアップ | 全データ（支出・カテゴリ・予算・定期支出）を JSON ファイルに書き出し |
-| 復元 | JSON バックアップファイルから全ストアを上書き復元。読み込み時に `parseBackup`（`src/utils/backup.ts`）で**全行を型検証**し、1件でも不正なデータ（金額が数値でない・日付形式不正・範囲外の値など）があればファイル全体を拒否して何件目が不正かを表示する。検証通過後、確認ダイアログに件数を表示。**Supabase側への反映が成功した場合のみ**ローカルにも反映する（クラウドを正とするため、失敗時はローカルを変更せずエラートーストを表示） |
+| バックアップ | 全データ（支出・カテゴリ・予算・定期支出）を JSON ファイルに書き出し。形式は**アプリ版（Flutter）と共通の v2**（`buildBackup`）で、そのままアプリ版で復元できる |
+| 復元 | JSON バックアップファイルから全ストアを上書き復元。読み込み時に `parseBackup`（`src/utils/backup.ts`）で**全行を型検証**し、1件でも不正なデータ（金額が数値でない・日付形式不正・範囲外の値など）があればファイル全体を拒否して何件目が不正かを表示する。**v2（アプリ版と共通）と v1（Web版の旧形式）の両方を読める**。検証通過後、確認ダイアログに件数を表示。**Supabase側への反映が成功した場合のみ**ローカルにも反映する（クラウドを正とするため、失敗時はローカルを変更せずエラートーストを表示） |
 | 全明細 CSV 出力 | 全年月分の支出明細を1ファイルに出力（`kakeibo_all_YYYY-MM-DD.csv`）。`StatsPage`の当月CSV出力と共通の`expenseDetailRows`（`src/utils/csv.ts`）を使用 |
 | 月別支出表 CSV 出力 | 行=年月・列=カテゴリの集計表（`kakeibo_monthly_YYYY-MM-DD.csv`）|
 
-**バックアップ JSON 形式**
+**バックアップ JSON 形式（v2 = アプリ版との共通移行フォーマット）**
 ```json
 {
-  "version": "1",
+  "version": "2",
   "exportedAt": "ISO 8601",
-  "expenses": [...],
-  "categories": [...],
-  "budgets": [...],
-  "recurring": [...]
+  "app": "kakeibo-web",
+  "categories": [{ "id": "1", "name": "食費", "color": "#FF9800", "icon": "🍽️", "iconName": "restaurant", "sortOrder": 0 }],
+  "expenses": [{ "id": "uuid", "amount": 1200, "categoryId": "1", "itemName": "ランチ", "note": "", "date": "2026-08-04", "createdAt": "ISO 8601" }],
+  "budgets": [{ "month": "2026-08", "amount": 50000 }],
+  "recurring": [{ "id": "uuid", "name": "家賃", "amount": 80000, "categoryId": "1", "dayOfMonth": 27, "isActive": true }]
 }
 ```
+
+- 仕様の詳細（ID の振り直し規則・変換で失われる項目）は `kakeibo/docs/backup-format-v2.md` を参照
+- アイコンは絵文字（Web版）と Material Icons 名（アプリ版）の両方を書き出す。対応表は `src/utils/categoryIcon.ts`
+- 取り込み時、支出・定期支出の ID が UUID でなければ採番し直す（Supabase の uuid 型カラムに備えるため）。カテゴリ ID はそのまま使う
+- `isActive: false` の定期支出は Web版に「無効」の概念が無いため取り込まない
+- `lastGeneratedMonth`（最後に自動生成した月）は両アプリで往復する。これが欠けるとアプリ版で復元直後に当月分が二重登録される
+- version:"1" でもアプリ版の旧形式（ID が整数・`colorValue`/`memo` を持つ）は判別して「取り直してほしい」旨のエラーを返す
 
 **全明細 CSV 列**: 日付, カテゴリ, 項目名, メモ, 金額, 登録日時, 更新日時
 
@@ -592,7 +600,7 @@ SPA ルーティング: すべてのパスを `/index.html` にリライト。
 | `recurringGenerator.test.ts` | `isRecurringDue`/`targetDayOf`（発生日判定・月末調整） |
 | `passcode.test.ts` | `hashPin`の決定性（同一pin/saltで同一ハッシュ、salt違いで異なるハッシュ） |
 | `csv.test.ts` | `escapeCell`のCSVインジェクション対策、`expenseDetailRows`の整形 |
-| `backup.test.ts` | `parseBackup`のバックアップ検証（正常系・旧形式・不正JSON・型不正・範囲外値の拒否） |
+| `backup.test.ts` | `parseBackup`/`buildBackup`（v1・v2の受理、不正JSON・型不正・範囲外値の拒否、v2のID振り直しとアイコン変換、書き出し→読み戻しの往復） |
 
 `npm test`（`vitest run`）で実行。CI（`.github/workflows/kakeiboweb-ci.yml`）にも組み込み済み。
 

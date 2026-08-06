@@ -218,8 +218,10 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 ### 4.12 設定画面（`settings_screen.dart`）
 
 **データ管理**（バックアップ・CSV出力とも、書き出し前に対象ファイル名を表示する確認ダイアログを挟む。Web版と同じ）
-- バックアップ: 全データ（支出・カテゴリ・予算・定期支出）を JSON で Documents に保存。ファイル名 `kakeibo_backup_yyyyMMdd_HHmmss.json`、`version: "1"` 付き（復元時に一覧から選べるよう日時まで含める。Web版はブラウザダウンロードのため日付のみ）
-- 復元: Documents 内のバックアップ一覧から選択 → **全行を型検証**（`data/backup/backup_parser.dart`。金額が数値でない・日付形式不正・範囲外の値などが1件でもあればファイル全体を拒否し、何件目が不正かを表示）→ **確認ダイアログに各データの件数を表示** → 全テーブルをクリアして ID を保持したまま復元
+- バックアップ: 全データ（支出・カテゴリ・予算・定期支出）を JSON で Documents に保存。ファイル名 `kakeibo_backup_yyyyMMdd_HHmmss.json`（復元時に一覧から選べるよう日時まで含める。Web版はブラウザダウンロードのため日付のみ）。形式は **Web版と共通の v2**（`data/backup/backup_serializer.dart`）で、そのまま Web版で復元できる
+- 復元: **「ファイルを選ぶ…」（file_selector）または Documents 内のバックアップ一覧**から選択 → **全行を型検証**（`data/backup/backup_parser.dart`。金額が数値でない・日付形式不正・範囲外の値などが1件でもあればファイル全体を拒否し、何件目が不正かを表示）→ **確認ダイアログにファイル名と各データの件数を表示** → 全テーブルをクリアして復元。**v2（Web版と共通）と v1（このアプリの旧形式）の両方を読める**
+  - Android ではダウンロードフォルダ等をアプリから直接見られないため、Web版から持ってきた JSON は「ファイルを選ぶ…」で取り込む
+  - 形式の詳細・ID の振り直し規則・変換で失われる項目は `docs/backup-format-v2.md` を参照
 - 全明細CSV: 全期間の明細を `kakeibo_all_yyyy-MM-dd.csv` に出力（ヘッダー: 日付,カテゴリ,項目名,メモ,金額,登録日時）
 - 月別支出表CSV: 表画面と同じカテゴリ×月のマトリクスを `kakeibo_monthly_yyyy-MM-dd.csv` に出力
 - CSV は Excel 対応のため BOM 付き UTF-8
@@ -268,7 +270,9 @@ lib/
                     budget/（get, set）
                     recurring/（get, add, update, delete）
   data/
-    backup/         backup_parser.dart（バックアップJSONの型検証）
+    backup/         backup_parser.dart（バックアップJSONの型検証・v1/v2読み込み）,
+                    backup_serializer.dart（v2書き出し）,
+                    category_icon_map.dart（絵文字⇔Material Icons名・色⇔#RRGGBB）
     models/         expense_model.dart, category_model.dart,
                     budget_model.dart, recurring_expense_model.dart（Isarコレクション）
     repositories/   各リポジトリ実装（*_repository_impl.dart）

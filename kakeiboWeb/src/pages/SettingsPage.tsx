@@ -14,8 +14,8 @@ import { usePasscodeStore } from '../store/passcodeStore'
 import { PinPad } from '../components/PinPad'
 import { useAuthStore } from '../store/authStore'
 import { useModalA11y } from '../hooks/useModalA11y'
-import { parseBackup, type BackupData } from '../utils/backup'
-import { APP_NAME, APP_VERSION, APP_BUILD, BACKUP_VERSION } from '../constants/app'
+import { parseBackup, buildBackup } from '../utils/backup'
+import { APP_NAME, APP_VERSION, APP_BUILD } from '../constants/app'
 
 export const SettingsPage = () => {
   const navigate = useNavigate()
@@ -59,14 +59,7 @@ export const SettingsPage = () => {
       confirmLabel: '書き出す',
     })
     if (!ok) return // 書き出し前の確認
-    const data: BackupData = {
-      version: BACKUP_VERSION,
-      exportedAt: new Date().toISOString(),
-      expenses,
-      categories,
-      budgets,
-      recurring,
-    }
+    const data = buildBackup({ expenses, categories, budgets, recurring }) // v2（アプリ版でもそのまま復元できる形式）
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
