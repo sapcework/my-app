@@ -17,4 +17,5 @@ time = { version = "0.3.45", features = ["serde", "formatting", "parsing"] }
 workspace = true
 
 [dev-dependencies]
+tempfile = "3"                                     # 2 プロセスが同じ DB を見る状況の再現に、ファイル実体が要る
 uuid = { version = "1.24.0", features = ["v4"] }

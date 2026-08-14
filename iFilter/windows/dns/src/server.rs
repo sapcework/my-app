@@ -135,6 +135,18 @@ impl<S: PolicyStore> DnsFilter<S> {
             .reload(at)
     }
 
+    /// **別プロセスの変更があったときだけ**読み直す。読み直したら `true`。
+    ///
+    /// 保護者 UI は別プロセスとして DB を書き換える。これを定期的に呼ばないと
+    /// 「UI で許可したのに繋がらない」が起きる。読むのは版数 1 件だけ。
+    pub fn reload_if_stale(&self) -> filter_core::Result<bool> {
+        let at = OffsetDateTime::now_utc();
+        self.core
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .reload_if_stale(at)
+    }
+
     fn reject(&self, query: &Query, rcode: ResponseCode, why: &str) -> (Vec<u8>, Outcome) {
         self.log_raw(&format!("{why}: {}", query.name));
         (query.respond(rcode), Outcome::Rejected(rcode))

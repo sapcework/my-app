@@ -35,7 +35,7 @@ use storage::PolicyStore;
 use time::OffsetDateTime;
 
 pub use error::{CoreError, Result};
-pub use snapshot::PolicySnapshot;
+pub use snapshot::{PolicySnapshot, REVISION_KEY, bump_revision, read_revision};
 
 /// 判定の入口。
 ///
@@ -70,6 +70,27 @@ impl<S: PolicyStore> FilterCore<S> {
     pub fn reload(&mut self, at: OffsetDateTime) -> Result<()> {
         self.snapshot = PolicySnapshot::load(&self.store, self.snapshot.profile.id, at)?;
         Ok(())
+    }
+
+    /// **別プロセスの変更があったときだけ**読み直す。読み直したら `true`。
+    ///
+    /// 保護者 UI は別プロセスとして DB を書き換えるので、それに気づく手段が要る。
+    /// 無いと「UI で許可したのに繋がらない」が起きる。
+    ///
+    /// 読むのは版数 1 件だけなので、数秒ごとに呼んでも負担にならない。
+    /// ポリシー全体を読み直すのは実際に変わっていたときだけ。
+    pub fn reload_if_stale(&mut self, at: OffsetDateTime) -> Result<bool> {
+        let current = snapshot::read_revision(&self.store)?;
+        if current == self.snapshot.revision {
+            return Ok(false);
+        }
+        self.reload(at)?;
+        Ok(true)
+    }
+
+    /// 読み込んである写しの版数。
+    pub fn revision(&self) -> u64 {
+        self.snapshot.revision
     }
 
     /// 使用するプロファイルを切り替える。
@@ -143,22 +164,39 @@ impl<S: PolicyStore> FilterCore<S> {
         at: OffsetDateTime,
     ) -> Result<()> {
         self.store.upsert_parent_override(entry)?;
-        self.reload(at)
+        self.commit(at)
     }
 
     /// ドメインの分類を保存し、判定に反映する。
     pub fn put_domain_record(&mut self, record: &DomainRecord, at: OffsetDateTime) -> Result<()> {
         self.store.upsert_domain_record(record)?;
-        self.reload(at)
+        self.commit(at)
     }
 
     /// プロファイルを保存し、使用中のものなら判定に反映する。
+    ///
+    /// 使用中でなくても版数は進める。別プロセスが**そのプロファイルを使っている**
+    /// 可能性があるため。
     pub fn put_profile(&mut self, profile: &Profile, at: OffsetDateTime) -> Result<()> {
         self.store.upsert_profile(profile, at)?;
         if profile.id == self.snapshot.profile.id {
-            self.reload(at)?;
+            self.commit(at)
+        } else {
+            // 使っていないプロファイルなので写しの中身は変わらない。版数だけ
+            // 合わせておく。放っておくと次の `reload_if_stale` が自分の書き込みに
+            // 反応して、意味のない読み直しが走る
+            self.snapshot.revision = snapshot::bump_revision(&mut self.store, at)?;
+            Ok(())
         }
-        Ok(())
+    }
+
+    /// 書き換えたあとの共通処理。版数を進めてから読み直す。
+    ///
+    /// 順序が逆だと、進める前の版数を写しに取り込んでしまい、
+    /// 次の `reload_if_stale` が「変わっている」と誤判定して無駄に読み直す。
+    fn commit(&mut self, at: OffsetDateTime) -> Result<()> {
+        snapshot::bump_revision(&mut self.store, at)?;
+        self.reload(at)
     }
 
     pub fn profile(&self) -> &Profile {

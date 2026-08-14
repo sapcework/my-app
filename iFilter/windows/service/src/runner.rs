@@ -24,6 +24,12 @@ type Result<T> = std::result::Result<T, String>;
 /// 塞ぐのは WFP（Step 11〜12）の仕事なので、ここは軽さを優先する。
 const DNS_REAPPLY_INTERVAL: Duration = Duration::from_secs(30);
 
+/// 保護者 UI の変更を拾う間隔。
+///
+/// 保護者が「許可」を押してから効くまでの待ち時間になるので、DNS 設定の巡回より
+/// ずっと短くする。読むのは版数 1 件だけなので 2 秒でも負担にならない。
+const POLICY_POLL_INTERVAL: Duration = Duration::from_secs(2);
+
 /// フィルターを組み立てて動かす。`shutdown` が来るまで戻らない。
 ///
 /// `on_ready` は**問い合わせを受け取れるようになってから**呼ばれる。DB の準備に
@@ -77,6 +83,10 @@ async fn run_async(
     let upstream = Upstream::new(config.upstream, Duration::from_secs(config.timeout));
     let filter = Arc::new(DnsFilter::new(core, upstream, config.verbose));
 
+    // 保護者 UI は別プロセスとして DB を書き換える。定期的に見に行かないと
+    // 「UI で許可したのに繋がらない」になる。読むのは版数 1 件だけなので軽い
+    let watcher = tokio::spawn(watch_policy_changes(Arc::clone(&filter)));
+
     // DNS 設定の差し替えは、待ち受けが立ち上がってから始める。
     // 先に向けてしまうと、その隙間で端末の名前解決が丸ごと失敗する
     let enforcer = if config.enforce_dns {
@@ -104,6 +114,7 @@ async fn run_async(
     .inspect_err(|err| log::write(err));
 
     log::write("待ち受けを終了しました");
+    watcher.abort();
 
     if let Some(handle) = enforcer {
         handle.abort();
@@ -130,6 +141,21 @@ fn ensure_database(path: &Path) -> Result<()> {
     store
         .seed_builtins(OffsetDateTime::now_utc())
         .map_err(|err| format!("同梱データを書き込めません: {err}"))
+}
+
+/// 保護者 UI の変更を拾ってポリシーを読み直す。
+async fn watch_policy_changes(filter: Arc<DnsFilter<SqliteStore>>) {
+    loop {
+        tokio::time::sleep(POLICY_POLL_INTERVAL).await;
+
+        // ロックを握るのは版数を読むあいだだけ。判定は止めない
+        match tokio::task::block_in_place(|| filter.reload_if_stale()) {
+            Ok(true) => log::write("設定の変更を検出しました。ポリシーを読み直しました"),
+            Ok(false) => {}
+            // 読めなくても諦めない。DB が一時的に使えないだけかもしれない
+            Err(err) => log::write(&format!("設定の確認に失敗しました: {err}")),
+        }
+    }
 }
 
 /// DNS 設定を定期的に見直し、iFilter に向け直す。

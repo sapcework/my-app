@@ -21,6 +21,12 @@ pub struct PolicySnapshot {
     /// カテゴリの表示名。判定には使わないが、保護者への説明に要る
     /// （docs/POLICY_MODEL.md §1-3）。
     pub categories: CategoryRegistry,
+    /// この写しを作った時点のポリシー版数。
+    ///
+    /// **別プロセスの変更に気づくために持つ。** UI が DB を書き換えても、
+    /// サービスはメモリ上の写しを見続けるので、これが無いと
+    /// 「許可したのに繋がらない」が起きる。
+    pub revision: u64,
 }
 
 impl PolicySnapshot {
@@ -39,7 +45,29 @@ impl PolicySnapshot {
             overrides: store.parent_overrides()?.into_iter().collect(),
             emergency: store.emergency_blocks()?.into_iter().collect(),
             categories: store.categories()?,
+            revision: read_revision(store)?,
             loaded_at: at,
         })
     }
+}
+
+/// ポリシー版数を保存する `settings` のキー。
+pub const REVISION_KEY: &str = "policy.revision";
+
+/// 現在のポリシー版数を読む。未設定なら 0。
+///
+/// 読めない値が入っていても 0 として扱う。版数が壊れていることを理由に
+/// フィルターを止めると、設定の不整合がそのまま通信断になる。
+pub fn read_revision<S: PolicyStore>(store: &S) -> Result<u64> {
+    Ok(store
+        .setting(REVISION_KEY)?
+        .and_then(|raw| raw.parse().ok())
+        .unwrap_or(0))
+}
+
+/// ポリシー版数を 1 つ進める。**設定を書き換えたら必ず呼ぶ。**
+pub fn bump_revision<S: PolicyStore>(store: &mut S, at: OffsetDateTime) -> Result<u64> {
+    let next = read_revision(store)?.wrapping_add(1);
+    store.set_setting(REVISION_KEY, &next.to_string(), at)?;
+    Ok(next)
 }

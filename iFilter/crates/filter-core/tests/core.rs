@@ -65,6 +65,136 @@ fn allow(name: &str) -> ParentOverride {
     }
 }
 
+// ---- 別プロセスからの変更に気づくか ----
+//
+// 保護者 UI は DNS フィルターとは別プロセスで動き、同じ DB を書き換える。
+// フィルターはポリシーをメモリに載せているので、気づく手段が無いと
+// 「UI で許可したのに繋がらない」が起きる。
+
+/// 同じ DB ファイルを見る 2 つの `FilterCore` を作る。UI とサービスに見立てる。
+fn two_cores() -> (
+    tempfile::TempDir,
+    FilterCore<SqliteStore>,
+    FilterCore<SqliteStore>,
+) {
+    let dir = tempfile::tempdir().expect("一時ディレクトリを作れる");
+    let path = dir.path().join("ifilter.sqlite");
+
+    let mut store = SqliteStore::open(&path).expect("開ける");
+    store.seed_builtins(now()).expect("同梱データを書ける");
+    drop(store);
+
+    let service = FilterCore::load(
+        SqliteStore::open(&path).expect("開ける"),
+        ProfileId::Beginner,
+        "service",
+        now(),
+    )
+    .expect("読み込める");
+    let ui = FilterCore::load(
+        SqliteStore::open(&path).expect("開ける"),
+        ProfileId::Beginner,
+        "ui",
+        now(),
+    )
+    .expect("読み込める");
+
+    (dir, service, ui)
+}
+
+#[test]
+fn 別プロセスの許可に気づいて反映する() {
+    let (_dir, mut service, mut ui) = two_cores();
+    let target = domain("example.com");
+    assert_eq!(
+        service.decide(&target, now(), RequestSource::Dns).decision,
+        Decision::Block
+    );
+
+    ui.put_parent_override(&allow("example.com"), now())
+        .expect("許可を書ける");
+
+    // 気づかないまま判定を続けると「許可したのに繋がらない」になる
+    assert!(
+        service.reload_if_stale(now()).expect("確認できる"),
+        "別プロセスの変更を検出できていない"
+    );
+    assert_eq!(
+        service.decide(&target, now(), RequestSource::Dns).decision,
+        Decision::Allow
+    );
+}
+
+#[test]
+fn 変更が無ければ読み直さない() {
+    // 数秒ごとに呼ぶので、毎回ポリシー全体を読み直すわけにはいかない
+    let (_dir, mut service, _ui) = two_cores();
+    assert!(!service.reload_if_stale(now()).expect("確認できる"));
+    assert!(!service.reload_if_stale(now()).expect("確認できる"));
+}
+
+#[test]
+fn 自分で書いた直後は読み直さない() {
+    // put_* は自分で読み直しているので、そのあと stale 扱いになるのは無駄
+    let (_dir, _service, mut ui) = two_cores();
+    ui.put_parent_override(&allow("example.com"), now())
+        .expect("書ける");
+    assert!(
+        !ui.reload_if_stale(now()).expect("確認できる"),
+        "自分の変更で読み直しが発生している"
+    );
+}
+
+#[test]
+fn 版数は書き換えのたびに進む() {
+    let (_dir, _service, mut ui) = two_cores();
+    let start = ui.revision();
+
+    ui.put_parent_override(&allow("a.example.com"), now())
+        .expect("書ける");
+    assert_eq!(ui.revision(), start + 1);
+
+    ui.put_domain_record(&record("b.example.com", &["kids"]), now())
+        .expect("書ける");
+    assert_eq!(ui.revision(), start + 2);
+}
+
+#[test]
+fn 使用中でないプロファイルの変更でも版数は進む() {
+    // 別プロセスがそのプロファイルを使っているかもしれない
+    let (_dir, mut service, mut ui) = two_cores();
+    let start = ui.revision();
+
+    let mut other = domain_model::Profile::teen();
+    other.name = "変更した".to_owned();
+    ui.put_profile(&other, now()).expect("書ける");
+
+    assert_eq!(ui.revision(), start + 1);
+    assert!(
+        !ui.reload_if_stale(now()).expect("確認できる"),
+        "自分の書き込みで読み直しが発生している"
+    );
+    assert!(
+        service.reload_if_stale(now()).expect("確認できる"),
+        "別プロセスが変更に気づけない"
+    );
+}
+
+#[test]
+fn 別プロセスの分類変更にも気づく() {
+    let (_dir, mut service, mut ui) = two_cores();
+    let target = domain("shop.example.com");
+
+    ui.put_domain_record(&record("shop.example.com", &["education"]), now())
+        .expect("書ける");
+
+    assert!(service.reload_if_stale(now()).expect("確認できる"));
+    assert_eq!(
+        service.decide(&target, now(), RequestSource::Dns).decision,
+        Decision::Allow
+    );
+}
+
 #[test]
 fn 同梱データだけで判定できる() {
     let verdict = core().decide(&domain("example.com"), now(), RequestSource::Cli);
