@@ -4,8 +4,8 @@
 //! 判定そのものの正しさは `policy-engine` 側のテストが担当する。
 
 use domain_model::{
-    CategoryId, Decision, DomainName, DomainRecord, OverrideAction, OverrideScope, ParentOverride,
-    ProfileId, Reason, RecordStatus, RequestSource, RiskLevel, Source,
+    CategoryId, Decision, DomainName, DomainRecord, MatchScope, OverrideAction, OverrideScope,
+    ParentOverride, ProfileId, Reason, RecordStatus, RequestSource, RiskLevel, Source,
 };
 use filter_core::{CoreError, FilterCore};
 use storage::{PolicyStore, SqliteStore};
@@ -42,6 +42,7 @@ fn record(name: &str, categories: &[&str]) -> DomainRecord {
         confidence: 1.0,
         source: Source::Parent,
         status: RecordStatus::Active,
+        scope: MatchScope::Domain,
         version: 1,
         created_at: now(),
         updated_at: now(),

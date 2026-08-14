@@ -6,8 +6,9 @@
 #![allow(dead_code)]
 
 use domain_model::{
-    CategoryId, DomainName, DomainRecord, OverrideAction, OverrideScope, ParentOverride, Profile,
-    ProfileId, RecordStatus, Request, RequestSource, RiskLevel, Source, Verdict,
+    CategoryId, DomainName, DomainRecord, MatchScope, OverrideAction, OverrideScope,
+    ParentOverride, Profile, ProfileId, RecordStatus, Request, RequestSource, RiskLevel, Source,
+    Verdict,
 };
 use policy_engine::{DomainIndex, DomainSet, OverrideSet, PolicyContext, PolicyEngine};
 use time::OffsetDateTime;
@@ -40,6 +41,7 @@ pub fn record_with_risk(name: &str, categories: &[&str], risk: RiskLevel) -> Dom
         confidence: 0.9,
         source: Source::Bundled,
         status: RecordStatus::Active,
+        scope: MatchScope::Domain,
         version: 1,
         created_at: now(),
         updated_at: now(),
@@ -99,6 +101,13 @@ impl Scenario {
 
     pub fn with_record(mut self, record: DomainRecord) -> Self {
         self.records.insert(record);
+        self
+    }
+
+    pub fn with_records(mut self, records: impl IntoIterator<Item = DomainRecord>) -> Self {
+        for record in records {
+            self.records.insert(record);
+        }
         self
     }
 

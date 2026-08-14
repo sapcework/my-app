@@ -4,8 +4,8 @@
 //! 判定に使う型を保存都合で歪めないため。
 
 use domain_model::{
-    CategoryId, Decision, DomainName, OverrideAction, OverrideScope, ProfileId, RecordStatus,
-    RiskLevel, Source,
+    CategoryId, Decision, DomainName, MatchScope, OverrideAction, OverrideScope, ProfileId,
+    RecordStatus, RiskLevel, Source,
 };
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -140,6 +140,22 @@ pub fn decode_status(column: &'static str, value: &str) -> Result<RecordStatus> 
     }
 }
 
+/// ドメイン分類の照合範囲。保護者の [`OverrideScope`] とは別物なので名前を分けてある。
+pub fn encode_match_scope(value: MatchScope) -> &'static str {
+    match value {
+        MatchScope::Domain => "domain",
+        MatchScope::Suffix => "suffix",
+    }
+}
+
+pub fn decode_match_scope(column: &'static str, value: &str) -> Result<MatchScope> {
+    match value {
+        "domain" => Ok(MatchScope::Domain),
+        "suffix" => Ok(MatchScope::Suffix),
+        _ => Err(decode_err(column, value, "未知の照合範囲")),
+    }
+}
+
 pub fn encode_action(value: OverrideAction) -> &'static str {
     match value {
         OverrideAction::Allow => "allow",
@@ -200,6 +216,19 @@ mod tests {
         assert!(decode_scope("scope", "everything").is_err());
         assert!(decode_status("status", "archived").is_err());
         assert!(decode_source("source", "ai").is_err());
+        assert!(decode_match_scope("scope", "wildcard").is_err());
+    }
+
+    #[test]
+    fn 照合範囲が往復する() {
+        for scope in [MatchScope::Domain, MatchScope::Suffix] {
+            let encoded = encode_match_scope(scope);
+            assert_eq!(
+                decode_match_scope("scope", encoded).expect("読める"),
+                scope,
+                "encoded={encoded}"
+            );
+        }
     }
 
     #[test]

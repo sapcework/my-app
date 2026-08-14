@@ -30,6 +30,24 @@ pub enum RecordStatus {
     Disabled,
 }
 
+/// このレコードがどこまで及ぶか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchScope {
+    /// ドメイン自身とそのサブドメイン。照合は eTLD+1 で打ち切る（既定）。
+    #[default]
+    Domain,
+    /// 公開サフィックスとして扱い、配下すべてに及ぶ。
+    ///
+    /// `cloudfront.net` のような CDN のためだけにある。これらは Public Suffix List に
+    /// 載っているので [`MatchScope::Domain`] では**一度もヒットしない**うえ、
+    /// ホスト名が顧客ごとのランダム文字列なので個別列挙もできない
+    /// （docs/adr/0008-infrastructure-suffix-records.md）。
+    ///
+    /// **同梱の基盤ドメイン専用。**保護者の Allowlist には使わない。
+    Suffix,
+}
+
 /// ドメイン 1 件の分類情報。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DomainRecord {
@@ -44,6 +62,9 @@ pub struct DomainRecord {
     pub confidence: f32,
     pub source: Source,
     pub status: RecordStatus,
+    /// 照合範囲。既定は [`MatchScope::Domain`]。
+    #[serde(default)]
+    pub scope: MatchScope,
     /// サーバーとの差分同期用。
     pub version: u64,
     #[serde(with = "time::serde::rfc3339")]
@@ -85,6 +106,7 @@ mod tests {
             confidence: 0.9,
             source: Source::Bundled,
             status,
+            scope: MatchScope::Domain,
             version: 1,
             created_at: now,
             updated_at: now,
@@ -114,6 +136,31 @@ mod tests {
     fn 複数カテゴリを保持できる() {
         let r = record(&["kids", "video"], RecordStatus::Active);
         assert_eq!(r.categories.len(), 2);
+    }
+
+    #[test]
+    fn 照合範囲の既定は_domain() {
+        // 既定が Suffix だと、うっかり作ったレコードが配下すべてに及ぶ
+        assert_eq!(MatchScope::default(), MatchScope::Domain);
+    }
+
+    #[test]
+    fn 照合範囲が無い_json_も読める() {
+        // scope 列を足す前に書かれたデータを開けなくしない
+        let json = r#"{
+            "id": "00000000-0000-0000-0000-000000000000",
+            "domain": "example.com",
+            "categories": ["education"],
+            "risk_level": "safe",
+            "confidence": 0.9,
+            "source": "bundled",
+            "status": "active",
+            "version": 1,
+            "created_at": "1970-01-01T00:00:00Z",
+            "updated_at": "1970-01-01T00:00:00Z"
+        }"#;
+        let restored: DomainRecord = serde_json::from_str(json).expect("読める");
+        assert_eq!(restored.scope, MatchScope::Domain);
     }
 
     #[test]

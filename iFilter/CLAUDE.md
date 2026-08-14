@@ -82,6 +82,20 @@ Windows Defender の無断停止。
 マッチは `ends_with` ではなく**ラベル境界**で行う。`ends_with` だと
 `example.com` の登録が `notexample.com` にヒットする。
 
+### CDN は「登録したのに一度もヒットしない」
+
+`cloudfront.net` `akamaiedge.net` `googleapis.com` など大手 CDN は Public Suffix List に
+載っている。`d111abc.cloudfront.net` の eTLD+1 は**それ自身**なので、上の規則により
+`cloudfront.net` の登録には決して到達しない。しかもホスト名は顧客ごとのランダム文字列で
+個別列挙もできない。**エラーは出ず、ページが崩れる形でだけ表面化する。**
+
+`MatchScope::Suffix` を付けたレコードだけが配下すべてに及ぶ（ADR-0008）。付けてよいのは
+**同梱の `infrastructure` レコードだけ**。`blogspot.com` や `github.io` も同じ公開
+サフィックスだが、第三者が読めるサブドメインを取れるので付けてはいけない。
+
+同梱ドメインを増やしたら `policy-engine/tests/bundled_domains.rs` の `SAMPLES` に
+**ブラウザが実際に引くホスト名**を足すこと。登録しただけで効いていない状態を検出する。
+
 ### リスク上限にカテゴリ由来の危険度を混ぜない
 
 `DomainRecord.risk_level` は**そのドメイン自身**への評価であり、カテゴリの既定リスクを

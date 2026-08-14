@@ -135,6 +135,9 @@ impl Profile {
                 ("phishing", Block),
                 ("fraud", Block),
                 ("piracy", Block),
+                // 通すと DNS フィルター自体が迂回されるので、どのプロファイルでも Block。
+                // 派生プロファイル（beginner_plus / standard / teen）もこれを継承する
+                ("doh", Block),
             ]),
             forced_block_categories: BTreeSet::new(), // MVP では保護者がすべて解除できる
             risk_ceiling: RiskLevel::Low,

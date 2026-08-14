@@ -7,6 +7,7 @@
 //!
 //! 型の設計意図は docs/POLICY_MODEL.md を参照。
 
+pub mod bundled;
 pub mod category;
 pub mod decision;
 pub mod domain;
@@ -17,12 +18,13 @@ pub mod record;
 pub mod request;
 pub mod risk;
 
+pub use bundled::bundled_records;
 pub use category::{CategoryId, CategoryInfo, CategoryRegistry, InvalidCategoryId};
 pub use decision::{Decision, Reason, RuleId, Stage, StageOutcome, TraceStep, Verdict};
 pub use domain::{DomainName, DomainParseError};
 pub use log::AccessDecision;
 pub use parent::{OverrideAction, OverrideScope, ParentOverride};
 pub use profile::{Profile, ProfileId, TimeRule};
-pub use record::{DomainRecord, RecordStatus, Source};
+pub use record::{DomainRecord, MatchScope, RecordStatus, Source};
 pub use request::{Request, RequestSource};
 pub use risk::RiskLevel;

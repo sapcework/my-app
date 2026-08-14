@@ -6,8 +6,9 @@
 use std::collections::BTreeSet;
 
 use domain_model::{
-    AccessDecision, CategoryId, CategoryInfo, Decision, DomainName, DomainRecord, OverrideAction,
-    OverrideScope, ParentOverride, Profile, ProfileId, RecordStatus, RiskLevel, RuleId, Source,
+    AccessDecision, CategoryId, CategoryInfo, Decision, DomainName, DomainRecord, MatchScope,
+    OverrideAction, OverrideScope, ParentOverride, Profile, ProfileId, RecordStatus, RiskLevel,
+    RuleId, Source, bundled_records,
 };
 use storage::{PolicyStore, SqliteStore};
 use time::{Duration, OffsetDateTime};
@@ -44,6 +45,7 @@ fn record(name: &str, categories: &[&str]) -> DomainRecord {
         confidence: 0.75,
         source: Source::Bundled,
         status: RecordStatus::Active,
+        scope: MatchScope::Domain,
         version: 1,
         created_at: now(),
         updated_at: now(),
@@ -81,21 +83,49 @@ fn 同梱データを書き込める() {
     let store = seeded();
 
     let categories = store.categories().expect("読める");
-    assert_eq!(categories.len(), 24);
+    assert_eq!(categories.len(), 25);
     assert!(categories.get(&category("infrastructure")).is_some());
 
     assert_eq!(store.profiles().expect("読める").len(), 4);
+
+    // ドメイン分類が入っていないと、あらゆるドメインが未分類になって
+    // BEGINNER では CDN もフォントも BLOCK される
+    let records = store.domain_records().expect("読める");
+    assert_eq!(records.len(), bundled_records(now()).len());
+    assert!(!records.is_empty());
 }
 
 #[test]
 fn 同梱データを二度書いても重複しない() {
     let mut store = seeded();
+    let before = store.domain_records().expect("読める").len();
     store
         .seed_builtins(now() + Duration::days(1))
         .expect("再書き込みできる");
 
-    assert_eq!(store.categories().expect("読める").len(), 24);
+    assert_eq!(store.categories().expect("読める").len(), 25);
     assert_eq!(store.profiles().expect("読める").len(), 4);
+    // 同梱ドメインの ID はドメイン名から決まるので upsert で上書きされる
+    assert_eq!(store.domain_records().expect("読める").len(), before);
+}
+
+#[test]
+fn 同梱の照合範囲が保たれる() {
+    // Suffix が Domain に化けると cloudfront.net 配下が丸ごと未分類に戻る
+    let store = seeded();
+    let loaded = store.domain_records().expect("読める");
+
+    let cloudfront = loaded
+        .iter()
+        .find(|r| r.domain.as_str() == "cloudfront.net")
+        .expect("同梱されている");
+    assert_eq!(cloudfront.scope, MatchScope::Suffix);
+
+    let gstatic = loaded
+        .iter()
+        .find(|r| r.domain.as_str() == "gstatic.com")
+        .expect("同梱されている");
+    assert_eq!(gstatic.scope, MatchScope::Domain);
 }
 
 // ---- プロファイル ----
@@ -180,14 +210,14 @@ fn カテゴリを後から追加できる() {
         categories.default_risk(&category("crypto")),
         RiskLevel::High
     );
-    assert_eq!(categories.len(), 25);
+    assert_eq!(categories.len(), 26);
 }
 
 // ---- ドメインレコード ----
 
 #[test]
 fn ドメインレコードが往復する() {
-    let mut store = seeded();
+    let mut store = store(); // 同梱データを入れると件数の検査が同梱分に引きずられる
     let record = record("example.com", &["kids", "video"]);
     store.upsert_domain_record(&record).expect("書ける");
 
@@ -198,7 +228,7 @@ fn ドメインレコードが往復する() {
 
 #[test]
 fn 複数カテゴリが保たれる() {
-    let mut store = seeded();
+    let mut store = store();
     store
         .upsert_domain_record(&record("example.com", &["kids", "video", "education"]))
         .expect("書ける");
@@ -214,7 +244,7 @@ fn 複数カテゴリが保たれる() {
 
 #[test]
 fn カテゴリの更新で古い分類が残らない() {
-    let mut store = seeded();
+    let mut store = store();
     let mut record = record("example.com", &["kids", "video"]);
     store.upsert_domain_record(&record).expect("書ける");
 
@@ -233,7 +263,7 @@ fn カテゴリの更新で古い分類が残らない() {
 
 #[test]
 fn 論理削除したレコードは判定に使われない() {
-    let mut store = seeded();
+    let mut store = store();
     let mut record = record("example.com", &["adult"]);
     record.deleted_at = Some(now());
     store.upsert_domain_record(&record).expect("書ける");
@@ -245,7 +275,7 @@ fn 論理削除したレコードは判定に使われない() {
 
 #[test]
 fn ドメインは正規化して保存される() {
-    let mut store = seeded();
+    let mut store = store();
     let mut record = record("example.com", &["education"]);
     record.domain = domain("  EXAMPLE.COM.  ");
     store.upsert_domain_record(&record).expect("書ける");

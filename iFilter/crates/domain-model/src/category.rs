@@ -155,6 +155,9 @@ impl CategoryRegistry {
             ("phishing", "フィッシング", Critical),
             ("fraud", "詐欺", Critical),
             ("piracy", "著作権侵害", High),
+            // DNS over HTTPS のプロバイダ。閲覧内容ではなく「フィルターの迂回路」
+            // なので独立したカテゴリにする（docs/adr/0007-doh-countermeasures-in-mvp.md）
+            ("doh", "DNS 迂回", High),
             ("unknown", "未分類", Unknown),
         ];
 
@@ -189,7 +192,7 @@ mod tests {
     #[test]
     fn 同梱カテゴリが揃っている() {
         let registry = CategoryRegistry::builtin();
-        assert_eq!(registry.len(), 24); // 指示書 9 の 23 種 + infrastructure
+        assert_eq!(registry.len(), 25); // 指示書 9 の 23 種 + infrastructure + doh
 
         for id in [
             "education",
@@ -198,6 +201,7 @@ mod tests {
             "malware",
             "unknown",
             "infrastructure",
+            "doh",
         ] {
             let id = CategoryId::parse(id).expect("妥当");
             assert!(registry.get(&id).is_some(), "{id} が同梱されていない");

@@ -131,10 +131,24 @@ impl DomainName {
         if !other.is_registrable() {
             return false; // 公開サフィックス配下すべてに及ぶ照合は禁止
         }
-        if self.0 == other.0 {
+        self.is_within(other)
+    }
+
+    /// 自身が `suffix` と同一、または `suffix` 配下か。**公開サフィックスも対象にできる。**
+    ///
+    /// [`Self::is_subdomain_of`] との違いは `co.jp` や `cloudfront.net` を渡せる点。
+    /// 1 件で配下すべてに及ぶため、**保護者の Allowlist には使ってはいけない**
+    /// （「`co.jp` を許可」で日本のほぼ全ドメインが通る）。用途は同梱の基盤ドメインだけで、
+    /// [`crate::record::MatchScope::Suffix`] のレコードからのみ到達する
+    /// （docs/adr/0008-infrastructure-suffix-records.md）。
+    ///
+    /// 比較はラベル境界で行う。`ends_with` だと `notexample.com` が
+    /// `example.com` にヒットしてしまう。
+    pub fn is_within(&self, suffix: &Self) -> bool {
+        if self.0 == suffix.0 {
             return true;
         }
-        let (s, o) = (self.0.as_str(), other.0.as_str());
+        let (s, o) = (self.0.as_str(), suffix.0.as_str());
         s.len() > o.len() && s.ends_with(o) && s.as_bytes()[s.len() - o.len() - 1] == b'.'
     }
 }

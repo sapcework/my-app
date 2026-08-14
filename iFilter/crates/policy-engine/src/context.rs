@@ -6,13 +6,17 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use domain_model::{DomainName, DomainRecord, OverrideAction, ParentOverride, Profile};
+use domain_model::{DomainName, DomainRecord, MatchScope, OverrideAction, ParentOverride, Profile};
 use time::OffsetDateTime;
 
 /// ドメイン → 分類情報の索引。
+///
+/// 照合範囲ごとに 2 つに分けて持つ。サフィックスは件数が少なく、階層マッチで
+/// 引けないので線形に見る（`DomainName::is_within`）。
 #[derive(Debug, Clone, Default)]
 pub struct DomainIndex {
     by_domain: HashMap<DomainName, DomainRecord>,
+    suffixes: Vec<DomainRecord>,
 }
 
 impl DomainIndex {
@@ -21,26 +25,49 @@ impl DomainIndex {
     }
 
     pub fn insert(&mut self, record: DomainRecord) {
-        self.by_domain.insert(record.domain.clone(), record);
+        match record.scope {
+            MatchScope::Domain => {
+                self.by_domain.insert(record.domain.clone(), record);
+            }
+            MatchScope::Suffix => {
+                // 同じドメインの登録は差し替える。upsert と挙動をそろえる
+                self.suffixes.retain(|r| r.domain != record.domain);
+                self.suffixes.push(record);
+            }
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.by_domain.len()
+        self.by_domain.len() + self.suffixes.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.by_domain.is_empty()
+        self.by_domain.is_empty() && self.suffixes.is_empty()
     }
 
     /// 階層をたどって**最も具体的な**レコードを返す。
     ///
     /// 候補は eTLD+1 までで打ち切られる（`DomainName::match_candidates`）。
     /// 無効化・論理削除されたレコードは飛ばして、より上位の候補を見る。
+    ///
+    /// 階層マッチで当たらなかったときだけサフィックス登録を見る。順序が逆だと
+    /// `cloudfront.net` の一括許可が、その配下に付けた個別の分類を握りつぶす。
     pub fn lookup(&self, domain: &DomainName) -> Option<&DomainRecord> {
         domain
             .match_candidates()
             .iter()
             .find_map(|candidate| self.by_domain.get(candidate).filter(|r| r.is_usable()))
+            .or_else(|| self.lookup_suffix(domain))
+    }
+
+    /// サフィックス登録のうち、**最も長い（＝具体的な）** ものを返す。
+    ///
+    /// 長さが同じなら文字列順で決める。結果を決定的にするため。
+    fn lookup_suffix(&self, domain: &DomainName) -> Option<&DomainRecord> {
+        self.suffixes
+            .iter()
+            .filter(|r| r.is_usable() && domain.is_within(&r.domain))
+            .max_by_key(|r| (r.domain.as_str().len(), r.domain.as_str()))
     }
 }
 

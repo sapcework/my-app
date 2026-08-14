@@ -40,7 +40,13 @@ impl SqliteStore {
         Ok(Self { conn })
     }
 
-    /// 同梱のカテゴリとプロファイルを、まだ無ければ書き込む。
+    /// 同梱のカテゴリ・プロファイル・ドメイン分類を書き込む。
+    ///
+    /// 何度呼んでも結果は同じ。同梱ドメインの ID はドメイン名から決定的に決まるので
+    /// upsert で上書きされる（`domain_model::bundled`）。
+    ///
+    /// ドメイン分類を入れないと**あらゆるドメインが未分類**になり、BEGINNER では
+    /// CDN もフォントも BLOCK されてページが表示できなくなる。
     pub fn seed_builtins(&mut self, at: OffsetDateTime) -> Result<()> {
         for info in CategoryRegistry::builtin().iter() {
             self.upsert_category(info, at)?;
@@ -53,6 +59,9 @@ impl SqliteStore {
         ] {
             let profile = Profile::builtin(id).expect("同梱プロファイル");
             self.upsert_profile(&profile, at)?;
+        }
+        for record in domain_model::bundled_records(at) {
+            self.upsert_domain_record(&record)?;
         }
         Ok(())
     }
@@ -180,7 +189,7 @@ impl PolicyStore for SqliteStore {
 
     fn domain_records(&self) -> Result<Vec<DomainRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, domain, risk_level, confidence, source, status, version, \
+            "SELECT id, domain, risk_level, confidence, source, status, scope, version, \
                     created_at, updated_at, deleted_at \
              FROM domain_records ORDER BY domain",
         )?;
@@ -193,17 +202,29 @@ impl PolicyStore for SqliteStore {
                 row.get::<_, f64>(3)?,
                 row.get::<_, String>(4)?,
                 row.get::<_, String>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, String>(7)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, i64>(7)?,
                 row.get::<_, String>(8)?,
-                row.get::<_, Option<String>>(9)?,
+                row.get::<_, String>(9)?,
+                row.get::<_, Option<String>>(10)?,
             ))
         })?;
 
         let mut out = Vec::new();
         for row in rows {
-            let (id, domain, risk, confidence, source, status, version, created, updated, deleted) =
-                row?;
+            let (
+                id,
+                domain,
+                risk,
+                confidence,
+                source,
+                status,
+                scope,
+                version,
+                created,
+                updated,
+                deleted,
+            ) = row?;
             out.push(DomainRecord {
                 id: codec::decode_uuid("domain_records.id", &id)?,
                 categories: self.categories_of(&id)?,
@@ -212,6 +233,7 @@ impl PolicyStore for SqliteStore {
                 confidence: confidence as f32,
                 source: codec::decode_source("domain_records.source", &source)?,
                 status: codec::decode_status("domain_records.status", &status)?,
+                scope: codec::decode_match_scope("domain_records.scope", &scope)?,
                 version: version as u64,
                 created_at: codec::decode_time("domain_records.created_at", &created)?,
                 updated_at: codec::decode_time("domain_records.updated_at", &updated)?,
@@ -227,13 +249,14 @@ impl PolicyStore for SqliteStore {
 
         tx.execute(
             "INSERT INTO domain_records \
-                 (id, domain, risk_level, confidence, source, status, version, \
+                 (id, domain, risk_level, confidence, source, status, scope, version, \
                   created_at, updated_at, deleted_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
              ON CONFLICT(id) DO UPDATE SET \
                  domain = excluded.domain, risk_level = excluded.risk_level, \
                  confidence = excluded.confidence, source = excluded.source, \
-                 status = excluded.status, version = excluded.version, \
+                 status = excluded.status, scope = excluded.scope, \
+                 version = excluded.version, \
                  updated_at = excluded.updated_at, deleted_at = excluded.deleted_at",
             params![
                 id,
@@ -242,6 +265,7 @@ impl PolicyStore for SqliteStore {
                 f64::from(record.confidence),
                 codec::encode_source(record.source),
                 codec::encode_status(record.status),
+                codec::encode_match_scope(record.scope),
                 record.version as i64,
                 codec::encode_time(record.created_at)?,
                 codec::encode_time(record.updated_at)?,

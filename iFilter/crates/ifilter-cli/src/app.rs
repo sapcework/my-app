@@ -6,8 +6,8 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use domain_model::{
-    CategoryId, Decision, DomainName, DomainRecord, OverrideAction, OverrideScope, ParentOverride,
-    ProfileId, RecordStatus, RequestSource, RiskLevel, Source,
+    CategoryId, Decision, DomainName, DomainRecord, MatchScope, OverrideAction, OverrideScope,
+    ParentOverride, ProfileId, RecordStatus, RequestSource, RiskLevel, Source,
 };
 use filter_core::FilterCore;
 use storage::{PolicyStore, SqliteStore};
@@ -198,6 +198,7 @@ fn cmd_init(path: &PathBuf) -> std::result::Result<ExitCode, AnyError> {
     println!("DB を用意しました: {}", path.display());
     println!("カテゴリ: {} 件", store.categories()?.len());
     println!("プロファイル: {} 件", store.profiles()?.len());
+    println!("同梱ドメイン: {} 件", store.domain_records()?.len());
     Ok(ExitCode::SUCCESS)
 }
 
@@ -294,9 +295,24 @@ fn cmd_classify(path: &PathBuf, args: ClassifyArgs) -> std::result::Result<ExitC
         .domain_records()?
         .into_iter()
         .find(|r| r.domain == domain);
-    let (id, created_at, version) = existing.as_ref().map_or((Uuid::new_v4(), at, 1), |r| {
-        (r.id, r.created_at, r.version + 1)
-    });
+    // 照合範囲は既存レコードから引き継ぐ。CLI からは Suffix を新規作成できない。
+    // 1 件で配下すべてに及ぶ強い設定なので、同梱データだけが持つ
+    // （docs/adr/0008-infrastructure-suffix-records.md）
+    let (id, created_at, version, scope) = existing
+        .as_ref()
+        .map_or((Uuid::new_v4(), at, 1, MatchScope::Domain), |r| {
+            (r.id, r.created_at, r.version + 1, r.scope)
+        });
+
+    // Domain スコープで公開サフィックスを登録しても、階層マッチが eTLD+1 で
+    // 止まるため一度もヒットしない。黙って無効なレコードを作らせない
+    if scope == MatchScope::Domain && !domain.is_registrable() {
+        return Err(format!(
+            "{domain} は公開サフィックスなので分類できません\
+             （登録しても配下のドメインには一度も適用されません）"
+        )
+        .into());
+    }
 
     let record = DomainRecord {
         id,
@@ -306,6 +322,7 @@ fn cmd_classify(path: &PathBuf, args: ClassifyArgs) -> std::result::Result<ExitC
         confidence: 1.0,
         source: Source::Parent,
         status: RecordStatus::Active,
+        scope,
         version,
         created_at,
         updated_at: at,

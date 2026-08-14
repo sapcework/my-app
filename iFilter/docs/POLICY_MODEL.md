@@ -82,6 +82,7 @@ pub struct DomainRecord {
     pub confidence: f32,                // 0.0..=1.0
     pub source: Source,                 // Local / Bundled / Server / Parent
     pub status: RecordStatus,           // Active / Disabled
+    pub scope: MatchScope,              // Domain（既定）/ Suffix
     pub version: u64,                   // サーバーとの差分同期用
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
@@ -91,6 +92,26 @@ pub struct DomainRecord {
 
 JSON は保存形式のひとつにすぎない。内部モデルは上記の型であり、`serde` で
 JSON / SQLite の双方に出し入れする。
+
+#### `scope` — このレコードがどこまで及ぶか
+
+```rust
+pub enum MatchScope {
+    Domain,   // 既定。ドメイン自身とサブドメイン。照合は eTLD+1 で打ち切る
+    Suffix,   // 公開サフィックスとして扱い、配下すべてに及ぶ
+}
+```
+
+`Suffix` は CDN のためだけにある。`cloudfront.net` `akamaiedge.net` `googleapis.com`
+などは Public Suffix List に載っているため、§1-1 の階層マッチでは
+`d111abc.cloudfront.net` から `cloudfront.net` へ**降りられず、登録しても
+一度もヒットしない**。ホスト名は顧客ごとのランダム文字列なので個別列挙もできない。
+
+**`Suffix` を持てるのは同梱の `infrastructure` レコードだけ**（ADR-0008）。
+保護者の `ParentOverride` は対象外で、公開サフィックスの登録を従来どおり拒否する。
+
+照合の順序は **階層マッチが先、サフィックスが後**。`evil.cloudfront.net` に付けた
+個別の分類が、CDN の一括許可に勝つ。
 
 ### 1-5. プロファイル
 

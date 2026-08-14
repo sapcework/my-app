@@ -137,6 +137,28 @@ ifilter log --limit 20
 設定を書き換えたときだけ読み直す（DNS は 1 ページ表示で数十件飛ぶため、
 問い合わせのたびに DB を読むわけにはいかない）。
 
+## Step 6.5 — 同梱ドメインデータ ✅ 完了（2026-08-15）
+
+Step 6 まででポリシーの正しさは検証できたが、**DB には `DomainRecord` が 1 件も
+無かった**。この状態で DNS プロキシを繋ぐと全ドメインが未分類 → BEGINNER では
+全部 BLOCK になり、CDN もフォントも止まって何も表示できない。
+
+`domain-model/src/bundled.rs` に初期分類を同梱し、`seed_builtins` から投入する。
+
+- 基盤（CDN・フォント・OCSP・NTP・OS 更新）／検索／学習・辞書／DoH プロバイダ
+- `doh` カテゴリを新設。Firefox の canary ドメイン `use-application-dns.net` を
+  ここに入れることで、**DNS 層に特別扱いを書かずに** BLOCK → NXDOMAIN が
+  そのまま DoH 無効化として働く（Step 8 の DoH 対策の中核）
+- 同梱レコードの ID はドメイン名からの UUID v5。`init` を繰り返しても重複しない
+
+実装中に設計上の穴を 1 件見つけて対処した。大手 CDN 13 件は Public Suffix List に
+載っているため、eTLD+1 で打ち切る階層マッチでは**登録しても一度もヒットしない**。
+`MatchScope::Suffix` を追加した（ADR-0008・migration 002）。
+
+確認済み: ワークスペース全体で **197 件**が通る。clippy 警告ゼロ。
+`policy-engine/tests/bundled_domains.rs` が実在のホスト名
+（`d111abcdef8.cloudfront.net` など）で照合を検査する。
+
 ---
 
 ## Step 7 — Windows サービス

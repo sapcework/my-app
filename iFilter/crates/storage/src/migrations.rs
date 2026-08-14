@@ -12,10 +12,16 @@ use crate::error::{Result, StorageError};
 
 /// 適用順に並べたマイグレーション。**既存の要素を書き換えてはいけない。**
 /// スキーマを変えるときは末尾に追加する。
-const MIGRATIONS: &[Migration] = &[Migration {
-    name: "001_initial",
-    sql: include_str!("../migrations/001_initial.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        name: "001_initial",
+        sql: include_str!("../migrations/001_initial.sql"),
+    },
+    Migration {
+        name: "002_domain_record_scope",
+        sql: include_str!("../migrations/002_domain_record_scope.sql"),
+    },
+];
 
 struct Migration {
     name: &'static str,
@@ -150,5 +156,31 @@ mod tests {
             ],
             "判定履歴の列が増えている。プライバシー方針を確認すること"
         );
+    }
+
+    #[test]
+    fn 既存の_db_に照合範囲の列を足せる() {
+        // 001 だけ適用された DB を作り、002 が既存行を壊さず追加されることを見る
+        let conn = memory();
+        conn.execute_batch(MIGRATIONS[0].sql).expect("001 を適用");
+        conn.execute_batch("PRAGMA user_version = 1").expect("設定");
+        conn.execute(
+            "INSERT INTO domain_records \
+                 (id, domain, risk_level, confidence, source, status, version, \
+                  created_at, updated_at) \
+             VALUES ('x', 'example.com', 'safe', 1.0, 'bundled', 'active', 1, \
+                     '1970-01-01T00:00:00Z', '1970-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("既存行を入れる");
+
+        assert_eq!(apply(&conn).expect("残りを適用"), MIGRATIONS.len() - 1);
+
+        let scope: String = conn
+            .query_row("SELECT scope FROM domain_records WHERE id = 'x'", [], |r| {
+                r.get(0)
+            })
+            .expect("読める");
+        assert_eq!(scope, "domain", "既存行は従来どおりの挙動のままにする");
     }
 }
