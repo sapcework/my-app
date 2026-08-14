@@ -1,0 +1,28 @@
+[package]
+name = "ifilter-service"
+description = "iFilter を Windows サービスとして常駐させる。UI を終了してもフィルターが動き続ける"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ifilter-service"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+domain-model.workspace = true
+filter-core = { path = "../../crates/filter-core" }
+ifilter-dns = { path = "../dns" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0"
+storage = { path = "../../crates/storage" }
+time = { version = "0.3.45", features = ["formatting"] }
+tokio = { version = "1.48", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+windows-registry = "0.6"      # レジストリの安全なラッパー。unsafe を書かずに済む
+windows-service = "0.8"       # SCM との受け答え。ドライバも WDK も要らない
+
+[lints]
+workspace = true

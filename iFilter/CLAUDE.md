@@ -32,6 +32,18 @@ cargo run -p ifilter-dns -- --db <path> --upstream 192.168.10.1:53 --verbose
 `check` は終了コードで判定を返す（ALLOW=0 / BLOCK=1 / REVIEW=3）。
 **PowerShell では BLOCK が「コマンド失敗」に見えるが正常。**
 
+### サービスの DB は CLI と別の場所が既定になる
+
+サービスは LocalSystem で動くので既定が `%PROGRAMDATA%\iFilter`、CLI は
+`%LOCALAPPDATA%\iFilter`。**そろえるには両方に `--db` を明示する。**
+忘れると「CLI で許可したのにフィルターに反映されない」形で表面化する。
+
+### DNS 差し替えは `--enforce-dns` を付けたときだけ
+
+付けなければサービスは 53 番で待ち受けるだけで、端末の名前解決に影響しない。
+有効にすると BEGINNER では未知が全部 BLOCK なので、**開発中のブラウザや cargo が
+繋がらなくなる**。戻すのは `ifilter-service revert-dns`。
+
 ### DNS プロキシの動作確認に `nslookup` を使わない
 
 PowerShell は `nslookup -port=15353 ...` の `-port=` を渡しそこねて 53 番に問い合わせ、

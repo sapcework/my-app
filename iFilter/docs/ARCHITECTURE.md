@@ -91,6 +91,7 @@ match verdict.decision {
 | `filter-core` | 上記を束ねる唯一の入口。キャッシュ・ロード・ログ記録 | 上記 3 つ | OS 固有 API |
 | `ifilter-cli` | 検証用 CLI（`ifilter check example.com --profile beginner`） | `filter-core` | — |
 | `ifilter-dns` | ローカル DNS プロキシ（`windows/dns`）。`Verdict` を DNS 応答として実現する | `filter-core`, `storage`, tokio | 判定ロジック |
+| `ifilter-service` | Windows サービスとしての常駐・DNS 設定差し替え・ブラウザポリシー（`windows/service`） | `ifilter-dns`, windows-service, windows-registry | 判定ロジック |
 
 `policy-engine` が I/O も時刻取得もしないのは、テスト容易性のため。現在時刻は
 `Request.at` として**引数で注入する**（時間帯ルールを後から入れても純粋性を保てる）。
