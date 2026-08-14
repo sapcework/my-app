@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/domain-model",
+    "crates/filter-core",
+    "crates/ifilter-cli",
+    "crates/policy-engine",
+    "crates/storage",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["sapcework"]
+license = ""
+
+[workspace.dependencies]
+domain-model = { path = "crates/domain-model" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"                      # Core に unsafe は不要。windows/ 側で必要になったら個別に許可する
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }   # CI で警告ゼロを維持する（リポジトリの方針）

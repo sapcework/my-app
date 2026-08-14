@@ -1,0 +1,23 @@
+[package]
+name = "storage"
+description = "iFilter のローカル永続化（SQLite）。判定ロジックは持たない"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+domain-model.workspace = true
+# bundled: システムの SQLite に依存せず、ソースから同梱する。
+# Windows で配布が楽になり、Android でも同じスキーマをそのまま使える
+rusqlite = { version = "0.38", features = ["bundled"] }
+serde_json = "1.0"
+time = { version = "0.3.45", features = ["serde", "formatting", "parsing"] }
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+policy-engine = { path = "../policy-engine" }

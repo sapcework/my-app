@@ -1,0 +1,12 @@
+/target
+**/*.rs.bk
+
+# ローカル DB・ログ（生成物）
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+/logs
+
+# UI（Step 9 以降）
+node_modules
+dist

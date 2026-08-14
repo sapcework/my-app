@@ -1,0 +1,24 @@
+[package]
+name = "ifilter-cli"
+description = "iFilter の検証用 CLI。ネットワーク層を作る前にポリシーの正しさを確かめる"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ifilter"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+domain-model.workspace = true
+filter-core = { path = "../filter-core" }
+serde_json = "1.0"
+storage = { path = "../storage" }
+time = { version = "0.3.45", features = ["serde", "formatting", "parsing", "local-offset"] }
+uuid = { version = "1.24.0", features = ["v4"] }
+
+[lints]
+workspace = true

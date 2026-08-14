@@ -1,0 +1,20 @@
+[package]
+name = "filter-core"
+description = "iFilter の中核。保存済みポリシーを読み込み、判定エンジンへの唯一の入口を提供する"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+domain-model.workspace = true
+policy-engine = { path = "../policy-engine" }
+storage = { path = "../storage" }
+time = { version = "0.3.45", features = ["serde", "formatting", "parsing"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+uuid = { version = "1.24.0", features = ["v4"] }
