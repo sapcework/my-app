@@ -32,6 +32,18 @@ cargo run -p ifilter-dns -- --db <path> --upstream 192.168.10.1:53 --verbose
 `check` は終了コードで判定を返す（ALLOW=0 / BLOCK=1 / REVIEW=3）。
 **PowerShell では BLOCK が「コマンド失敗」に見えるが正常。**
 
+### UI の設定変更は必ず `filter-core` 経由で行う
+
+DB を直接書くとポリシー版数（`policy.revision`）が進まず、**動いているサービスが
+古いポリシーのまま動き続ける**。「UI で許可したのに繋がらない」という、原因の
+分かりにくい形で出る。サービスは 2 秒ごとに版数だけを見て、変わっていれば読み直す。
+
+### Tauri crate はルートの workspace に入れない
+
+`tauri::generate_context!` がビルド時に `dist/` を要求するため、UI をビルドして
+いない状態で `cargo build --workspace` が落ちる。ルート `Cargo.toml` で
+`exclude` してあり、UI 側は `npm run verify` が自前で typecheck・lint・テストを回す。
+
 ### サービスは「準備できてから」実行中と報告する
 
 起動から待ち受け開始まで DB の準備に約 0.6 秒かかる。先に `Running` と報告すると、

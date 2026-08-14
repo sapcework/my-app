@@ -190,6 +190,16 @@ impl<S: PolicyStore> FilterCore<S> {
         }
     }
 
+    /// 設定値を保存する。
+    ///
+    /// 使用中プロファイルのように**判定に影響しうる**値が入るので、版数も進める。
+    /// 進めないと、動いているフィルターが古い設定のまま動き続ける。
+    pub fn put_setting(&mut self, key: &str, value: &str, at: OffsetDateTime) -> Result<()> {
+        self.store.set_setting(key, value, at)?;
+        self.snapshot.revision = snapshot::bump_revision(&mut self.store, at)?;
+        Ok(())
+    }
+
     /// 書き換えたあとの共通処理。版数を進めてから読み直す。
     ///
     /// 順序が逆だと、進める前の版数を写しに取り込んでしまい、

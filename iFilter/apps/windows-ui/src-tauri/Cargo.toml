@@ -1,0 +1,42 @@
+[package]
+name = "ifilter-ui"
+description = "iFilter の保護者向け管理 UI"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["sapcework"]
+license = ""
+
+# この crate はルートの workspace から exclude してある（理由はルート Cargo.toml）。
+# lint は自前で宣言する
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+
+[lib]
+name = "ifilter_ui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# 実行ファイルはマニフェストで管理者権限を要求するため、cargo test が
+# テスト用に起動しようとすると os error 740 で失敗する。中身は lib を
+# 呼ぶだけでテストも無いので、テスト対象から外す
+[[bin]]
+name = "ifilter-ui"
+path = "src/main.rs"
+test = false
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+domain-model = { path = "../../../crates/domain-model" }
+filter-core = { path = "../../../crates/filter-core" }
+ifilter-service = { path = "../../../windows/service" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+storage = { path = "../../../crates/storage" }
+tauri = { version = "2.11.2", features = [] }
+time = { version = "0.3.45", features = ["formatting", "parsing", "serde"] }
+uuid = { version = "1.24.0", features = ["v4", "serde"] }

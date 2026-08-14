@@ -10,6 +10,12 @@ members = [
     "windows/service",
 ]
 
+# Tauri アプリはこの workspace に入れない。`tauri::generate_context!` が
+# ビルド時にフロントエンドの成果物（dist/）を必要とするため、UI をビルドして
+# いない状態で `cargo build --workspace` が失敗してしまう。
+# UI 側は `npm run verify` が自前で typecheck・lint・テストを回す。
+exclude = ["apps/windows-ui/src-tauri"]
+
 [workspace.package]
 version = "0.1.0"
 edition = "2024"

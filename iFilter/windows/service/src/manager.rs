@@ -144,6 +144,29 @@ pub fn stop() -> Result<()> {
     wait_for(&service, ServiceState::Stopped)
 }
 
+/// 登録と稼働の状態。
+///
+/// 呼び出し側（保護者 UI）に `windows-service` の型を持ち出させないための形。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ServiceSummary {
+    pub installed: bool,
+    pub running: bool,
+}
+
+/// 登録と稼働の状態をまとめて返す。
+///
+/// SCM に問い合わせられない場合も「未登録」として返す。保護者 UI が
+/// 状態表示だけで開けなくなるより、分かる範囲を出すほうがよい。
+pub fn summary() -> ServiceSummary {
+    match status() {
+        Ok(Some(state)) => ServiceSummary {
+            installed: true,
+            running: state == ServiceState::Running,
+        },
+        _ => ServiceSummary::default(),
+    }
+}
+
 /// 現在の状態を返す。登録されていなければ `None`。
 pub fn status() -> Result<Option<ServiceState>> {
     let manager = manager(ServiceManagerAccess::CONNECT)?;

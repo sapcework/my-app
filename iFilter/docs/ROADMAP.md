@@ -327,14 +327,64 @@ DoH 対策（ARCHITECTURE.md §7-2）のうち、ドメイン遮断ぶんは **S
 
 確認: TEST_PLAN.md §4。
 
-## Step 9 — Tauri UI
+## Step 9 — Tauri UI ⚠️ 実装完了・実機確認はこれから（2026-08-15）
 
-`apps/windows-ui`。Tauri 2.11 + React 19 + TypeScript（fast-browser と同構成）。
-Dashboard / Profile / Category / Allowlist / Blocklist / Requests / Settings。
+`apps/windows-ui`。Tauri 2.11 + React 19 + TypeScript 6 + Vite 8（fast-browser と同構成）。
 
-Filter OFF は UAC 昇格で保護する（ARCHITECTURE.md §7-4）。
+```bash
+cd apps/windows-ui
+npm install
+npm run verify      # typecheck / lint / vitest / cargo fmt / clippy / cargo test
+npm run tauri dev   # 起動時に UAC が出る
+```
 
-確認: Verdict の `reason` と `matched_rule` が保護者に読める形で表示される。
+### 画面
+
+| 画面 | 中身 |
+| --- | --- |
+| ホーム | 稼働状態・24 時間の集計・**「このサイトは見られる？」**（判定と 9 段のトレース）・最近の記録 |
+| 遮断された記録 | 時間の近いものをまとめて表示し、選んでまとめて許可する |
+| プロファイル | 4 つから選ぶ。未分類の扱い・リスク上限・要確認の扱いを表示 |
+| サイトの種類 | カテゴリごとの Allow / Review / Block をプロファイル別に編集 |
+| 許可リスト / 拒否リスト | 保護者の上書き。サブドメイン適用の有無つき |
+| 設定 | フィルター ON/OFF・ブラウザの DoH 無効化・DB の場所 |
+
+### 実装上の決定
+
+- **起動時に管理者権限を必須にする**（`build.rs` のマニフェスト）。UAC は起動時の
+  1 回だけで、以降は全機能が使える。子供のアカウントを標準ユーザーにしておけば
+  保護者の資格情報なしには開けない。DB も `%PROGRAMDATA%` にあり標準ユーザーには
+  書けないので、要求する権限と実際に必要な権限が一致している（ARCHITECTURE.md §7-4）
+- **`Verdict` は加工せずそのまま渡す。** 「なぜブロックされたか」を保護者が読めることが
+  この製品の価値そのもので、要約すると意味が薄れる（POLICY_MODEL.md §1-6）
+- **判定ロジックは Rust 側にも React 側にも書かない。** コマンドは `filter-core` の
+  薄い包み。書いた瞬間に「UI では許可なのに DNS では遮断」が起こりうる状態になる
+- 設定の書き換えは必ず `filter-core` 経由。DB を直接触ると版数が進まず、
+  動いているサービスが古いポリシーのまま動き続ける
+- **Tauri crate はルートの workspace から `exclude` する。** `generate_context!` が
+  ビルド時に `dist/` を要求するため、UI をビルドしていない状態で
+  `cargo build --workspace` が失敗してしまう。UI 側は `npm run verify` が自前で回す
+- サービス制御は `windows/service` を lib 化して共有する。手順を 2 か所に書くと
+  片方だけ直して食い違う
+
+### 遮断された記録のまとめ方
+
+ARCHITECTURE.md §7-1 は「そのページで BLOCK された関連ドメインを併記してまとめて許可」を
+求めているが、**DNS には「どのページ由来か」の情報が無い**。時間の近さ（5 秒以内）で
+まとめた**推測**にしてあり、画面でもそう伝えている。1 件ずつ許可させると、CDN や
+フォントを含むページでは運用が破綻するため、推測でもまとめる価値が勝ると判断した。
+
+### 表示名の食い違いを検出する
+
+`Stage` や `Reason` の serde 名が変わると、画面には生の識別子がそのまま出る。
+エラーにならず静かに読みにくくなるだけなので、
+`src-tauri/src/dto.rs` のテストが名前を固定してある。変えるときは
+`src/labels.ts` も一緒に直すこと。
+
+確認済み: TypeScript テスト 5 件 + Rust テスト 17 件。typecheck・lint・fmt・clippy
+すべてクリーン。ワークスペース側は **256 件**。
+
+**未確認**: 実際に起動しての画面確認。アイコンは仮のもの（青地に白い盾）。
 
 ## Step 10 — ブラウザ統合テスト
 

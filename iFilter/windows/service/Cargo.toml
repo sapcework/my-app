@@ -7,6 +7,10 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "ifilter_service"
+path = "src/lib.rs"
+
 [[bin]]
 name = "ifilter-service"
 path = "src/main.rs"

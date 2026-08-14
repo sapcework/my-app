@@ -18,20 +18,14 @@
 //! DNS 設定の差し替えは `install --enforce-dns` を付けたときだけ行う。
 //! 付けなければ 53 番で待ち受けるだけなので、端末の名前解決には影響しない。
 
-mod browser_policy;
-mod config;
-mod dns_settings;
-mod log;
-mod manager;
-mod runner;
-
 use std::ffi::OsString;
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand};
-use config::{FilterConfig, SERVICE_NAME};
+use ifilter_service::config::{FilterConfig, SERVICE_NAME};
+use ifilter_service::{browser_policy, log, manager, runner};
 use windows_service::service::{
     ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus, ServiceType,
 };
