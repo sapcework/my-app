@@ -6,6 +6,7 @@ members = [
     "crates/ifilter-cli",
     "crates/policy-engine",
     "crates/storage",
+    "windows/dns",
 ]
 
 [workspace.package]

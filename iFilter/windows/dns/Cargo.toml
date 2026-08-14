@@ -1,0 +1,26 @@
+[package]
+name = "ifilter-dns"
+description = "iFilter のローカル DNS プロキシ。判定は filter-core に任せ、応答の作り方だけを担当する"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ifilter-dns"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+domain-model.workspace = true
+filter-core = { path = "../../crates/filter-core" }
+storage = { path = "../../crates/storage" }
+time = { version = "0.3.45", features = ["formatting", "local-offset"] }
+tokio = { version = "1.48", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1.48", features = ["sync"] }   # テストで待ち受けアドレスと停止合図を渡すため
+
+[lints]
+workspace = true

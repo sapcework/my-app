@@ -166,19 +166,56 @@ Step 6 まででポリシーの正しさは検証できたが、**DB には `Dom
 `windows/service`。UI を終了してもフィルターが動き続ける。自動起動。
 昇格が必要になるのはここから。
 
+**Step 8 を先に済ませてある**ので、ここでやるのは常駐と昇格が要る配線だけ。
+
+- サービスとしての登録・起動・停止と、`ifilter-dns` の待ち受けを 53 番にする
+- Windows の DNS 設定差し替え（ARCHITECTURE.md §7-7）
+- Chrome / Edge の `DnsOverHttpsMode` をレジストリで無効化
+- サービス異常終了時のフォールバック（ARCHITECTURE.md §7-3）
+
 確認: サービスの登録・起動・停止・PC 再起動後の自動起動。
 
-## Step 8 — DNS フィルター統合
+## Step 8 — DNS フィルター統合 ⚠️ 大半完了（2026-08-15）
 
-`windows/dns`。UDP 53 でリッスンし、`filter-core` に問い合わせて
-ALLOW は上流へフォワード、BLOCK は NXDOMAIN。
+`windows/dns`。UDP でリッスンし、`filter-core` に問い合わせて
+ALLOW は上流へフォワード、BLOCK / REVIEW は NXDOMAIN。
 
-**あわせて DoH 対策を入れる**（ARCHITECTURE.md §7-2）。これが無いと
-「ブラウザに依存しない遮断」という MVP の目的が達成できないため、後回しにしない。
+**Step 7 より先に着手した。** 高位ポート（既定 `127.0.0.1:15353`）で動く
+コンソール版なら非管理者でテストまで完結し、53 番と常駐は「配線」だけになるため。
 
-- Firefox canary domain (`use-application-dns.net`) への NXDOMAIN 応答
-- Chrome / Edge の DnsOverHttpsMode をポリシーで無効化
-- 既知 DoH プロバイダのドメインを BLOCK
+```bash
+cargo run -p ifilter-dns -- --db <path> --upstream 192.168.10.1:53 --verbose
+```
+
+実装上の決定:
+
+- **DNS メッセージは自前で最小限だけ扱う。** 問い合わせから名前を取り出すことと、
+  遮断の応答を組み立てることだけ。ALLOW は生バイトのまま転送して応答も
+  そのまま返すので、応答の解析が要らない。新しいレコード種別が出ても壊れない
+- 質問セクションの圧縮ポインタは**追いかけずに拒否する**。細工されたパケットで
+  無限ループしうるうえ、問い合わせには本来現れない
+- QTYPE で判定を変えない。HTTPS(65) レコードは ECH や代替接続先の広告に使われ、
+  A だけ見て通すと遮断を迂回される
+- 上流障害は **SERVFAIL** で返す。NXDOMAIN にすると否定応答がキャッシュされ、
+  上流が復旧しても引けない状態が続く
+- 履歴の書き込みに失敗しても判定は続ける。記録できないことを理由に通信を止めると、
+  DB の不調が「ネットに繋がらない」事故になる
+- REVIEW も通さない。DNS の応答に「確認中」を表す手段が無いため。履歴には
+  REVIEW として残るので、保護者 UI の許可申請に出せる
+
+DoH 対策（ARCHITECTURE.md §7-2）のうち、ドメイン遮断ぶんは **Step 6.5 の同梱データ**で
+実現済み。`doh` カテゴリが BLOCK → NXDOMAIN になるだけなので、DNS 層に特別扱いの
+コードは無い。Firefox の canary も同じ経路で無効化される。
+
+確認済み: テスト 29 件（`message` 16 / `upstream` 2 / 統合 11）。ワークスペース全体で
+**226 件**。実機でルータを上流に指定し、期待どおりの応答を確認した。
+
+### 残り（管理者権限が要るので Step 7 に回す）
+
+- UDP 53 番でのバインド
+- Windows の DNS 設定を `127.0.0.1` に差し替える（ARCHITECTURE.md §7-7 の
+  インターフェース漏れ対策を含む）
+- Chrome / Edge の `DnsOverHttpsMode` をレジストリで無効化
 
 確認: TEST_PLAN.md §4。
 

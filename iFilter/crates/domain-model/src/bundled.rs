@@ -93,6 +93,10 @@ const INFRASTRUCTURE_SUFFIXES: &[Entry] = &[
     ("cloudfront.net", &["infrastructure"], RiskLevel::Safe),
     ("azureedge.net", &["infrastructure"], RiskLevel::Safe),
     ("azurefd.net", &["infrastructure"], RiskLevel::Safe),
+    // 逆引き（IP → 名前）。IANA 管理で第三者が登録できず、閲覧経路にならない。
+    // 止めると OS やアプリの名前解決が無用に遅くなるだけなので通す
+    ("in-addr.arpa", &["infrastructure"], RiskLevel::Safe),
+    ("ip6.arpa", &["infrastructure"], RiskLevel::Safe),
 ];
 
 /// 検索。SafeSearch の強制は将来の課題で、ここでは分類だけ行う。

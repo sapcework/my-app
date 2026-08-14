@@ -24,10 +24,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cargo run -p ifilter-cli -- --db <path> init
 cargo run -p ifilter-cli -- --db <path> check example.com --profile beginner --trace
+
+# DNS プロキシ。既定は 127.0.0.1:15353 なので非管理者で動く
+cargo run -p ifilter-dns -- --db <path> --upstream 192.168.10.1:53 --verbose
 ```
 
 `check` は終了コードで判定を返す（ALLOW=0 / BLOCK=1 / REVIEW=3）。
 **PowerShell では BLOCK が「コマンド失敗」に見えるが正常。**
+
+### DNS プロキシの動作確認に `nslookup` を使わない
+
+PowerShell は `nslookup -port=15353 ...` の `-port=` を渡しそこねて 53 番に問い合わせ、
+**「No response from server」＝サーバーが動いていないように見える**。UDP を直接叩く
+スクリプトか、`windows/dns/tests/proxy.rs` の統合テストで確認すること。
 
 ## ビルド・検証コマンド
 

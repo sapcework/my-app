@@ -33,6 +33,8 @@ const SAMPLES: &[(&str, &str)] = &[
     ("example.azureedge.net", "azureedge.net"),
     // 証明書の失効確認
     ("ocsp.digicert.com", "digicert.com"),
+    // 逆引き。止めても閲覧は防げず、名前解決が遅くなるだけ
+    ("1.0.0.127.in-addr.arpa", "in-addr.arpa"),
     // 学習・検索
     ("ja.wikipedia.org", "wikipedia.org"),
     ("www.google.com", "google.com"),
