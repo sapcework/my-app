@@ -173,10 +173,17 @@ fn rcode_for(err: ParseError) -> ResponseCode {
     }
 }
 
+/// 連続でこれだけ受信に失敗したら、ソケットが壊れているとみなして諦める。
+///
+/// 1 件ずつのエラーは無視するが、無視し続けると壊れたソケットを相手に
+/// 延々と空回りする。どこかで見切る必要がある。
+const MAX_CONSECUTIVE_RECV_ERRORS: u32 = 100;
+
 /// 待ち受けを開始し、`shutdown` が完了するまで処理を続ける。
 ///
-/// 実際に確保できたアドレスを `bound` で知らせる。ポート 0 を指定したときに
-/// テスト側が接続先を知るために使う。
+/// `bound` は**ソケットを確保できた時点**で呼ばれる。ここより前は問い合わせを
+/// 受け取れないので、呼び出し側が「準備完了」を外に知らせるのはこの合図のあと。
+/// 実際に確保できたアドレスを渡すので、ポート 0 を指定したときの接続先も分かる。
 pub async fn serve<S>(
     filter: Arc<DnsFilter<S>>,
     listen: SocketAddr,
@@ -191,11 +198,30 @@ where
 
     tokio::pin!(shutdown);
     let mut buf = vec![0u8; MAX_MESSAGE_LEN];
+    let mut consecutive_errors = 0u32;
 
     loop {
-        let (len, from) = tokio::select! {
-            result = socket.recv_from(&mut buf) => result?,
+        let received = tokio::select! {
+            result = socket.recv_from(&mut buf) => result,
             () = &mut shutdown => return Ok(()),
+        };
+
+        let (len, from) = match received {
+            Ok(pair) => {
+                consecutive_errors = 0;
+                pair
+            }
+            Err(err) => {
+                // Windows では、すでに閉じたクライアントのポートへ応答を返すと
+                // ICMP が返り、**こちらの次の受信が失敗する**（WSAECONNRESET）。
+                // 相手が 1 つ先に消えただけで待ち受け全体を落とすわけにはいかない。
+                // 問い合わせは常に別プロセスから来るので、これは日常的に起きる
+                consecutive_errors += 1;
+                if consecutive_errors >= MAX_CONSECUTIVE_RECV_ERRORS {
+                    return Err(err);
+                }
+                continue;
+            }
         };
 
         // 問い合わせごとに切り離す。1 件の上流待ちで他が止まらないようにする

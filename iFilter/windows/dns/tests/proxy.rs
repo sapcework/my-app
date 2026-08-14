@@ -195,6 +195,59 @@ async fn 上流が落ちていても_nxdomain_は返さない() {
 }
 
 #[tokio::test]
+async fn 応答を受け取らずに消えた相手がいても待ち受けを続ける() {
+    // Windows では、閉じたクライアントのポートへ応答を返すと ICMP が返り、
+    // サーバー側の次の受信が WSAECONNRESET で失敗する。ここで待ち受けを畳むと
+    // **相手が 1 つ先に消えただけでフィルターが黙って止まる**
+    let filter = filter(ProfileId::Beginner).await;
+    let (addr_tx, addr_rx) = oneshot::channel();
+    let (stop_tx, stop_rx) = oneshot::channel();
+
+    let server = tokio::spawn(async move {
+        serve(
+            filter,
+            "127.0.0.1:0".parse().expect("妥当"),
+            |bound| {
+                let _ = addr_tx.send(bound);
+            },
+            async {
+                let _ = stop_rx.await;
+            },
+        )
+        .await
+    });
+
+    let server_addr = addr_rx.await.expect("待ち受けアドレスが分かる");
+
+    // 送ってすぐ閉じる相手を何度か作る
+    for _ in 0..5 {
+        let ghost = UdpSocket::bind("127.0.0.1:0").await.expect("開ける");
+        ghost
+            .send_to(&query("some-unclassified-site.com", 1), server_addr)
+            .await
+            .expect("送れる");
+        drop(ghost);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    // そのあとでも普通に応答が返ること
+    let client = UdpSocket::bind("127.0.0.1:0").await.expect("開ける");
+    let mut buf = vec![0u8; 4096];
+    client
+        .send_to(&query("some-unclassified-site.com", 1), server_addr)
+        .await
+        .expect("送れる");
+    let (len, _) = tokio::time::timeout(Duration::from_secs(3), client.recv_from(&mut buf))
+        .await
+        .expect("応答が返る（待ち受けが止まっている）")
+        .expect("受け取れる");
+    assert_eq!(rcode_of(&buf[..len]), 3);
+
+    let _ = stop_tx.send(());
+    server.await.expect("止まる").expect("エラーなく終わる");
+}
+
+#[tokio::test]
 async fn udp_で待ち受けて応答を返す() {
     // handle() だけでなく、ソケットまで含めた配線が通っていることの確認
     let filter = filter(ProfileId::Beginner).await;

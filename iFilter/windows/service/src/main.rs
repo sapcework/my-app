@@ -21,6 +21,7 @@
 mod browser_policy;
 mod config;
 mod dns_settings;
+mod log;
 mod manager;
 mod runner;
 
@@ -36,6 +37,12 @@ use windows_service::service::{
 };
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::{define_windows_service, service_dispatcher};
+
+/// 待ち受けに入るまで SCM に待ってもらう時間の目安。
+///
+/// DB の作成と同梱データの書き込みが初回だけ走る。短すぎると SCM が
+/// 「応答しないサービス」と判断する。
+const STARTUP_WAIT_HINT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Parser)]
 #[command(name = "ifilter-service", version, about = "iFilter を Windows サービスとして動かす", long_about = None)]
@@ -108,8 +115,13 @@ fn main() -> ExitCode {
 fn cmd_install(config: &FilterConfig) -> Result<(), String> {
     manager::install(config)?;
 
+    let db = config.db_path()?;
     println!("サービスを登録しました: {SERVICE_NAME}");
-    println!("  DB        : {}", config.db_path()?.display());
+    println!("  DB        : {}", db.display());
+    println!(
+        "  ログ      : {}",
+        db.with_file_name("service.log").display()
+    );
     println!("  待ち受け  : {}", config.listen);
     println!("  上流      : {}", config.upstream);
     println!("  プロファイル: {}", config.profile.as_arg());
@@ -173,11 +185,8 @@ fn describe(state: ServiceState) -> &'static str {
 }
 
 fn cmd_console(config: &FilterConfig) -> Result<(), String> {
-    println!(
-        "前面で実行します（Ctrl+C で終了）。待ち受け: {}",
-        config.listen
-    );
-    runner::run(config, async {
+    println!("前面で実行します（Ctrl+C で終了）。");
+    runner::run(config, |bound| println!("待ち受け開始: {bound}"), async {
         let _ = tokio::signal::ctrl_c().await;
         println!("終了します。");
     })
@@ -229,8 +238,8 @@ fn cmd_run() -> Result<(), String> {
 /// 登録した引数でプロセスを起動するので、`install` が書いた設定がそのまま届く。
 fn service_main(_arguments: Vec<OsString>) {
     if let Err(err) = run_service() {
-        // サービスからは標準出力が見えない。詳細はサービスの終了コードで伝える
-        eprintln!("サービスの実行に失敗しました: {err}");
+        // サービスからは標準出力が見えない。ここで書き残さないと原因が追えない
+        log::write(&format!("サービスの実行に失敗しました: {err}"));
     }
 }
 
@@ -238,6 +247,8 @@ fn run_service() -> Result<(), String> {
     let Command::Run { config } = Cli::parse().command else {
         return Err("`run` として起動されていません".to_owned());
     };
+    // 待ち受けに入る前の失敗も残せるよう、ここで書き込み先を決めておく
+    log::init(&config.db_path()?);
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
     let handle = service_control_handler::register(SERVICE_NAME, move |control| match control {
@@ -251,22 +262,39 @@ fn run_service() -> Result<(), String> {
     })
     .map_err(|err| format!("制御ハンドラを登録できません: {err}"))?;
 
-    let report = |state: ServiceState, exit: ServiceExitCode| ServiceStatus {
+    let report = |state: ServiceState, exit: ServiceExitCode, wait_hint: Duration| ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
         current_state: state,
         // PC のシャットダウンでも止める。止め損ねると次回起動時に 53 番が空かない
         controls_accepted: ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN,
         exit_code: exit,
         checkpoint: 0,
-        wait_hint: Duration::default(),
+        wait_hint,
         process_id: None,
     };
 
+    // まずは「開始中」。DB の準備に数百ミリ秒かかるので、ここで Running と
+    // 報告してしまうと `start` の直後に投げた問い合わせが**まだ誰も居ないポート**へ
+    // 届いて失敗する（Windows では ICMP が返り WSAECONNRESET になる）
     handle
-        .set_service_status(report(ServiceState::Running, ServiceExitCode::Win32(0)))
+        .set_service_status(report(
+            ServiceState::StartPending,
+            ServiceExitCode::Win32(0),
+            STARTUP_WAIT_HINT,
+        ))
         .map_err(|err| format!("状態を報告できません: {err}"))?;
 
-    let result = runner::run(&config, runner::wait_for_signal(shutdown_rx));
+    // 待ち受けが立ち上がってから「実行中」にする
+    let ready_handle = handle;
+    let on_ready = move |_bound| {
+        let _ = ready_handle.set_service_status(report(
+            ServiceState::Running,
+            ServiceExitCode::Win32(0),
+            Duration::default(),
+        ));
+    };
+
+    let result = runner::run(&config, on_ready, runner::wait_for_signal(shutdown_rx));
 
     // 失敗を終了コードで伝える。0 以外なら SCM が再起動を試みる
     let exit = if result.is_ok() {
@@ -274,7 +302,7 @@ fn run_service() -> Result<(), String> {
     } else {
         ServiceExitCode::ServiceSpecific(1)
     };
-    let _ = handle.set_service_status(report(ServiceState::Stopped, exit));
+    let _ = handle.set_service_status(report(ServiceState::Stopped, exit, Duration::default()));
 
     result
 }

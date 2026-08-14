@@ -1,5 +1,6 @@
 //! サービス本体。SCM から起動され、DNS プロキシを動かし続ける。
 
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
@@ -12,6 +13,7 @@ use time::OffsetDateTime;
 
 use crate::config::FilterConfig;
 use crate::dns_settings::{self, ORIGINAL_SETTINGS_KEY, OriginalSettings, WindowsDns};
+use crate::log;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -24,23 +26,42 @@ const DNS_REAPPLY_INTERVAL: Duration = Duration::from_secs(30);
 
 /// フィルターを組み立てて動かす。`shutdown` が来るまで戻らない。
 ///
+/// `on_ready` は**問い合わせを受け取れるようになってから**呼ばれる。DB の準備に
+/// 数百ミリ秒かかるので、これより早く「準備できた」と外に伝えると、直後の
+/// 問い合わせが誰も居ないポートに届いて失敗する。
+///
 /// サービスからもコンソールからも同じ経路を通す。「サービスだと動かない」を
 /// デバッグしづらい形で作り込まないため。
-pub fn run(config: &FilterConfig, shutdown: impl std::future::Future<Output = ()>) -> Result<()> {
+pub fn run(
+    config: &FilterConfig,
+    on_ready: impl FnOnce(SocketAddr) + Send + 'static,
+    shutdown: impl std::future::Future<Output = ()>,
+) -> Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|err| format!("非同期ランタイムを作れません: {err}"))?;
 
-    runtime.block_on(async move { run_async(config, shutdown).await })
+    runtime.block_on(async move { run_async(config, on_ready, shutdown).await })
 }
 
 async fn run_async(
     config: &FilterConfig,
+    on_ready: impl FnOnce(SocketAddr) + Send + 'static,
     shutdown: impl std::future::Future<Output = ()>,
 ) -> Result<()> {
     let path = config.db_path()?;
-    ensure_database(&path)?;
+    log::init(&path);
+    log::write(&format!(
+        "起動 listen={} upstream={} profile={} enforce_dns={}",
+        config.listen,
+        config.upstream,
+        config.profile.as_arg(),
+        config.enforce_dns
+    ));
+
+    ensure_database(&path).inspect_err(|err| log::write(err))?;
+    log::write(&format!("DB を用意しました: {}", path.display()));
 
     let store = SqliteStore::open(&path).map_err(|err| format!("DB を開けません: {err}"))?;
     let core = FilterCore::load(
@@ -49,7 +70,9 @@ async fn run_async(
         config.device_id.clone(),
         OffsetDateTime::now_utc(),
     )
-    .map_err(|err| format!("ポリシーを読み込めません: {err}"))?;
+    .map_err(|err| format!("ポリシーを読み込めません: {err}"))
+    .inspect_err(|err| log::write(err))?;
+    log::write("ポリシーを読み込みました");
 
     let upstream = Upstream::new(config.upstream, Duration::from_secs(config.timeout));
     let filter = Arc::new(DnsFilter::new(core, upstream, config.verbose));
@@ -65,9 +88,22 @@ async fn run_async(
         None
     };
 
-    let result = serve(filter, config.listen, |_| {}, shutdown)
-        .await
-        .map_err(|err| format!("{} で待ち受けられません: {err}", config.listen));
+    // 実際に確保できたアドレスを残す。ここが出ていれば待ち受けは成立している。
+    // 出ずに終わっているならバインドで失敗している
+    let result = serve(
+        filter,
+        config.listen,
+        |bound| {
+            log::write(&format!("待ち受け開始: {bound}"));
+            on_ready(bound);
+        },
+        shutdown,
+    )
+    .await
+    .map_err(|err| format!("{} で待ち受けられません: {err}", config.listen))
+    .inspect_err(|err| log::write(err));
+
+    log::write("待ち受けを終了しました");
 
     if let Some(handle) = enforcer {
         handle.abort();
