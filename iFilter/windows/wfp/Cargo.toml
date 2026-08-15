@@ -1,0 +1,25 @@
+[package]
+name = "ifilter-wfp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+domain-model.workspace = true
+
+# WFP には windows-registry / windows-service のような安全なラッパーが無い。
+# 生の Win32 API を呼ぶので、unsafe はこの crate の内側だけに閉じる（ADR-0010）。
+#
+# feature は 3 つ要る。WindowsFilteringPlatform だけでは足りず、
+# FWPM_SESSION0 に Win32_Security、FwpmEngineOpen0 にはさらに Win32_System_Rpc が要る。
+# 足りないと「関数が見つからない」形のエラーになり、API 名の間違いに見える。
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_WindowsFilteringPlatform",
+    "Win32_Security",
+    "Win32_System_Rpc",
+]
+
+[lints]
+workspace = true

@@ -98,6 +98,17 @@ async fn run_async(
         None
     };
 
+    // DoH プロバイダの IP を塞ぐ。ドメイン名の遮断は、ブラウザの DoH 設定に
+    // https://1.1.1.1/dns-query と**数字で**書かれるとすり抜ける（ADR-0010）。
+    //
+    // 落とすと解除されるので、待ち受けのあいだ持ち続ける必要がある。
+    // 名前の `_` は「使わない」ではなく「Drop のために保持している」の意味
+    let _doh_blocker = if config.enforce_dns {
+        block_doh_addresses()
+    } else {
+        None
+    };
+
     // 実際に確保できたアドレスを残す。ここが出ていれば待ち受けは成立している。
     // 出ずに終わっているならバインドで失敗している
     let result = serve(
@@ -125,6 +136,30 @@ async fn run_async(
     }
 
     result
+}
+
+/// DoH プロバイダの IP を塞ぐ。塞げなくても待ち受けは続ける。
+///
+/// **失敗を理由に止めない。** ここが効かなくてもドメイン名による遮断は働いており、
+/// サービスごと落とすと DNS フィルタまで失う。害の大きいほうを避ける。
+/// ただし黙って進むと「効いているつもり」になるので、必ずログに残す。
+fn block_doh_addresses() -> Option<ifilter_wfp::AddressBlocker> {
+    let addresses = domain_model::bundled_doh_addresses();
+    match ifilter_wfp::AddressBlocker::block(&addresses) {
+        Ok(blocker) => {
+            log::write(&format!(
+                "DoH プロバイダの IP を {} 件塞ぎました",
+                blocker.filter_count()
+            ));
+            Some(blocker)
+        }
+        Err(err) => {
+            log::write(&format!(
+                "DoH プロバイダの IP を塞げません（ドメイン名の遮断は有効です）: {err}"
+            ));
+            None
+        }
+    }
 }
 
 /// DB が無ければ作り、同梱データを入れる。

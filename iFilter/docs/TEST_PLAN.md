@@ -141,6 +141,7 @@ Chrome / Edge / Firefox の 3 つで同じ手順を実施する。
 | Allowlist に追加した直後 | 表示できる（DNS キャッシュの扱いを確認） |
 | Blocklist に追加した直後 | 表示できない |
 | **DoH を有効にしたブラウザ** | **素通りしないこと**（ARCHITECTURE.md §7-2） |
+| **DoH の URL に IP を直接書く**（`https://1.1.1.1/dns-query`） | 繋がらないこと（WFP・ADR-0010） |
 | サービス再起動 | 正しく復旧する |
 | PC 再起動 | フィルターが自動起動する |
 | 許可したページ内の CDN・フォント | ページが崩れない（ARCHITECTURE.md §7-1） |

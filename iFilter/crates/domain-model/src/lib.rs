@@ -18,7 +18,7 @@ pub mod record;
 pub mod request;
 pub mod risk;
 
-pub use bundled::bundled_records;
+pub use bundled::{bundled_doh_addresses, bundled_records};
 pub use category::{CategoryId, CategoryInfo, CategoryRegistry, InvalidCategoryId};
 pub use decision::{Decision, Reason, RuleId, Stage, StageOutcome, TraceStep, Verdict};
 pub use domain::{DomainName, DomainParseError};

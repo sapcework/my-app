@@ -11,6 +11,8 @@
 //! DNS 層は BLOCK を NXDOMAIN として返すだけで対策が成立する。ネットワーク層に
 //! 特別扱いを書かずに済む（docs/adr/0007-doh-countermeasures-in-mvp.md）。
 
+use std::net::IpAddr;
+
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -142,7 +144,7 @@ const LEARNING: &[Entry] = &[
 /// BLOCK → NXDOMAIN がそのまま正しい応答になる。
 ///
 /// IP 直打ち（`8.8.8.8` など）はここでは塞げない。DNS を経由しないため。
-/// WFP（Step 11〜12）の担当。
+/// WFP（Step 11〜12）の担当。IP は [`DOH_ADDRESSES`] にある。
 const DOH: &[Entry] = &[
     ("use-application-dns.net", &["doh"], RiskLevel::High),
     ("dns.google", &["doh"], RiskLevel::High),
@@ -157,6 +159,88 @@ const DOH: &[Entry] = &[
     ("dnscrypt.info", &["doh"], RiskLevel::High),
     ("doh.sb", &["doh"], RiskLevel::High),
 ];
+
+/// DoH プロバイダの IP アドレス。ブラウザの DoH 設定に
+/// `https://1.1.1.1/dns-query` と**数字で**書かれる形を塞ぐためのもの。
+/// 名前解決が起きないので [`DOH`] のドメイン遮断では止められない（ADR-0010）。
+///
+/// # ここに載せてよい IP の条件
+///
+/// **DNS 提供専用のアドレスだけ。** 一般の Web サイトと共有している IP を
+/// 載せると、無関係なサイトが巻き添えで見られなくなる。
+///
+/// 実際 `cloudflare-dns.com` は `1.1.1.1` ではなく `104.16.249.249`
+/// （Cloudflare の**共有 CDN レンジ**）に解決される。多数の顧客サイトが同じ IP に
+/// 載っているので、ここには入れない。Cloudflare の DoH は DNS 専用 anycast の
+/// `1.1.1.1` 側で塞ぐ。`dns.nextdns.io` も解決先が地域ごとに変わり専用とは
+/// 言えないため入れていない。
+///
+/// どちらもドメイン名では [`DOH`] が遮断するので、**無防備にはならない**。
+/// 数字で直接指定された場合だけが抜ける。
+///
+/// 2026-08-16 に実測して確認した（`Resolve-DnsName`）。
+type AddressEntry = (&'static str, &'static [&'static str]);
+const DOH_ADDRESSES: &[AddressEntry] = &[
+    (
+        "Google Public DNS",
+        &[
+            "8.8.8.8",
+            "8.8.4.4",
+            "2001:4860:4860::8888",
+            "2001:4860:4860::8844",
+        ],
+    ),
+    // one.one.one.one。DNS 専用 anycast なので全ポート塞いでよい
+    (
+        "Cloudflare DNS",
+        &[
+            "1.1.1.1",
+            "1.0.0.1",
+            "2606:4700:4700::1111",
+            "2606:4700:4700::1001",
+        ],
+    ),
+    (
+        "Quad9",
+        &["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"],
+    ),
+    // doh.opendns.com 専用。従来 DNS の 208.67.222.222 とは別のアドレス
+    ("Cisco OpenDNS", &["146.112.41.2", "2620:119:fc::2"]),
+    (
+        "AdGuard DNS",
+        &[
+            "94.140.14.14",
+            "94.140.15.15",
+            "2a10:50c0::ad1:ff",
+            "2a10:50c0::ad2:ff",
+        ],
+    ),
+    // AAAA を持たない
+    ("CleanBrowsing", &["185.228.168.168", "185.228.168.10"]),
+    (
+        "DNS.SB",
+        &["185.222.222.222", "45.11.45.11", "2a09::", "2a11::"],
+    ),
+];
+
+/// 塞ぐべき DoH プロバイダの IP を返す。
+///
+/// ネットワーク層（Windows なら `windows/wfp`）が「どう塞ぐか」を担当する。
+/// ここは**データを返すだけ**で、OS API には触れない（ADR-0001）。
+///
+/// ```
+/// use domain_model::bundled_doh_addresses;
+///
+/// let addresses = bundled_doh_addresses();
+/// assert!(addresses.iter().any(|ip| ip.to_string() == "1.1.1.1"));
+/// ```
+pub fn bundled_doh_addresses() -> Vec<IpAddr> {
+    DOH_ADDRESSES
+        .iter()
+        .flat_map(|(_, addresses)| addresses.iter())
+        .map(|raw| raw.parse().expect("同梱の DoH アドレスは妥当"))
+        .collect()
+}
 
 /// 同梱データ全体を照合範囲つきで返す。
 fn entries() -> impl Iterator<Item = (&'static Entry, MatchScope)> {
@@ -222,6 +306,60 @@ mod tests {
 
     fn records() -> Vec<DomainRecord> {
         bundled_records(OffsetDateTime::UNIX_EPOCH)
+    }
+
+    #[test]
+    fn doh_の_ip_はすべて解釈できる() {
+        // parse に expect を使っているので、書き間違いはここで落とす
+        assert!(!bundled_doh_addresses().is_empty());
+    }
+
+    #[test]
+    fn doh_の_ip_に重複がない() {
+        let addresses = bundled_doh_addresses();
+        let unique: HashSet<_> = addresses.iter().collect();
+        assert_eq!(
+            unique.len(),
+            addresses.len(),
+            "同じ IP を 2 回塞ごうとしている"
+        );
+    }
+
+    #[test]
+    fn doh_の_ip_に自分の側のアドレスを混ぜない() {
+        // ループバックやプライベート IP を塞ぐと、LAN のプリンタ・NAS や
+        // iFilter 自身の 127.0.0.1:53 まで止まる。**PC が壊れたように見える**
+        for ip in bundled_doh_addresses() {
+            assert!(!ip.is_loopback(), "{ip} はループバック");
+            assert!(!ip.is_unspecified(), "{ip} は未指定アドレス");
+            assert!(!ip.is_multicast(), "{ip} はマルチキャスト");
+            if let IpAddr::V4(v4) = ip {
+                assert!(!v4.is_private(), "{ip} はプライベート IP");
+                assert!(!v4.is_link_local(), "{ip} はリンクローカル");
+            }
+        }
+    }
+
+    #[test]
+    fn doh_の_ip_は_v4_と_v6_の両方を持つ() {
+        // v4 だけ塞いでも、主要プロバイダはどこも v6 を持っているので抜けられる
+        let addresses = bundled_doh_addresses();
+        assert!(addresses.iter().any(IpAddr::is_ipv4));
+        assert!(addresses.iter().any(IpAddr::is_ipv6));
+    }
+
+    #[test]
+    fn 共有_cdn_の_ip_を塞がない() {
+        // cloudflare-dns.com は 1.1.1.1 ではなく Cloudflare の共有 CDN レンジに
+        // 解決される。塞ぐと無関係の顧客サイトが巻き添えになる（ADR-0010）
+        for ip in bundled_doh_addresses() {
+            let IpAddr::V4(v4) = ip else { continue };
+            let [a, b, ..] = v4.octets();
+            assert!(
+                !(a == 104 && (16..=31).contains(&b)),
+                "{ip} は Cloudflare の共有 CDN レンジ"
+            );
+        }
     }
 
     #[test]

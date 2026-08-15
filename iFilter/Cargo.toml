@@ -8,6 +8,7 @@ members = [
     "crates/storage",
     "windows/dns",
     "windows/service",
+    "windows/wfp",
 ]
 
 # Tauri アプリはこの workspace に入れない。`tauri::generate_context!` が

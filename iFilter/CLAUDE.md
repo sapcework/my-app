@@ -223,6 +223,22 @@ Step 11 で実測済み（ADR-0010）。
 WFP フィルタは **v4 と v6 の両方**に入れる。`FWPM_LAYER_ALE_AUTH_CONNECT_V4`
 だけでは、主要な DoH プロバイダはどこも IPv6 を持っているのでそのまま抜けられる。
 
+### 遮断する IP に共有 CDN のアドレスを混ぜない
+
+`cloudflare-dns.com` は `1.1.1.1` **ではなく** `104.16.249.249`（Cloudflare の
+共有 CDN レンジ）に解決される。ここを塞ぐと**無関係な顧客サイトが道連れになる**。
+DoH の IP 遮断に載せてよいのは **DNS 提供専用の anycast だけ**（ADR-0010）。
+
+同梱の IP を増やすときは、記憶で書かず `Resolve-DnsName` で引いて確かめること。
+混入は `domain-model` のテストが止める（プライベート IP・ループバック・
+Cloudflare 共有レンジ）。
+
+### WFP の確認に `--enforce-dns` を使わない
+
+サービスの `--enforce-dns` は DNS 設定の差し替えも同時に行うため、WFP だけを
+試したいときに**端末の名前解決ごと巻き込む**。
+`cargo run -p ifilter-wfp --example block_doh` を使う（管理者権限が要る）。
+
 ### 日本語を含むファイルを PowerShell の文字列置換で書き換えない
 
 `Get-Content -Raw` → `-replace` → `Set-Content` は UTF-8 の日本語を壊す。
