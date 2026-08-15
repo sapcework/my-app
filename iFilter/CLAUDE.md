@@ -11,6 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ドキュメントの分担
 
+- **[docs/SYSTEM_OVERVIEW.md](./docs/SYSTEM_OVERVIEW.md)** — **初めて読む人の入口。**
+  何がどう動いているかを順を追って解説する。他の文書は前提を知っている人向けなので、
+  まずここを読む
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — レイヤ境界・crate 構成・
   Windows/Core の境界・Android 方針・**既知の設計上の問題点**
 - **[docs/POLICY_MODEL.md](./docs/POLICY_MODEL.md)** — 型定義と判定順序 9 段。
