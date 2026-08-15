@@ -467,6 +467,18 @@ pub fn get_blocked_groups(state: State<'_, AppState>) -> Result<Vec<crate::dto::
                 .most_specific(&entry.domain, now(), OverrideAction::Allow)
                 .is_some()
         },
+        // 判定はしていない。プロファイルの解除不可カテゴリ集合を引くだけ（ADR-0009）
+        |entry| {
+            snapshot
+                .records
+                .lookup(&entry.domain)
+                .is_some_and(|record| {
+                    record
+                        .categories
+                        .iter()
+                        .any(|category| snapshot.profile.is_forced_block(category))
+                })
+        },
     ))
 }
 

@@ -31,10 +31,15 @@ const MAX_PER_GROUP: usize = 20;
 ///
 /// `is_allowed` には「そのドメインをすでに保護者が許可しているか」を渡す。
 /// 済みのものを許可候補として出し続けないため。
+///
+/// `cannot_allow` には「許可しても解除できないか」を渡す（ADR-0009）。
+/// ここが偽になっても遮断は Policy Engine が行うので、**安全側の判断は
+/// この関数に依存していない**。画面の既定値と説明のためだけに使う。
 pub fn group_blocked(
     entries: &[AccessDecision],
     format_time: impl Fn(&AccessDecision) -> String,
     is_allowed: impl Fn(&AccessDecision) -> bool,
+    cannot_allow: impl Fn(&AccessDecision) -> bool,
 ) -> Vec<BlockedGroup> {
     let mut groups: Vec<BlockedGroup> = Vec::new();
     let mut previous: Option<time::OffsetDateTime> = None;
@@ -48,6 +53,7 @@ pub fn group_blocked(
             decision: entry.decision.slug().to_owned(),
             timestamp: timestamp.clone(),
             already_allowed: is_allowed(entry),
+            cannot_allow: cannot_allow(entry),
         };
 
         // 新しい順に来るので、前の 1 件との差が開いたら区切る
@@ -94,6 +100,7 @@ mod tests {
         group_blocked(
             entries,
             |e| e.timestamp.unix_timestamp().to_string(),
+            |_| false,
             |_| false,
         )
     }
@@ -171,10 +178,30 @@ mod tests {
             &entries,
             |_| String::new(),
             |e| e.domain.as_str() == "allowed.example",
+            |_| false,
         );
 
         assert!(groups[0].domains[0].already_allowed);
         assert!(!groups[0].domains[1].already_allowed);
+    }
+
+    #[test]
+    fn 解除できないものに印を付ける() {
+        // DoH プロバイダが既定チェックのまま「まとめて許可」に混ざると、
+        // 押した瞬間にフィルターごと素通りになる（ADR-0009）
+        let entries = [
+            entry("use-application-dns.net", 100),
+            entry("cdn.example.net", 100),
+        ];
+        let groups = group_blocked(
+            &entries,
+            |_| String::new(),
+            |_| false,
+            |e| e.domain.as_str() == "use-application-dns.net",
+        );
+
+        assert!(groups[0].domains[0].cannot_allow);
+        assert!(!groups[0].domains[1].cannot_allow);
     }
 
     #[test]

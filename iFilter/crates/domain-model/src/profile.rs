@@ -66,8 +66,11 @@ pub struct Profile {
     /// カテゴリ別のルール。未登録のカテゴリは `unknown_policy` ではなく
     /// `default_decision` に落ちる点に注意。
     pub category_rules: BTreeMap<CategoryId, Decision>,
-    /// 保護者の Allow でも解除できないカテゴリ。**MVP では空**。
+    /// 保護者の Allow でも解除できないカテゴリ。同梱プロファイルでは **`doh` だけ**。
     /// 集合に足すだけで「Allowlist で解除できない」挙動になる。
+    ///
+    /// 足してよいのは、その 1 件を許可すると**他のカテゴリ設定が全部無効になる**もの
+    /// （ADR-0009）。`adult` などは保護者が解除できる状態を保つ（ADR-0005）。
     pub forced_block_categories: BTreeSet<CategoryId>,
     /// これを超えるリスクは問答無用で BLOCK。
     pub risk_ceiling: RiskLevel,
@@ -139,7 +142,7 @@ impl Profile {
                 // 派生プロファイル（beginner_plus / standard / teen）もこれを継承する
                 ("doh", Block),
             ]),
-            forced_block_categories: BTreeSet::new(), // MVP では保護者がすべて解除できる
+            forced_block_categories: forced(&["doh"]), // doh だけは解除させない（ADR-0009）
             risk_ceiling: RiskLevel::Low,
             unknown_policy: Block,
             review_as_block: true, // BEGINNER では REVIEW を実質 BLOCK として扱う
@@ -214,6 +217,17 @@ impl Profile {
     }
 }
 
+/// 保護者の許可（4 段目）でも解除できないカテゴリの集合を作る。
+///
+/// ここに入れてよいのは、許可した 1 件が**他のカテゴリ設定を全部無効にする**ものだけ
+/// （＝ `doh`）。「そのサイトを見せるか」を決めるカテゴリは保護者の判断に委ねる
+/// （ADR-0009）。
+fn forced(ids: &[&str]) -> BTreeSet<CategoryId> {
+    ids.iter()
+        .map(|id| CategoryId::parse(id).expect("同梱プロファイルのカテゴリ ID は妥当"))
+        .collect()
+}
+
 fn rules(pairs: &[(&str, Decision)]) -> BTreeMap<CategoryId, Decision> {
     pairs
         .iter()
@@ -266,10 +280,39 @@ mod tests {
     }
 
     #[test]
-    fn 強制ブロックカテゴリは_mvp_では空() {
-        // 空にしてあることで「保護者がすべて解除できる」という MVP 要件を満たす
-        for profile in [Profile::beginner(), Profile::standard(), Profile::teen()] {
-            assert!(profile.forced_block_categories.is_empty());
+    fn 強制ブロックカテゴリは_doh_だけ() {
+        // doh の許可は「そのサイトを見せるか」ではなく「フィルターが働くか」を決める。
+        // 1 件通すと他のカテゴリ設定が全部無効になるのでここに入れる（ADR-0009）
+        let doh = CategoryId::parse("doh").expect("妥当");
+        for profile in [
+            Profile::beginner(),
+            Profile::beginner_plus(),
+            Profile::standard(),
+            Profile::teen(),
+        ] {
+            assert_eq!(
+                profile.forced_block_categories.len(),
+                1,
+                "{} の強制ブロックが doh 以外に増えている",
+                profile.name
+            );
+            assert!(
+                profile.is_forced_block(&doh),
+                "{} で doh が解除できる",
+                profile.name
+            );
+        }
+    }
+
+    #[test]
+    fn 見せるかどうかのカテゴリは保護者が解除できる() {
+        // 上のテストの対。adult まで解除不可にすると MVP 要件から外れる（ADR-0005）
+        for id in ["adult", "gambling", "social", "video"] {
+            let category = CategoryId::parse(id).expect("妥当");
+            assert!(
+                !Profile::beginner().is_forced_block(&category),
+                "{id} が解除不可になっている"
+            );
         }
     }
 

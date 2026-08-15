@@ -8,7 +8,7 @@ mod common;
 use common::{
     Scenario, beginner_tweaked, category, parent_allow, parent_block, record, record_with_risk,
 };
-use domain_model::{Decision, OverrideScope, Reason, RiskLevel, TimeRule};
+use domain_model::{Decision, OverrideScope, Profile, Reason, RiskLevel, TimeRule};
 use uuid::Uuid;
 
 #[test]
@@ -38,7 +38,7 @@ fn 保護者の拒否_が_保護者の許可_に勝つ() {
 
 #[test]
 fn 強制ブロックカテゴリ_が_保護者の許可_に勝つ() {
-    // MVP では集合が空なので保護者はすべて解除できる。
+    // 同梱プロファイルに入っているのは doh だけ（ADR-0009）。
     // 集合に足すだけで解除不可になることを確認する（docs/adr/0005-decision-priority.md）
     let profile = beginner_tweaked(|p| {
         p.forced_block_categories.insert(category("adult"));
@@ -55,7 +55,7 @@ fn 強制ブロックカテゴリ_が_保護者の許可_に勝つ() {
 }
 
 #[test]
-fn 強制ブロックが空なら保護者が解除できる() {
+fn 強制ブロックに無いカテゴリは保護者が解除できる() {
     // 上のテストの対。MVP の要件そのもの
     let verdict = Scenario::beginner()
         .with_record(record("bad.example.com", &["adult"]))
@@ -64,6 +64,42 @@ fn 強制ブロックが空なら保護者が解除できる() {
 
     assert_eq!(verdict.decision, Decision::Allow);
     assert_eq!(verdict.reason, Reason::ParentAllow);
+}
+
+#[test]
+fn 保護者が許可しても_doh_は遮断される() {
+    // これが通らないと、保護者が「まとめて許可」を押した瞬間に
+    // DNS フィルターごと素通りになる（ADR-0009）。全プロファイルで確認する
+    for profile in [
+        Profile::beginner(),
+        Profile::beginner_plus(),
+        Profile::standard(),
+        Profile::teen(),
+    ] {
+        let name = profile.name.clone();
+        let verdict = Scenario::new(profile)
+            .with_record(record("use-application-dns.net", &["doh"]))
+            .with_override(parent_allow(
+                "use-application-dns.net",
+                OverrideScope::ExactDomain,
+            ))
+            .evaluate("use-application-dns.net");
+
+        assert_eq!(verdict.decision, Decision::Block, "{name} で素通りしている");
+        assert_eq!(verdict.reason, Reason::ForcedCategory, "{name}");
+    }
+}
+
+#[test]
+fn 保護者が_doh_のサブドメインを許可しても遮断される() {
+    // 「www. などにも適用」を選んだ許可が配下に及ぶ経路も塞がっていることを見る
+    let verdict = Scenario::beginner()
+        .with_record(record("dns.google", &["doh"]))
+        .with_override(parent_allow("dns.google", OverrideScope::IncludeSubdomains))
+        .evaluate("dns.google");
+
+    assert_eq!(verdict.decision, Decision::Block);
+    assert_eq!(verdict.reason, Reason::ForcedCategory);
 }
 
 #[test]

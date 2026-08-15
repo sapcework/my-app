@@ -120,7 +120,7 @@ pub struct Profile {
     pub id: ProfileId,                              // Beginner / BeginnerPlus / Standard / Teen / Custom(Uuid)
     pub name: String,
     pub category_rules: BTreeMap<CategoryId, Decision>,
-    pub forced_block_categories: BTreeSet<CategoryId>,  // 保護者の Allow でも解除できない（MVP では空）
+    pub forced_block_categories: BTreeSet<CategoryId>,  // 保護者の Allow でも解除できない（同梱は doh のみ）
     pub risk_ceiling: RiskLevel,                    // これを超える risk は問答無用で BLOCK
     pub unknown_policy: Decision,                   // BEGINNER = Block, STANDARD = Review
     pub review_as_block: bool,                      // BEGINNER = true（REVIEW を実質 BLOCK にする）
@@ -213,7 +213,7 @@ pub struct PolicyContext<'a> {
 | --- | --- | --- | --- |
 | 1 | Emergency Block | システム定義の緊急停止リスト。保護者も解除できない | 段のみ（空） |
 | 2 | Parent Block | 保護者の明示 Blocklist | 実装 |
-| 3 | Forced Block Category | `profile.forced_block_categories` に該当 | 段のみ（空） |
+| 3 | Forced Block Category | `profile.forced_block_categories` に該当 | 実装（`doh` のみ） |
 | 4 | Parent Allow | 保護者の明示 Allowlist（期限切れは無視） | 実装 |
 | 5 | Time Window | 時間帯・曜日・利用時間 | 段のみ（無効） |
 | 6 | Risk Ceiling | `risk_level` が `profile.risk_ceiling` を超える | 実装 |
@@ -229,9 +229,13 @@ pub struct PolicyContext<'a> {
 - **Parent Block を Parent Allow より上に置く。** 保護者が明示的に止めたものは、
   他のどのルールより優先されるべき。
 - **Forced Block Category を Parent Allow より上に置く。** ここが指示書 11 の
-  「Allowlist だけでは解除できない設計」に対応する段。MVP では集合が空なので
-  実質「保護者はすべて解除できる」となり、指示書の MVP 要件と一致する。
-  後から `adult` `malware` などを集合に足すだけで挙動が変わる。
+  「Allowlist だけでは解除できない設計」に対応する段。同梱プロファイルに入れて
+  あるのは **`doh` だけ**で、`adult` などは保護者が解除できる状態を保つ。
+  後から `malware` などを集合に足すだけで挙動が変わる。
+
+  `doh` を例外にしたのは、その 1 件の許可が**他のすべてのカテゴリ設定を無効に
+  する**ため（ADR-0009）。ほかのカテゴリは「そのサイトを見せるか」を決めるが、
+  `doh` は「フィルターが働くかどうか」を決める。性質が違う。
 - **Time Window を Parent Allow より下に置く。** 保護者の明示許可が就寝時間を
   上書きできる方が直感に合う。「就寝時間は絶対」にしたい場合に備えて
   `TimeRule.hard` フラグを用意し、true のものだけ 1 番の段で評価できるようにする。

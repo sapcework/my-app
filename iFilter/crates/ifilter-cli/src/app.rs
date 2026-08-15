@@ -265,6 +265,10 @@ fn cmd_override(
     };
     core.put_parent_override(&entry, at)?;
 
+    if action == OverrideAction::Allow {
+        warn_if_forced_block(&core, &domain);
+    }
+
     let label = match action {
         OverrideAction::Allow => "許可",
         OverrideAction::Block => "拒否",
@@ -276,6 +280,32 @@ fn cmd_override(
     };
     println!("{domain} を{label}に設定しました（{scope}）");
     Ok(ExitCode::SUCCESS)
+}
+
+/// 許可しても解除できないカテゴリなら、その旨を伝える。
+///
+/// 登録自体は拒否しない。**判定は Policy Engine の 3 段目が単独で行う**ので、
+/// ここが黙っていても素通りにはならない（ADR-0009）。防いでいるのは
+/// 「許可したのに繋がらない」と保護者が悩む時間のほう。
+///
+/// 判定の再実装ではなく、`Profile.forced_block_categories` を引くだけ。
+fn warn_if_forced_block<S: PolicyStore>(core: &FilterCore<S>, domain: &DomainName) {
+    let snapshot = core.snapshot();
+    let Some(record) = snapshot.records.lookup(domain) else {
+        return;
+    };
+
+    let forced = crate::format::forced_categories(&snapshot.profile, &record.categories);
+    if forced.is_empty() {
+        return;
+    }
+
+    eprintln!(
+        "警告: {domain} は保護者の許可では解除できないカテゴリ（{}）に含まれます。",
+        forced.join(", ")
+    );
+    eprintln!("      登録はしましたが、判定は遮断のままです。この種類のサイトを通すと");
+    eprintln!("      フィルター自体が働かなくなるためです（ADR-0009）。");
 }
 
 fn cmd_classify(path: &PathBuf, args: ClassifyArgs) -> std::result::Result<ExitCode, AnyError> {

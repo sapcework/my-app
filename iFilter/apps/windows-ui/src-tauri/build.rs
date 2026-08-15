@@ -9,8 +9,27 @@
 //! 実際に必要な権限が一致している。
 
 /// 管理者として実行することを要求するマニフェスト。
+///
+/// **Common-Controls v6 の依存宣言を必ず残すこと。** `app_manifest` は tauri-build の
+/// 既定マニフェストを丸ごと置き換えるが、その既定の中身はこの宣言だけである。
+/// 落とすと comctl32 が v5 で読み込まれ、wry/tao が静的インポートしている
+/// `SetWindowSubclass` などが見つからず、**起動した瞬間に
+/// `STATUS_ENTRYPOINT_NOT_FOUND`（0xC0000139）で落ちる**。
+/// ビルドは通り、エラーもコードとは無関係な形で出る。
 const MANIFEST: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

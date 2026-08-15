@@ -237,12 +237,26 @@ fn 時間帯ルールは_mvp_では評価されない() {
 }
 
 #[test]
-fn 強制ブロックカテゴリは_mvp_では常に_skip() {
+fn 強制ブロックカテゴリは_doh_以外では該当しない() {
+    // 集合には doh が入っている（ADR-0009）ので段は評価される。
+    // 関係ないドメインは通り抜けて次の段へ進む
     let verdict = Scenario::beginner().evaluate("example.com");
     assert_eq!(
         outcome_of(&verdict.trace, Stage::ForcedCategory),
-        Some(StageOutcome::Skip)
+        Some(StageOutcome::Miss)
     );
+}
+
+#[test]
+fn 強制ブロックカテゴリは_doh_で該当する() {
+    let verdict = Scenario::beginner()
+        .with_record(record("dns.google", &["doh"]))
+        .evaluate("dns.google");
+    assert_eq!(
+        outcome_of(&verdict.trace, Stage::ForcedCategory),
+        Some(StageOutcome::Hit(Decision::Block))
+    );
+    assert_eq!(verdict.matched_rule.as_str(), "beginner.forced.doh");
 }
 
 #[test]

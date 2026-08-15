@@ -3,8 +3,20 @@
 //! **保護者が読んで理解できること**を優先する。内部の識別子をそのまま出すのではなく、
 //! 「なぜ止まったのか」が伝わる日本語を添える。
 
-use domain_model::{Decision, Reason, Stage, StageOutcome, Verdict};
+use domain_model::{CategoryId, Decision, Profile, Reason, Stage, StageOutcome, Verdict};
 use time::OffsetDateTime;
+
+/// そのドメインのカテゴリのうち、保護者の許可では解除できないものを返す。
+///
+/// **判定ではない。** 遮断は Policy Engine の 3 段目が単独で行う（ADR-0009）。
+/// ここは「許可しても効かない」と伝えるための表示用。
+pub fn forced_categories(profile: &Profile, categories: &[CategoryId]) -> Vec<String> {
+    categories
+        .iter()
+        .filter(|category| profile.is_forced_block(category))
+        .map(ToString::to_string)
+        .collect()
+}
 
 /// 履歴一覧に出す時刻。
 ///
@@ -129,6 +141,28 @@ mod tests {
             matched_domain: None,
             trace,
         }
+    }
+
+    fn category(id: &str) -> CategoryId {
+        CategoryId::parse(id).expect("妥当")
+    }
+
+    #[test]
+    fn 解除できないカテゴリだけを拾う() {
+        // doh を許可しても効かないことを保護者に伝えるための材料（ADR-0009）
+        let profile = Profile::beginner();
+        let forced = forced_categories(&profile, &[category("doh"), category("search")]);
+
+        assert_eq!(forced, ["doh"]);
+    }
+
+    #[test]
+    fn 解除できるカテゴリでは何も返さない() {
+        // adult は保護者が解除できる。ここで拾うと余計な警告が出る
+        let profile = Profile::beginner();
+        let forced = forced_categories(&profile, &[category("adult"), category("gambling")]);
+
+        assert!(forced.is_empty());
     }
 
     #[test]

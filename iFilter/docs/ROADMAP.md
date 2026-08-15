@@ -327,7 +327,7 @@ DoH 対策（ARCHITECTURE.md §7-2）のうち、ドメイン遮断ぶんは **S
 
 確認: TEST_PLAN.md §4。
 
-## Step 9 — Tauri UI ⚠️ 実装完了・実機確認はこれから（2026-08-15）
+## Step 9 — Tauri UI ✅ 完了（2026-08-15）
 
 `apps/windows-ui`。Tauri 2.11 + React 19 + TypeScript 6 + Vite 8（fast-browser と同構成）。
 
@@ -335,8 +335,14 @@ DoH 対策（ARCHITECTURE.md §7-2）のうち、ドメイン遮断ぶんは **S
 cd apps/windows-ui
 npm install
 npm run verify      # typecheck / lint / vitest / cargo fmt / clippy / cargo test
-npm run tauri dev   # 起動時に UAC が出る
+npm run tauri dev   # 管理者の PowerShell から実行する（下記）
 ```
+
+**`npm run tauri dev` は管理者の PowerShell から実行する。** `cargo run` は
+`CreateProcess` で exe を起動するため、`requireAdministrator` のマニフェストが
+あると **UAC ダイアログが出ないまま `os error 740` で落ちる**。ビルドが全部
+通ってから最後に失敗するので、コードの問題に見える。エクスプローラーからの
+起動は `ShellExecute` なので UAC が出る（製品としての起動は正常）。
 
 ### 画面
 
@@ -381,10 +387,53 @@ ARCHITECTURE.md §7-1 は「そのページで BLOCK された関連ドメイン
 `src-tauri/src/dto.rs` のテストが名前を固定してある。変えるときは
 `src/labels.ts` も一緒に直すこと。
 
-確認済み: TypeScript テスト 5 件 + Rust テスト 17 件。typecheck・lint・fmt・clippy
-すべてクリーン。ワークスペース側は **256 件**。
+### 実機確認で見つかった不具合 3 件（2026-08-15）
 
-**未確認**: 実際に起動しての画面確認。アイコンは仮のもの（青地に白い盾）。
+**1. マニフェストの差し替えで起動できなかった**
+
+`WindowsAttributes::app_manifest` は tauri-build の既定マニフェストを丸ごと
+置き換える。既定の中身は Common-Controls v6 の依存宣言だけなので、管理者権限の
+要求だけを書いたことでその宣言が消え、comctl32 が v5 で読み込まれていた。
+wry/tao が静的インポートしている `SetWindowSubclass` `TaskDialogIndirect` は
+v6 にしかないため、**起動した瞬間に `STATUS_ENTRYPOINT_NOT_FOUND` で落ちる**。
+
+ビルドは通り、メッセージもコードと無関係な形で出る。`dumpbin /imports` で
+comctl32 から何を引いているかを見て特定した。
+
+**2. スクロールすると左のメニューが消えた**
+
+`.nav` に固定指定が無く、ページ全体が一体でスクロールしていた。「遮断された
+記録」のように縦に長い画面では、スクロールした先から他の画面へ移動できない。
+`position: sticky` + `align-self: start` + `height: 100vh` で固定した。
+
+**3. 保護者が DoH プロバイダを許可できてしまった**（最も重い）
+
+「遮断された記録」は近い時刻の遮断を**既定で全件チェック**して「まとめて許可」
+ボタンを出す。そこに `use-application-dns.net` が混ざっていた。保護者の許可は
+4 段目で `doh` のカテゴリルール（7 段目）より先に効くため、**押した瞬間に DNS
+フィルターごと素通りになる**。画面は「稼働中」のままで異常に見えない。
+
+`doh` を全プロファイルの `forced_block_categories` に入れて Policy Engine で
+塞ぎ（ADR-0009）、UI でも `cannot_allow` で選択対象から外して理由を表示する。
+CLI の `allow` も同じ場合に警告を出す（登録は拒否しない。判定は 3 段目が
+単独で行うので、警告が出なくても素通りにはならない）。
+
+### 確認済み（2026-08-15・管理者権限で実施）
+
+TypeScript テスト 5 件 + Rust テスト 18 件。typecheck・lint・fmt・clippy
+すべてクリーン。ワークスペース側は **260 件**。
+
+| 画面 | 結果 |
+| --- | --- |
+| ホーム | 稼働状態・24 時間の集計・最近の記録が表示される |
+| ホーム「このサイトは見られる？」 | `use-application-dns.net` で遮断と 6 段のトレースが出る |
+| 遮断された記録 | 07:12 と 07:19 の 2 つのまとまりに分かれて表示される |
+| プロファイル | 4 つが並び、選択中と各プロファイルの扱いが出る |
+| サイトの種類 | カテゴリ一覧と Allow / Review / Block の切り替えが出る |
+| 許可リスト / 拒否リスト | 追加欄と登録済み一覧が出る |
+| 設定 | 未設置の案内・ブラウザ DoH の状態・DB の場所が出る |
+
+**未確認**: アイコンは仮のもの（青地に白い盾）。
 
 ## Step 10 — ブラウザ統合テスト
 

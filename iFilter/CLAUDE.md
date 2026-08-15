@@ -75,6 +75,28 @@ SCM が起動したプロセスにはコンソールが付かない。失敗し�
 有効にすると BEGINNER では未知が全部 BLOCK なので、**開発中のブラウザや cargo が
 繋がらなくなる**。戻すのは `ifilter-service revert-dns`。
 
+### UI の `npm run tauri dev` は管理者の PowerShell から実行する
+
+UI は `requestedExecutionLevel = requireAdministrator`（`src-tauri/build.rs`）。
+`cargo run` は `CreateProcess` で起動するため、**UAC ダイアログは出ずに
+`os error 740`（要求された操作には管理者特権が必要です）で落ちる**。
+ビルドは通ってから最後に失敗するので、原因がコードにあるように見える。
+
+エクスプローラーやショートカットからの起動は `ShellExecute` なので UAC が出る。
+**製品としての起動は正常で、困るのは開発時だけ。** マニフェストを外して回避しない
+（子供が UI を開けないことが Filter OFF の保護そのもの — ARCHITECTURE.md §7-4）。
+
+### 自前マニフェストは Common-Controls v6 の宣言ごと置き換わる
+
+`WindowsAttributes::app_manifest` は tauri-build の既定マニフェストを**丸ごと差し替える**。
+既定の中身は Common-Controls v6 の依存宣言だけなので、管理者権限の要求だけを書くと
+その宣言が消える。すると comctl32 が v5 で読み込まれ、wry/tao が静的インポートしている
+`SetWindowSubclass` `TaskDialogIndirect` が見つからず、**起動した瞬間に
+`STATUS_ENTRYPOINT_NOT_FOUND`（0xC0000139）で落ちる**。
+
+ビルドは通り、メッセージもコードと無関係な形で出るので原因が見えにくい。
+`src-tauri/build.rs` の `MANIFEST` から `<dependency>` を消さないこと。
+
 ### DNS プロキシの動作確認に `nslookup` を使わない
 
 PowerShell は `nslookup -port=15353 ...` の `-port=` を渡しそこねて 53 番に問い合わせ、
@@ -157,6 +179,17 @@ Windows Defender の無断停止。
 `video → Review` も BEGINNER_PLUS の `video → Allow` も到達しない）。
 
 `CategoryRegistry.default_risk` は UI 表示と分類作業の補助にだけ使う。
+
+### `doh` を保護者が解除できる状態に戻さない
+
+`doh` は同梱プロファイルの `forced_block_categories` に入っている唯一のカテゴリ
+（ADR-0009）。ここから外すと、保護者が許可リストに 1 件足しただけで
+**DNS フィルターが丸ごと素通りになる**。しかも画面は「稼働中」のままで、
+判定履歴が減るだけなので異常に見えない。
+
+カテゴリ別ルール（7 段目）の `doh → Block` だけでは足りない。**保護者の許可は
+4 段目**で、7 段目より先に効く。「遮断された記録」画面の「まとめて許可」は
+まさにその動線なので、UI 側でも `cannot_allow` で選択対象から外してある。
 
 ### 未知ドメイン BLOCK は「ページが崩れる」形で出る
 

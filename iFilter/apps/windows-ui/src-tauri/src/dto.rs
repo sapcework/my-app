@@ -74,6 +74,12 @@ pub struct BlockedDomain {
     pub timestamp: String,
     /// すでに保護者が許可しているか。二重に許可させない。
     pub already_allowed: bool,
+    /// 保護者の許可では解除できないカテゴリに属するか（ADR-0009）。
+    ///
+    /// 真なら「まとめて許可」の既定チェックから外し、理由を画面に出す。
+    /// **これは判定ではなく、`Profile.forced_block_categories` を読んだ結果**。
+    /// 実際の遮断は Policy Engine の 3 段目が行うので、ここを偽にしても通らない。
+    pub cannot_allow: bool,
 }
 
 /// カテゴリ 1 件と、選択中プロファイルでの扱い。

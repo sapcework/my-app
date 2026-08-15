@@ -68,8 +68,10 @@ function GroupCard({ startedAt, domains, busy, onAllow }: {
   busy: boolean;
   onAllow: (domains: string[]) => void;
 }) {
-  const pending = domains.filter((d) => !d.alreadyAllowed); // 済みのものは選ばせない
+  // 済みのものと、許可しても解除できないものは選ばせない（ADR-0009）
+  const pending = domains.filter((d) => !d.alreadyAllowed && !d.cannotAllow);
   const [selected, setSelected] = useState<string[]>(() => pending.map((d) => d.domain));
+  const blocked = domains.some((d) => d.cannotAllow); // 説明を出すかどうか
 
   function toggle(domain: string) {
     setSelected((current) =>
@@ -98,7 +100,7 @@ function GroupCard({ startedAt, domains, busy, onAllow }: {
                 <input
                   type="checkbox"
                   checked={selected.includes(row.domain)}
-                  disabled={row.alreadyAllowed}
+                  disabled={row.alreadyAllowed || row.cannotAllow}
                   onChange={() => toggle(row.domain)}
                 />
               </td>
@@ -107,11 +109,22 @@ function GroupCard({ startedAt, domains, busy, onAllow }: {
                 <Badge decision={row.decision} />
               </td>
               <td className="mono dim">{row.ruleId}</td>
-              <td className="dim">{row.alreadyAllowed ? '許可済み' : ''}</td>
+              <td className="dim">
+                {row.alreadyAllowed ? '許可済み' : row.cannotAllow ? '解除できません' : ''}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {blocked && (
+        <p className="note">
+          「解除できません」と表示されているサイトは、iFilter
+          を通さずに接続するための仕組み（暗号化 DNS）です。
+          これを許可すると、ほかのすべての設定が働かなくなるため、許可の対象から外しています。
+          フィルター自体を止めたい場合は「設定」画面から行ってください。
+        </p>
+      )}
     </div>
   );
 }

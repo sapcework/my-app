@@ -92,6 +92,8 @@ export interface BlockedDomain {
   decision: DecisionName;
   timestamp: string;
   alreadyAllowed: boolean;
+  // 保護者の許可では解除できないカテゴリ（暗号化 DNS）。許可の対象から外す（ADR-0009）
+  cannotAllow: boolean;
 }
 
 export interface OverrideRow {
