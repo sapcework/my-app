@@ -181,6 +181,16 @@ DoH の行と CDN の行は、指示書 39 には無いが**これが通らな�
 `cargo test` がコンパイルエラーで落ちる**。ローカルでは前回のビルド成果物が
 残っていて気づけない。
 
+### prettier は `endOfLine: "auto"` にする
+
+これが無いと **CI でだけ全ファイルが「未整形」と判定される**。prettier の既定は
+`"lf"` だが、Windows ランナーの checkout は `core.autocrlf` により CRLF で展開する
+ため、中身が正しくても全部落ちる。
+
+手元では気づけない。`npm run format` が書いた LF のファイルがそのまま残っている
+ので通ってしまい、**git を経由したときだけ CRLF になる**。1 ファイルだけ落ちるなら
+中身の問題、全ファイルが落ちるなら改行コードを疑う。
+
 ### ジョブは 1 つにまとめる
 
 `windows/service` と `windows/dns` が Windows 固有 crate を使うため、
