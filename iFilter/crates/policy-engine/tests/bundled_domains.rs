@@ -33,6 +33,12 @@ const SAMPLES: &[(&str, &str)] = &[
     ("example.azureedge.net", "azureedge.net"),
     // 証明書の失効確認
     ("ocsp.digicert.com", "digicert.com"),
+    // OS の時刻同期と更新。ここが通らないと、時計がずれて HTTPS が全部壊れたり
+    // 「更新を確認できません」で止まったりする。どちらもフィルターのせいには見えない
+    ("time.windows.com", "time.windows.com"),
+    ("ctldl.windowsupdate.com", "windowsupdate.com"),
+    ("update.microsoft.com", "update.microsoft.com"),
+    ("fe2.update.microsoft.com", "update.microsoft.com"),
     // 逆引き。止めても閲覧は防げず、名前解決が遅くなるだけ
     ("1.0.0.127.in-addr.arpa", "in-addr.arpa"),
     // 学習・検索

@@ -62,8 +62,25 @@ const INFRASTRUCTURE: &[Entry] = &[
     ("msftconnecttest.com", &["infrastructure"], RiskLevel::Safe),
     ("msftncsi.com", &["infrastructure"], RiskLevel::Safe),
     ("mozilla.net", &["infrastructure"], RiskLevel::Safe),
-    // 時刻同期。ずれると証明書が「期限切れ」に見えて HTTPS が全部壊れる
+    // 更新の**確認**は microsoft.com 側に来る。download.windowsupdate.com だけ通しても
+    // 「更新を確認できません」で止まる。microsoft.com 全体は通さない
+    // （OneDrive・Teams・Xbox まで巻き込む）ので、更新に使うホストだけ個別に挙げる
+    ("update.microsoft.com", &["infrastructure"], RiskLevel::Safe),
+    (
+        "windowsupdate.microsoft.com",
+        &["infrastructure"],
+        RiskLevel::Safe,
+    ),
+    (
+        "delivery.mp.microsoft.com",
+        &["infrastructure"],
+        RiskLevel::Safe,
+    ),
+    // 時刻同期。ずれると証明書が「期限切れ」に見えて HTTPS が全部壊れる。
+    // **Windows の既定は time.windows.com**。ntp.org だけでは、この最も引かれる
+    // 名前が通らず、登録した意図が実現しない（eTLD+1 は windows.com で別物）
     ("ntp.org", &["infrastructure"], RiskLevel::Safe),
+    ("time.windows.com", &["infrastructure"], RiskLevel::Safe),
 ];
 
 /// 配下すべてに及ぶ基盤ドメイン（[`MatchScope::Suffix`]）。
