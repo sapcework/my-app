@@ -154,10 +154,10 @@ DoH の行と CDN の行は、指示書 39 には無いが**これが通らな�
 
 ---
 
-## 6. CI
+## 6. CI ✅ 用意済み（2026-08-15）
 
-同一リポジトリの `fast-browser-ci.yml` に倣い、`iFilter/**` の変更で起動する
-`windows-latest` のワークフローを用意する。
+`.github/workflows/ifilter-ci.yml`。同一リポジトリの `fast-browser-ci.yml` に倣い、
+`iFilter/**` の変更で起動する `windows-latest` のワークフロー。
 
 ```yaml
 - cargo fmt --all -- --check
@@ -170,4 +170,19 @@ DoH の行と CDN の行は、指示書 39 には無いが**これが通らな�
 混入チェックに `cargo tree -i windows` を使ってはいけない。依存が**無いとき**に
 エラー終了するため判定が逆になる。ARCHITECTURE.md §5 の依存一覧方式を使う。
 
-UI 追加後は `npm run verify`（typecheck / eslint / vitest）を足す。
+保護者 UI は workspace から exclude してあるので、上の `--workspace` には含まれない。
+別ステップで `npm run verify`（typecheck / eslint / vitest / cargo fmt / clippy / test）
+と `npm run format:check` を回す。
+
+### UI は `npm run build` を verify より先に置く
+
+`tauri::generate_context!` がビルド時に `dist/` を要求する。checkout 直後は
+`dist/` が無いので、先にフロントをビルドしないと**後段の `cargo clippy` と
+`cargo test` がコンパイルエラーで落ちる**。ローカルでは前回のビルド成果物が
+残っていて気づけない。
+
+### ジョブは 1 つにまとめる
+
+`windows/service` と `windows/dns` が Windows 固有 crate を使うため、
+workspace 全体のビルドは Windows でしか通らない。Core と UI を別ジョブに
+分けると Windows ランナーを 2 つ使うことになるので、直列でも 1 ジョブにする。

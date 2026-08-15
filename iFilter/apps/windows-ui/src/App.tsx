@@ -10,7 +10,8 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { Requests } from './screens/Requests';
 import { Settings } from './screens/Settings';
 
-type ScreenId = 'dashboard' | 'requests' | 'profile' | 'categories' | 'allowlist' | 'blocklist' | 'settings';
+type ScreenId =
+  'dashboard' | 'requests' | 'profile' | 'categories' | 'allowlist' | 'blocklist' | 'settings';
 
 const SCREENS: { id: ScreenId; label: string }[] = [
   { id: 'dashboard', label: 'ホーム' },

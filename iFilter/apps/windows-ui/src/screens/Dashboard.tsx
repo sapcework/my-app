@@ -161,7 +161,11 @@ function RecentDecisions() {
                   <td className="mono">{row.domain}</td>
                   <td>
                     <span className={`badge badge-${row.decision}`}>
-                      {row.decision === 'allow' ? '許可' : row.decision === 'block' ? '遮断' : '要確認'}
+                      {row.decision === 'allow'
+                        ? '許可'
+                        : row.decision === 'block'
+                          ? '遮断'
+                          : '要確認'}
                     </span>
                   </td>
                   <td className="mono dim">{row.ruleId}</td>

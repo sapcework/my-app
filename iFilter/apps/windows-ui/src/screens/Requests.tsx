@@ -62,7 +62,12 @@ export function Requests() {
   );
 }
 
-function GroupCard({ startedAt, domains, busy, onAllow }: {
+function GroupCard({
+  startedAt,
+  domains,
+  busy,
+  onAllow,
+}: {
   startedAt: string;
   domains: BlockedDomain[];
   busy: boolean;
@@ -119,8 +124,8 @@ function GroupCard({ startedAt, domains, busy, onAllow }: {
 
       {blocked && (
         <p className="note">
-          「解除できません」と表示されているサイトは、iFilter
-          を通さずに接続するための仕組み（暗号化 DNS）です。
+          「解除できません」と表示されているサイトは、iFilter を通さずに接続するための仕組み（暗号化
+          DNS）です。
           これを許可すると、ほかのすべての設定が働かなくなるため、許可の対象から外しています。
           フィルター自体を止めたい場合は「設定」画面から行ってください。
         </p>

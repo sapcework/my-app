@@ -1,0 +1,107 @@
+name: iFilter CI
+
+on:
+  push:
+    branches: [master]
+    paths: ['iFilter/**', '.github/workflows/ifilter-ci.yml']
+  pull_request:
+    paths: ['iFilter/**', '.github/workflows/ifilter-ci.yml']
+
+# 同じブランチで新しい push があれば古い実行は打ち切る（Windows ランナーは高価なため）
+concurrency:
+  group: ifilter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # windows/service と windows/dns が Windows 固有 crate を使うため、
+  # workspace 全体のビルドは Windows でしか通らない。ジョブは 1 つにまとめる
+  # （ランナーが高価なので、並列化より総時間を優先する）
+  check:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: iFilter
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust ツールチェーンを準備
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          # 判定ロジックが Android へ移植できることを検査するため
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            iFilter
+            iFilter/apps/windows-ui/src-tauri
+
+      # ---- Core（ルートの workspace）----
+
+      - name: フォーマット確認
+        run: cargo fmt --all -- --check
+
+      - name: clippy（警告ゼロ必須）
+        # lint は workspace の Cargo.toml で deny 済みなので -D warnings は不要
+        run: cargo clippy --workspace --all-targets
+
+      - name: テスト
+        run: cargo test --workspace
+
+      - name: ビルド
+        run: cargo build --workspace
+
+      # ---- レイヤ境界の機械的な検査（docs/ARCHITECTURE.md §5）----
+
+      - name: Core に OS 固有 crate が混入していないこと
+        shell: pwsh
+        # --edges normal は必須。付けないと dev-dependency（proptest → tempfile →
+        # windows-sys）まで数えて、健全な状態でも誤検知する。
+        # cargo tree -i windows は使わない（依存が無いとき＝正常時にエラー終了し、判定が逆になる）
+        run: |
+          foreach ($crate in @('domain-model', 'policy-engine')) {
+            $deps = cargo tree -p $crate --edges normal --prefix none --format "{p}" | Sort-Object -Unique
+            $bad = $deps | Select-String -Pattern '^(windows|winapi)'
+            if ($bad) {
+              throw "$crate に OS 固有 crate が混入しています: $($bad -join ', ')"
+            }
+            Write-Output "$crate : OK"
+          }
+
+      - name: Android ターゲットでコンパイルできること
+        # cargo check はリンクしないので NDK なしで通る。
+        # storage は rusqlite の bundled が C をビルドするため対象外
+        run: |
+          cargo check -p domain-model --target aarch64-linux-android
+          cargo check -p policy-engine --target aarch64-linux-android
+
+      # ---- 保護者 UI（workspace から exclude された別プロジェクト）----
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: iFilter/apps/windows-ui/package-lock.json
+
+      - name: 依存を入れる
+        working-directory: iFilter/apps/windows-ui
+        run: npm ci
+
+      - name: 依存の脆弱性チェック
+        working-directory: iFilter/apps/windows-ui
+        run: npm audit --audit-level=high
+
+      - name: フロントをビルドする
+        working-directory: iFilter/apps/windows-ui
+        # verify より先に置く。tauri::generate_context! がビルド時に dist/ を要求するため、
+        # dist/ が無い状態では後段の cargo clippy / cargo test が失敗する
+        run: npm run build
+
+      - name: フォーマット確認（TS/CSS）
+        working-directory: iFilter/apps/windows-ui
+        run: npm run format:check
+
+      - name: 型チェック・lint・テスト（TS と Rust の両方）
+        working-directory: iFilter/apps/windows-ui
+        run: npm run verify

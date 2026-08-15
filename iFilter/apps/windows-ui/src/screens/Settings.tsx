@@ -33,10 +33,7 @@ export function Settings({ status }: { status: AsyncState<FilterStatus> }) {
       {error && <Message kind="error" text={error} />}
       {notice && <Message kind="info" text={notice} />}
 
-      <Panel
-        title="フィルター"
-        description="止めているあいだ、この PC のサイト制限は働きません。"
-      >
+      <Panel title="フィルター" description="止めているあいだ、この PC のサイト制限は働きません。">
         {status.loading && <Loading />}
         {status.data && !status.data.installed && (
           <Message
@@ -53,7 +50,9 @@ export function Settings({ status }: { status: AsyncState<FilterStatus> }) {
               onClick={() =>
                 void run(
                   () => api.setFilterEnabled(!status.data!.running),
-                  status.data!.running ? 'フィルターを停止しました。' : 'フィルターを開始しました。',
+                  status.data!.running
+                    ? 'フィルターを停止しました。'
+                    : 'フィルターを開始しました。',
                 )
               }
             >

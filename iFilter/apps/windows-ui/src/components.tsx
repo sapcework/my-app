@@ -8,7 +8,11 @@ export function Badge({ decision }: { decision: DecisionName }) {
   return <span className={`badge badge-${decision}`}>{decisionLabel[decision]}</span>;
 }
 
-export function Panel({ title, description, children }: {
+export function Panel({
+  title,
+  description,
+  children,
+}: {
   title: string;
   description?: string;
   children: ReactNode;
