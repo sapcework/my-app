@@ -212,6 +212,16 @@ ARCHITECTURE.md §5 の依存一覧方式を使う。
 
 `FwpmFilterAdd` / ALE レイヤなら**ドライバ不要**で Windows SDK だけでビルドできる。
 カーネル callout ドライバは WDK と署名が必要で、必要と実証できるまで作らない。
+Step 11 で実測済み（ADR-0010）。
+
+`windows` crate で WFP を使うには feature が **3 つ**要る。
+`Win32_NetworkManagement_WindowsFilteringPlatform` だけでは足りず、
+`FWPM_SESSION0` に `Win32_Security`、`FwpmEngineOpen0` にはさらに
+`Win32_System_Rpc` が要る。足りないと「関数が見つからない」という形の
+コンパイルエラーになるので、**API 名を間違えたように見える**。
+
+WFP フィルタは **v4 と v6 の両方**に入れる。`FWPM_LAYER_ALE_AUTH_CONNECT_V4`
+だけでは、主要な DoH プロバイダはどこも IPv6 を持っているのでそのまま抜けられる。
 
 ### 日本語を含むファイルを PowerShell の文字列置換で書き換えない
 
