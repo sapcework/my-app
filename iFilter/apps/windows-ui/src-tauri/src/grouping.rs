@@ -22,9 +22,13 @@ use crate::dto::{BlockedDomain, BlockedGroup};
 /// 遅れて来る問い合わせが取り残されて、まとめる意味が薄れる。
 const GROUP_GAP: Duration = Duration::seconds(5);
 
-/// 1 つのまとまりに入れる上限。
+/// 1 つのまとまりに入れる上限。**同じドメインは 1 件として数える。**
 ///
 /// 広告や計測が多いページでは数十件になる。全部並べると読めないので切る。
+///
+/// 数えるのを「行数」にすると枠が意味をなさない。1 ページの読み込みで同じ
+/// 配信元へ何十回も問い合わせるのは普通のことで、実際 Step 10 の確認では
+/// **20 行の中身が 4 種類しかなかった**。必要なドメインが枠からあふれる。
 const MAX_PER_GROUP: usize = 20;
 
 /// 新しい順に並んだ履歴を、時間の近さでまとめる。
@@ -54,6 +58,7 @@ pub fn group_blocked(
             timestamp: timestamp.clone(),
             already_allowed: is_allowed(entry),
             cannot_allow: cannot_allow(entry),
+            count: 1,
         };
 
         // 新しい順に来るので、前の 1 件との差が開いたら区切る
@@ -61,14 +66,30 @@ pub fn group_blocked(
             .map(|prev| prev - entry.timestamp <= GROUP_GAP)
             .unwrap_or(false);
 
-        match groups.last_mut() {
-            Some(group) if continues && group.domains.len() < MAX_PER_GROUP => {
-                group.domains.push(row);
+        // いまのまとまりに入れられたか。入らなければ新しいまとまりを起こす
+        let placed = match groups.last_mut() {
+            Some(group) if continues => {
+                // 同じドメインは行を増やさず回数だけ数える。
+                // 保護者が見るのは「どのサイトを許可するか」であって、
+                // 何回問い合わせたかではない
+                if let Some(found) = group.domains.iter_mut().find(|d| d.domain == row.domain) {
+                    found.count += 1;
+                    true
+                } else if group.domains.len() < MAX_PER_GROUP {
+                    group.domains.push(row.clone());
+                    true
+                } else {
+                    false // あふれたぶんは次のまとまりへ。捨てると許可できなくなる
+                }
             }
-            _ => groups.push(BlockedGroup {
+            _ => false,
+        };
+
+        if !placed {
+            groups.push(BlockedGroup {
                 started_at: timestamp,
                 domains: vec![row],
-            }),
+            });
         }
 
         previous = Some(entry.timestamp);
@@ -168,6 +189,37 @@ mod tests {
 
         assert_eq!(groups[0].domains.len(), MAX_PER_GROUP);
         assert!(groups.len() > 1, "あふれたぶんが捨てられている");
+    }
+
+    #[test]
+    fn 同じドメインは一行にまとめる() {
+        // Step 10 の実機確認では、20 行の中身が 4 種類しかなかった。
+        // 行で数えると枠が埋まり、**必要なドメインがあふれる**
+        let mut entries = vec![entry("cdn.example.net", 100); 8];
+        entries.push(entry("other.example", 100));
+        let groups = group(&entries);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].domains.len(), 2, "同じドメインで行が増えている");
+        assert_eq!(groups[0].domains[0].domain, "cdn.example.net");
+        assert_eq!(groups[0].domains[0].count, 8);
+        assert_eq!(groups[0].domains[1].count, 1);
+    }
+
+    #[test]
+    fn 重複を除いた数で上限を数える() {
+        // 同じドメインが何度出ても枠を消費しない。20 種類ぶん入れられる
+        let mut entries = Vec::new();
+        for i in 0..MAX_PER_GROUP {
+            for _ in 0..5 {
+                entries.push(entry(&format!("d{i}.example"), 1000));
+            }
+        }
+        let groups = group(&entries);
+
+        assert_eq!(groups.len(), 1, "同じ時刻なのに分かれている");
+        assert_eq!(groups[0].domains.len(), MAX_PER_GROUP);
+        assert!(groups[0].domains.iter().all(|d| d.count == 5));
     }
 
     #[test]

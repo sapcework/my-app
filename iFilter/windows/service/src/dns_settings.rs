@@ -136,46 +136,76 @@ impl DnsAdapter for WindowsDns {
     }
 }
 
+/// インターフェースごとの成否。
+///
+/// **1 つの失敗で全体を止めない**ために、成功と失敗を分けて持つ。
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Outcome {
+    /// 処理できたインターフェースの表示名。
+    pub changed: Vec<String>,
+    /// できなかったものと、その理由。
+    pub failed: Vec<(String, String)>,
+}
+
+impl Outcome {
+    pub fn is_empty(&self) -> bool {
+        self.changed.is_empty() && self.failed.is_empty()
+    }
+}
+
 /// 全インターフェースを iFilter に向け、元の設定を `original` に足す。
 ///
-/// 戻り値は実際に差し替えたインターフェースの表示名。
+/// **1 件失敗しても残りを続ける。** レジストリには、いま存在しないアダプタの記録が
+/// 残っていることがある（一度接続した USB イーサネットなど）。そこへの設定は
+/// 「オブジェクトが見つかりません」で失敗するが、そこで打ち切ると
+/// **本命の Wi-Fi に到達しないまま黙って終わる**。
 pub fn apply(
     adapter: &impl DnsAdapter,
     proxy: IpAddr,
     original: &mut OriginalSettings,
-) -> Result<Vec<String>, String> {
+) -> Result<Outcome, String> {
     let interfaces = adapter.interfaces()?;
-    let mut changed = Vec::new();
+    let mut outcome = Outcome::default();
 
     for iface in needs_redirect(&interfaces, proxy) {
-        original.remember(iface);
-        adapter.set_servers(iface, &[proxy])?;
-        changed.push(iface.alias.clone());
+        match adapter.set_servers(iface, &[proxy]) {
+            Ok(()) => {
+                // 成功したものだけ覚える。失敗したものを覚えると、
+                // 戻すときに存在しないアダプタへ延々と試し続けることになる
+                original.remember(iface);
+                outcome.changed.push(iface.alias.clone());
+            }
+            Err(err) => outcome.failed.push((iface.alias.clone(), err)),
+        }
     }
 
-    Ok(changed)
+    Ok(outcome)
 }
 
 /// 記録しておいた設定に戻す。
 ///
 /// 現在の状態ではなく**記録した内容**を基準にする。iFilter に向いた状態を
 /// 「元の設定」と読み違えないため。
-pub fn revert(
-    adapter: &impl DnsAdapter,
-    original: &OriginalSettings,
-) -> Result<Vec<String>, String> {
-    let mut restored = Vec::new();
+///
+/// ここも 1 件の失敗で打ち切らない。戻せないものが 1 つあるせいで、
+/// **他のアダプタが iFilter を向いたまま残る**ほうが害が大きい。
+pub fn revert(adapter: &impl DnsAdapter, original: &OriginalSettings) -> Result<Outcome, String> {
+    let mut outcome = Outcome::default();
 
     for iface in original.by_guid.values() {
-        if iface.configured.is_empty() {
-            adapter.reset_to_dhcp(iface)?; // 元は DHCP 任せだった
+        let result = if iface.configured.is_empty() {
+            adapter.reset_to_dhcp(iface) // 元は DHCP 任せだった
         } else {
-            adapter.set_servers(iface, &iface.configured)?;
+            adapter.set_servers(iface, &iface.configured)
+        };
+
+        match result {
+            Ok(()) => outcome.changed.push(iface.alias.clone()),
+            Err(err) => outcome.failed.push((iface.alias.clone(), err)),
         }
-        restored.push(iface.alias.clone());
     }
 
-    Ok(restored)
+    Ok(outcome)
 }
 
 // ---- Windows 固有の読み書き ----
@@ -234,8 +264,12 @@ fn quote(value: &str) -> String {
 }
 
 fn run_powershell(script: &str) -> Result<(), String> {
+    // 出力を UTF-8 に固定する。既定では日本語 Windows のコードページで返るため、
+    // そのままログに載せると**エラーの内容が読めない**（Step 10 で遭遇した）
+    let script = format!("[Console]::OutputEncoding=[Text.Encoding]::UTF8; {script}");
+
     let output = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .map_err(|err| format!("PowerShell を起動できません: {err}"))?;
 
@@ -244,8 +278,18 @@ fn run_powershell(script: &str) -> Result<(), String> {
     }
     Err(format!(
         "DNS 設定の変更に失敗しました: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
+        first_line(&String::from_utf8_lossy(&output.stderr))
     ))
+}
+
+/// PowerShell のエラーは十数行に及ぶ。ログに載せるのは要点の 1 行だけにする。
+fn first_line(stderr: &str) -> String {
+    stderr
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("(詳細なし)")
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -272,6 +316,22 @@ mod tests {
     struct FakeDns {
         interfaces: Vec<InterfaceDns>,
         calls: RefCell<Vec<String>>,
+        /// この表示名への設定は失敗させる。実在しないアダプタを模す
+        failing: Vec<String>,
+    }
+
+    impl FakeDns {
+        fn fail_on(&self, iface: &InterfaceDns) -> Result<(), String> {
+            if self.failing.contains(&iface.alias) {
+                // Windows が実際に返すのと同じ形の失敗
+                Err(format!(
+                    "プロパティ 'InterfaceAlias' が '{}' のオブジェクトが見つかりません",
+                    iface.alias
+                ))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     impl DnsAdapter for FakeDns {
@@ -280,6 +340,7 @@ mod tests {
         }
 
         fn set_servers(&self, iface: &InterfaceDns, servers: &[IpAddr]) -> Result<(), String> {
+            self.fail_on(iface)?;
             let list = servers
                 .iter()
                 .map(ToString::to_string)
@@ -292,11 +353,67 @@ mod tests {
         }
 
         fn reset_to_dhcp(&self, iface: &InterfaceDns) -> Result<(), String> {
+            self.fail_on(iface)?;
             self.calls
                 .borrow_mut()
                 .push(format!("dhcp {}", iface.alias));
             Ok(())
         }
+    }
+
+    #[test]
+    fn 存在しないアダプタで失敗しても残りを差し替える() {
+        // レジストリには、いま存在しないアダプタの記録が残っていることがある。
+        // そこで打ち切ると**本命の Wi-Fi に到達しないまま黙って終わる**。
+        // 実機ではこれで DNS がまったく差し替わっていなかった
+        let adapter = FakeDns {
+            interfaces: vec![
+                iface("イーサネット 2", &[], &["192.168.1.1"]), // 記録だけ残る幽霊
+                iface("Wi-Fi 2", &[], &["192.168.10.1"]),       // 本命
+            ],
+            failing: vec!["イーサネット 2".to_owned()],
+            ..Default::default()
+        };
+
+        let mut original = OriginalSettings::default();
+        let outcome = apply(&adapter, ip("127.0.0.1"), &mut original).expect("一覧は読める");
+
+        assert_eq!(outcome.changed, ["Wi-Fi 2"], "本命が差し替わっていない");
+        assert_eq!(outcome.failed.len(), 1);
+        assert_eq!(outcome.failed[0].0, "イーサネット 2");
+    }
+
+    #[test]
+    fn 失敗したアダプタは元の設定として覚えない() {
+        // 覚えてしまうと、戻すときに存在しないアダプタへ延々と試し続ける
+        let adapter = FakeDns {
+            interfaces: vec![iface("幽霊", &[], &["192.168.1.1"])],
+            failing: vec!["幽霊".to_owned()],
+            ..Default::default()
+        };
+
+        let mut original = OriginalSettings::default();
+        apply(&adapter, ip("127.0.0.1"), &mut original).expect("一覧は読める");
+
+        assert!(original.is_empty(), "失敗したものを記録している");
+    }
+
+    #[test]
+    fn 戻すときも一件の失敗で打ち切らない() {
+        // 戻せないものが 1 つあるせいで、他が iFilter を向いたまま残るほうが害が大きい
+        let adapter = FakeDns {
+            failing: vec!["幽霊".to_owned()],
+            ..Default::default()
+        };
+
+        let mut original = OriginalSettings::default();
+        original.remember(&iface("幽霊", &[], &["192.168.1.1"]));
+        original.remember(&iface("Wi-Fi 2", &["8.8.8.8"], &[]));
+
+        let outcome = revert(&adapter, &original).expect("戻せる");
+
+        assert_eq!(outcome.changed, ["Wi-Fi 2"]);
+        assert_eq!(outcome.failed.len(), 1);
     }
 
     #[test]
@@ -358,8 +475,8 @@ mod tests {
             .interfaces
             .push(iface("USB テザリング", &[], &["192.168.42.129"]));
 
-        let changed = apply(&adapter, ip("127.0.0.1"), &mut original).expect("適用できる");
-        assert_eq!(changed, vec!["USB テザリング"]);
+        let outcome = apply(&adapter, ip("127.0.0.1"), &mut original).expect("適用できる");
+        assert_eq!(outcome.changed, ["USB テザリング"]);
     }
 
     #[test]

@@ -204,11 +204,18 @@ fn cmd_revert_browser_policy() -> Result<(), String> {
 }
 
 fn cmd_revert_dns(config: &FilterConfig) -> Result<(), String> {
-    let restored = runner::restore_dns(&config.db_path()?)?;
-    if restored.is_empty() {
+    let outcome = runner::restore_dns(&config.db_path()?)?;
+    if outcome.is_empty() {
         println!("戻すべき記録はありませんでした。");
-    } else {
-        println!("DNS 設定を元に戻しました: {}", restored.join(", "));
+        return Ok(());
+    }
+
+    if !outcome.changed.is_empty() {
+        println!("DNS 設定を元に戻しました: {}", outcome.changed.join(", "));
+    }
+    // 戻せなかったものは必ず見せる。放っておくと iFilter を向いたまま残る
+    for (alias, err) in &outcome.failed {
+        eprintln!("戻せませんでした（{alias}）: {err}");
     }
     Ok(())
 }

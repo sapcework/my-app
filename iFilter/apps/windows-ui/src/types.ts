@@ -94,6 +94,8 @@ export interface BlockedDomain {
   alreadyAllowed: boolean;
   // 保護者の許可では解除できないカテゴリ（暗号化 DNS）。許可の対象から外す（ADR-0009）
   cannotAllow: boolean;
+  // このまとまりで遮断された回数。同じドメインは 1 行にまとめてある
+  count: number;
 }
 
 export interface OverrideRow {

@@ -80,6 +80,11 @@ pub struct BlockedDomain {
     /// **これは判定ではなく、`Profile.forced_block_categories` を読んだ結果**。
     /// 実際の遮断は Policy Engine の 3 段目が行うので、ここを偽にしても通らない。
     pub cannot_allow: bool,
+    /// このまとまりの中で同じドメインが遮断された回数。
+    ///
+    /// 1 ページの読み込みで同じ配信元に何十回も問い合わせるため、
+    /// **行を分けると一覧が同じ名前で埋まる**。1 行にまとめて回数だけ見せる。
+    pub count: usize,
 }
 
 /// カテゴリ 1 件と、選択中プロファイルでの扱い。

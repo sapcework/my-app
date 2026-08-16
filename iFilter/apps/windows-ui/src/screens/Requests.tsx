@@ -110,6 +110,7 @@ function GroupCard({
                 />
               </td>
               <td className="mono">{row.domain}</td>
+              <td className="dim">{row.count > 1 ? `${row.count} 回` : ''}</td>
               <td>
                 <Badge decision={row.decision} />
               </td>

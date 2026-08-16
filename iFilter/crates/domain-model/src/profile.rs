@@ -119,6 +119,7 @@ impl Profile {
                 ("kids", Allow),
                 ("reference", Allow),
                 ("infrastructure", Allow), // ページの部品が壊れないようにする
+                ("security", Allow),       // 止めると定義ファイルが更新されなくなる
                 ("search", Allow),         // 将来 SafeSearch 強制とあわせて運用する
                 ("news", Review),
                 ("video", Review),

@@ -137,6 +137,10 @@ impl CategoryRegistry {
             // 単体では閲覧対象にならない基盤ドメイン（CDN・フォント・OCSP など）。
             // これが無いと、許可したページが部品の BLOCK で崩れる（ARCHITECTURE.md §7-1）
             ("infrastructure", "基盤・配信", Safe),
+            // ウイルス対策ソフトの定義更新とクラウド判定。**閲覧対象ではない**。
+            // 止めると子供の PC のセキュリティ機能が落ちる。CLAUDE.md が
+            // 「セキュリティソフトの無断停止」を禁止しているのと同じ理由で通す
+            ("security", "セキュリティ対策", Safe),
             ("news", "ニュース", Low),
             ("video", "動画", Medium),
             ("gaming", "ゲーム", Medium),
@@ -192,7 +196,8 @@ mod tests {
     #[test]
     fn 同梱カテゴリが揃っている() {
         let registry = CategoryRegistry::builtin();
-        assert_eq!(registry.len(), 25); // 指示書 9 の 23 種 + infrastructure + doh
+        // 指示書 9 の 23 種 + infrastructure + doh + security
+        assert_eq!(registry.len(), 26);
 
         for id in [
             "education",
@@ -202,6 +207,7 @@ mod tests {
             "unknown",
             "infrastructure",
             "doh",
+            "security",
         ] {
             let id = CategoryId::parse(id).expect("妥当");
             assert!(registry.get(&id).is_some(), "{id} が同梱されていない");

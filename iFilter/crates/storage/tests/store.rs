@@ -83,7 +83,7 @@ fn 同梱データを書き込める() {
     let store = seeded();
 
     let categories = store.categories().expect("読める");
-    assert_eq!(categories.len(), 25);
+    assert_eq!(categories.len(), 26);
     assert!(categories.get(&category("infrastructure")).is_some());
 
     assert_eq!(store.profiles().expect("読める").len(), 4);
@@ -103,7 +103,7 @@ fn 同梱データを二度書いても重複しない() {
         .seed_builtins(now() + Duration::days(1))
         .expect("再書き込みできる");
 
-    assert_eq!(store.categories().expect("読める").len(), 25);
+    assert_eq!(store.categories().expect("読める").len(), 26);
     assert_eq!(store.profiles().expect("読める").len(), 4);
     // 同梱ドメインの ID はドメイン名から決まるので upsert で上書きされる
     assert_eq!(store.domain_records().expect("読める").len(), before);
@@ -210,7 +210,7 @@ fn カテゴリを後から追加できる() {
         categories.default_risk(&category("crypto")),
         RiskLevel::High
     );
-    assert_eq!(categories.len(), 26);
+    assert_eq!(categories.len(), 27);
 }
 
 // ---- ドメインレコード ----

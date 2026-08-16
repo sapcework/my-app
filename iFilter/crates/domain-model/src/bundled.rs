@@ -54,11 +54,14 @@ const INFRASTRUCTURE: &[Entry] = &[
     ("unpkg.com", &["infrastructure"], RiskLevel::Safe),
     ("bootstrapcdn.com", &["infrastructure"], RiskLevel::Safe),
     ("typekit.net", &["infrastructure"], RiskLevel::Safe),
-    // 証明書の失効確認。止めると HTTPS の接続確立そのものが遅くなる・失敗する
+    // 証明書の失効確認。止めると HTTPS の接続確立そのものが遅くなる・失敗する。
+    // pki.goog は Google の証明書配布。Step 10 の実機確認で c.pki.goog が
+    // 遮断されていた（ページは崩れないが接続のたびに待たされる）
     ("digicert.com", &["infrastructure"], RiskLevel::Safe),
     ("globalsign.com", &["infrastructure"], RiskLevel::Safe),
     ("sectigo.com", &["infrastructure"], RiskLevel::Safe),
     ("letsencrypt.org", &["infrastructure"], RiskLevel::Safe),
+    ("pki.goog", &["infrastructure"], RiskLevel::Safe),
     // OS・ブラウザの更新と接続性チェック。止めると Windows が「インターネットなし」と表示する
     ("windowsupdate.com", &["infrastructure"], RiskLevel::Safe),
     ("msftconnecttest.com", &["infrastructure"], RiskLevel::Safe),
@@ -116,6 +119,35 @@ const INFRASTRUCTURE_SUFFIXES: &[Entry] = &[
     // 止めると OS やアプリの名前解決が無用に遅くなるだけなので通す
     ("in-addr.arpa", &["infrastructure"], RiskLevel::Safe),
     ("ip6.arpa", &["infrastructure"], RiskLevel::Safe),
+];
+
+/// ウイルス対策ソフトの更新とクラウド判定。
+///
+/// **閲覧対象ではない。** 止めると定義ファイルが更新されず、子供の PC の
+/// セキュリティ機能が落ちる。CLAUDE.md が「セキュリティソフトの無断停止」を
+/// 禁止しているのと同じ理由で、どのプロファイルでも通す。
+///
+/// Step 10 の実機確認で `update.eset.com` `livegrid.eset.systems`
+/// `signals.urs.microsoft.com` が遮断されていたのを見て足した。
+/// **ページは崩れないので、記録を見なければ気づけない**形の問題だった。
+const SECURITY: &[Entry] = &[
+    // Windows Defender と SmartScreen
+    ("wdcp.microsoft.com", &["security"], RiskLevel::Safe),
+    ("wdcpalt.microsoft.com", &["security"], RiskLevel::Safe),
+    ("urs.microsoft.com", &["security"], RiskLevel::Safe),
+    ("smartscreen.microsoft.com", &["security"], RiskLevel::Safe),
+    // 主要なウイルス対策ソフト
+    ("eset.com", &["security"], RiskLevel::Safe),
+    ("eset.systems", &["security"], RiskLevel::Safe),
+    ("trendmicro.com", &["security"], RiskLevel::Safe),
+    ("norton.com", &["security"], RiskLevel::Safe),
+    ("symantec.com", &["security"], RiskLevel::Safe),
+    ("mcafee.com", &["security"], RiskLevel::Safe),
+    ("kaspersky.com", &["security"], RiskLevel::Safe),
+    ("avast.com", &["security"], RiskLevel::Safe),
+    ("avg.com", &["security"], RiskLevel::Safe),
+    ("bitdefender.com", &["security"], RiskLevel::Safe),
+    ("sophos.com", &["security"], RiskLevel::Safe),
 ];
 
 /// 検索。SafeSearch の強制は将来の課題で、ここでは分類だけ行う。
@@ -246,6 +278,7 @@ pub fn bundled_doh_addresses() -> Vec<IpAddr> {
 fn entries() -> impl Iterator<Item = (&'static Entry, MatchScope)> {
     INFRASTRUCTURE
         .iter()
+        .chain(SECURITY)
         .chain(SEARCH)
         .chain(LEARNING)
         .chain(DOH)

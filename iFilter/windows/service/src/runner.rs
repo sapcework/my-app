@@ -129,9 +129,22 @@ async fn run_async(
 
     if let Some(handle) = enforcer {
         handle.abort();
-        // 止まるときは必ず元の DNS に戻す。戻さないと名前解決ができないまま残る
-        if let Err(err) = restore_dns(&path) {
-            eprintln!("DNS 設定を戻せませんでした: {err}");
+        // 止まるときは必ず元の DNS に戻す。戻さないと名前解決ができないまま残る。
+        // ここが失敗すると端末がネットに繋がらないまま残るので、記録を必ず残す
+        match restore_dns(&path) {
+            Ok(outcome) if outcome.is_empty() => log::write("DNS は差し替えていません"),
+            Ok(outcome) => {
+                if !outcome.changed.is_empty() {
+                    log::write(&format!(
+                        "DNS を元に戻しました: {}",
+                        outcome.changed.join(", ")
+                    ));
+                }
+                for (alias, err) in &outcome.failed {
+                    log::write(&format!("DNS を戻せません（{alias}）: {err}"));
+                }
+            }
+            Err(err) => log::write(&format!("DNS 設定を戻せませんでした: {err}")),
         }
     }
 
@@ -195,41 +208,59 @@ async fn watch_policy_changes(filter: Arc<DnsFilter<SqliteStore>>) {
 
 /// DNS 設定を定期的に見直し、iFilter に向け直す。
 async fn enforce_dns_loop(path: std::path::PathBuf, proxy: std::net::IpAddr) {
+    // 30 秒ごとに回るので、毎回書くとログが埋まる。初回だけは必ず残す
+    let mut first = true;
     loop {
-        if let Err(err) = enforce_dns_once(&path, proxy) {
-            // 1 回失敗しても諦めない。アダプタの入れ替え中など一時的な失敗がある
-            eprintln!("DNS 設定を適用できませんでした: {err}");
+        match enforce_dns_once(&path, proxy) {
+            Ok(outcome) => {
+                if !outcome.changed.is_empty() {
+                    log::write(&format!(
+                        "DNS を iFilter に向けました: {}",
+                        outcome.changed.join(", ")
+                    ));
+                }
+                // 失敗は毎回残す。存在しないアダプタの記録が残っているだけなら
+                // 無害だが、本命のアダプタが落ちているなら素通りしている
+                for (alias, err) in &outcome.failed {
+                    log::write(&format!("DNS を差し替えられません（{alias}）: {err}"));
+                }
+                if first && outcome.is_empty() {
+                    // 対象が 1 つも無いまま始まるのは、掴めていない可能性がある。
+                    // **黙って進むと「効いているつもり」になる**
+                    log::write("DNS の差し替え対象がありません（すでに iFilter を向いています）");
+                }
+            }
+            // 一覧そのものが読めなかった場合。次の巡回で拾い直す
+            Err(err) => log::write(&format!("DNS 設定を適用できませんでした: {err}")),
         }
+        first = false;
         tokio::time::sleep(DNS_REAPPLY_INTERVAL).await;
     }
 }
 
-fn enforce_dns_once(path: &Path, proxy: std::net::IpAddr) -> Result<()> {
+fn enforce_dns_once(path: &Path, proxy: std::net::IpAddr) -> Result<dns_settings::Outcome> {
     let mut store = SqliteStore::open(path).map_err(|err| format!("DB を開けません: {err}"))?;
     let mut original = load_original(&store)?;
 
-    let changed = dns_settings::apply(&WindowsDns, proxy, &mut original)?;
-    if changed.is_empty() {
-        return Ok(());
+    let outcome = dns_settings::apply(&WindowsDns, proxy, &mut original)?;
+    if !outcome.changed.is_empty() {
+        save_original(&mut store, &original)?;
     }
-
-    save_original(&mut store, &original)?;
-    println!("DNS を iFilter に向けました: {}", changed.join(", "));
-    Ok(())
+    Ok(outcome)
 }
 
 /// 記録しておいた設定に戻す。
-pub fn restore_dns(path: &Path) -> Result<Vec<String>> {
+pub fn restore_dns(path: &Path) -> Result<dns_settings::Outcome> {
     let mut store = SqliteStore::open(path).map_err(|err| format!("DB を開けません: {err}"))?;
     let original = load_original(&store)?;
     if original.is_empty() {
-        return Ok(Vec::new());
+        return Ok(dns_settings::Outcome::default());
     }
 
-    let restored = dns_settings::revert(&WindowsDns, &original)?;
+    let outcome = dns_settings::revert(&WindowsDns, &original)?;
     // 戻し終えたら記録を消す。残しておくと次に「元の設定」を取り違える
     save_original(&mut store, &OriginalSettings::default())?;
-    Ok(restored)
+    Ok(outcome)
 }
 
 pub fn load_original(store: &impl PolicyStore) -> Result<OriginalSettings> {
