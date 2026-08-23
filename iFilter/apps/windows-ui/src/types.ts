@@ -128,4 +128,5 @@ export interface DomainRecordRow {
 export interface DomainCheck {
   normalized: string;
   registrable: boolean;
+  registrableDomain: string | null; // eTLD+1。www.yahoo.co.jp なら yahoo.co.jp
 }

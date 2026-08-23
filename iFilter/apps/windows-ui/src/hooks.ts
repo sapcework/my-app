@@ -52,3 +52,18 @@ export function useAsync<T>(load: () => Promise<T>, deps: unknown[] = []): Async
 
   return { data, error, loading, reload };
 }
+
+// 入力が落ち着くまで待つ。
+//
+// 1 文字ごとに問い合わせると、`yahoo.co.jp` を打つ間に途中の断片
+// （`y` `ya` …）まで判定され、入力中ずっと赤い注意が出続けることになる。
+export function useDebounced<T>(value: T, delayMs = 250): T {
+  const [settled, setSettled] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delayMs);
+    return () => clearTimeout(timer); // 次の入力が来たら前の予約は捨てる
+  }, [value, delayMs]);
+
+  return settled;
+}

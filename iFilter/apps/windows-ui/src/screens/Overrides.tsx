@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, errorMessage } from '../api';
 import { Empty, Loading, Message, Panel } from '../components';
-import { useAsync } from '../hooks';
+import { domainHint } from '../domainHint';
+import { useAsync, useDebounced } from '../hooks';
 import { formatTimestamp } from '../labels';
+import type { DomainCheck } from '../types';
+
+// 入力中のドメインを Rust 側に見てもらった結果。**どの入力に対する答えかを持つ。**
+// 持たないと、打ち直した直後に前の入力の説明が残り、正規化の案内が嘘になる。
+interface Inspected {
+  input: string;
+  check: DomainCheck | null;
+  error: string | null;
+}
 
 export function Overrides({ action }: { action: 'allow' | 'block' }) {
   const overrides = useAsync(() => api.getOverrides(), []);
@@ -11,9 +21,47 @@ export function Overrides({ action }: { action: 'allow' | 'block' }) {
   const [includeSubdomains, setIncludeSubdomains] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [inspected, setInspected] = useState<Inspected | null>(null);
 
   const title = action === 'allow' ? '許可リスト' : '拒否リスト';
   const rows = overrides.data?.filter((row) => row.action === action) ?? [];
+
+  // eTLD+1 の算出は Rust 側にしかない（公開サフィックス表を持っているのがそちらだけ）。
+  // 判定と同じ規則で答えてもらうことが大事で、UI 側で近い処理を書いてはいけない
+  const typed = useDebounced(domain.trim());
+  useEffect(() => {
+    if (!typed) return; // 空欄のときは消さなくてよい。入力と一致しない答えは下で捨てる
+    let cancelled = false; // 打ち直しの途中で古い答えを書き込まない
+
+    api
+      .inspectDomain(typed)
+      .then((check) => {
+        if (!cancelled) setInspected({ input: typed, check, error: null });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setInspected({ input: typed, check: null, error: errorMessage(err) });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [typed]);
+
+  const fresh = inspected?.input === typed ? inspected : null; // 答え待ちの間は何も出さない
+  const hint = domainHint({
+    input: typed,
+    check: fresh?.check ?? null,
+    error: fresh?.error ?? null,
+    action,
+    includeSubdomains,
+  });
+
+  // 提案を受け入れたら「下の階層も」も入れる。eTLD+1 を単体で登録しても
+  // www. すら対象にならず、提案の意味（サイト全体）が果たせない
+  function applySuggestion(suggestion: string) {
+    setDomain(suggestion);
+    setIncludeSubdomains(true);
+  }
 
   async function add() {
     const value = domain.trim();
@@ -79,7 +127,11 @@ export function Overrides({ action }: { action: 'allow' | 'block' }) {
             placeholder="理由（任意・例: 学校の宿題）"
             onChange={(e) => setReason(e.target.value)}
           />
-          <button type="button" onClick={() => void add()} disabled={busy || !domain.trim()}>
+          <button
+            type="button"
+            onClick={() => void add()}
+            disabled={busy || !domain.trim() || hint?.canAdd === false}
+          >
             追加
           </button>
         </div>
@@ -92,6 +144,22 @@ export function Overrides({ action }: { action: 'allow' | 'block' }) {
           />
           下の階層（www. などを含む）にも適用する
         </label>
+
+        {hint && (
+          <div className={`hint hint-${hint.kind}`}>
+            <p className="hint-label">{hint.label}</p>
+            <p>{hint.text}</p>
+            {hint.suggestion && (
+              <button
+                type="button"
+                className="link"
+                onClick={() => applySuggestion(hint.suggestion as string)}
+              >
+                {hint.suggestion} にする
+              </button>
+            )}
+          </div>
+        )}
       </Panel>
 
       <Panel title="登録済み">

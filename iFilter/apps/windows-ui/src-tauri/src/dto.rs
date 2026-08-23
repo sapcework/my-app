@@ -177,12 +177,19 @@ pub struct DomainRecordRow {
 }
 
 /// 判定できるドメインか確かめた結果。
+///
+/// `registrable_domain`（eTLD+1）を返すのは、**保護者がここを必ず間違える**ため。
+/// 「下の階層にも適用する」は配下に及ぶだけで兄弟には及ばないので、
+/// `www.yahoo.co.jp` を許可しても `quriosity.yahoo.co.jp` には届かない。
+/// 正しくは `yahoo.co.jp` を登録する。画面で提案するのに使う。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DomainCheck {
     pub normalized: String,
     /// 公開サフィックス（`co.jp` など）は登録できない。
     pub registrable: bool,
+    /// eTLD+1。`www.yahoo.co.jp` なら `yahoo.co.jp`。公開サフィックスそのものなら `None`。
+    pub registrable_domain: Option<String>,
 }
 
 impl DomainCheck {
@@ -190,6 +197,7 @@ impl DomainCheck {
         Self {
             normalized: domain.to_string(),
             registrable: domain.is_registrable(),
+            registrable_domain: domain.registrable().map(|d| d.to_string()),
         }
     }
 }
@@ -266,6 +274,45 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&skip).expect("書ける"),
             r#"{"stage":"time_window","outcome":{"outcome":"skip"}}"#
+        );
+    }
+
+    /// 画面が「代わりに `yahoo.co.jp` を登録しませんか」と出せるかは、ここが
+    /// 埋まっているかで決まる。空のまま返すと提案が黙って消える。
+    #[test]
+    fn 登録できるドメインを返す() {
+        use crate::dto::DomainCheck;
+        use domain_model::DomainName;
+
+        let check = DomainCheck::new(&DomainName::parse("www.yahoo.co.jp").expect("妥当"));
+        assert_eq!(check.normalized, "www.yahoo.co.jp");
+        assert!(check.registrable);
+        assert_eq!(check.registrable_domain.as_deref(), Some("yahoo.co.jp"));
+
+        // eTLD+1 そのものなら提案は出ない（正規化後と同じ）
+        let check = DomainCheck::new(&DomainName::parse("YAHOO.co.jp.").expect("妥当"));
+        assert_eq!(check.normalized, "yahoo.co.jp");
+        assert_eq!(check.registrable_domain.as_deref(), Some("yahoo.co.jp"));
+
+        // 公開サフィックスそのもの。登録させてはいけない
+        let check = DomainCheck::new(&DomainName::parse("co.jp").expect("妥当"));
+        assert!(!check.registrable);
+        assert_eq!(check.registrable_domain, None);
+    }
+
+    /// UI は camelCase で読む。ここが崩れると提案が出ないだけで、エラーにはならない。
+    #[test]
+    fn 名前は_camel_case_で渡る() {
+        use crate::dto::DomainCheck;
+        use domain_model::DomainName;
+
+        let json = serde_json::to_string(&DomainCheck::new(
+            &DomainName::parse("a.example.com").unwrap(),
+        ))
+        .expect("書ける");
+        assert_eq!(
+            json,
+            r#"{"normalized":"a.example.com","registrable":true,"registrableDomain":"example.com"}"#
         );
     }
 }

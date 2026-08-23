@@ -349,6 +349,49 @@ h1 {
   font-size: 12px;
 }
 
+/* 入力中のドメインについての助言。
+   **種類は見出しの言葉（hint-label）が伝える。** 色と線はその補強でしかない。
+   電子ペーパーなど階調の狭い画面では、注意（review）と危険（block）の色が
+   同じ濃さに潰れて区別できなくなるため、色だけに意味を持たせない */
+
+.hint {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.hint p {
+  margin: 0;
+}
+
+.hint-label {
+  font-weight: 700;
+}
+
+.hint button {
+  margin-top: 4px;
+}
+
+/* 範囲の説明。読み流してよいので線は細いまま、文字を控えめにする */
+.hint-info .hint-label {
+  color: var(--dim);
+}
+
+/* 手を止めてほしい 2 つは、左の太線でも目に留まるようにする */
+.hint-suggest {
+  border-left: 4px solid var(--review);
+}
+
+.hint-error {
+  border-left: 4px solid var(--block);
+}
+
+.hint-error .hint-label {
+  color: var(--block);
+}
+
 /* ---- 入力 ---- */
 
 .row {
