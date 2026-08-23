@@ -391,26 +391,38 @@ fn cmd_classify(path: &PathBuf, args: ClassifyArgs) -> std::result::Result<ExitC
     Ok(ExitCode::SUCCESS)
 }
 
+/// 保護者の設定 1 件を 1 行で表す。
+fn describe_override(entry: &ParentOverride) -> String {
+    let action = match entry.action {
+        OverrideAction::Allow => "許可",
+        OverrideAction::Block => "拒否",
+    };
+    let scope = match entry.scope {
+        OverrideScope::ExactDomain => "単体",
+        OverrideScope::IncludeSubdomains => "配下含む",
+    };
+    format!("{action} {:<32} {scope}", entry.domain.as_str())
+}
+
 fn cmd_list(path: &PathBuf) -> std::result::Result<ExitCode, AnyError> {
     let store = open(path)?;
 
+    // 取り消し済みは行として残る（消したことを他の端末へ伝えるため）。
+    // **数に混ぜない。** 混ぜると「22 件消したのに 33 件のまま」に見え、
+    // 消えていないと読み違える。いま効いているものと分けて出す
     let overrides = store.parent_overrides()?;
-    println!("保護者の設定: {} 件", overrides.len());
-    for entry in &overrides {
-        let action = match entry.action {
-            OverrideAction::Allow => "許可",
-            OverrideAction::Block => "拒否",
-        };
-        let scope = match entry.scope {
-            OverrideScope::ExactDomain => "単体",
-            OverrideScope::IncludeSubdomains => "配下含む",
-        };
-        let state = if entry.deleted_at.is_some() {
-            "（削除済み）"
-        } else {
-            ""
-        };
-        println!("  {action} {:<32} {scope}{state}", entry.domain.as_str());
+    let (live, removed): (Vec<_>, Vec<_>) = overrides.iter().partition(|e| e.deleted_at.is_none());
+
+    println!("保護者の設定: {} 件", live.len());
+    for entry in &live {
+        println!("  {}", describe_override(entry));
+    }
+
+    if !removed.is_empty() {
+        println!("\n取り消し済み: {} 件", removed.len());
+        for entry in &removed {
+            println!("  {}", describe_override(entry));
+        }
     }
 
     let records = store.domain_records()?;
