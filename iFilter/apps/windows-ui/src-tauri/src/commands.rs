@@ -277,9 +277,11 @@ pub fn add_override(state: State<'_, AppState>, input: OverrideInput) -> Result<
         deleted_at: None,
     };
 
+    // 同じドメインを 2 回許可しても行は増やさない。増えると、保護者が一覧から
+    // 1 件消しても残りが効き続ける（＝「取り消したのに、まだ通る」）
     state
         .core()
-        .put_parent_override(&entry, at)
+        .set_parent_override(&entry, at)
         .map_err(|err| format!("保存できません: {err}"))
 }
 

@@ -346,3 +346,152 @@ fn 写しは自動では更新されない() {
     core.reload(now() + Duration::hours(1)).expect("読み直せる");
     assert_eq!(core.snapshot().loaded_at, now() + Duration::hours(1));
 }
+
+fn block(name: &str) -> ParentOverride {
+    ParentOverride {
+        action: OverrideAction::Block,
+        ..allow(name)
+    }
+}
+
+/// 保存は id の衝突でしか上書きされない。追加のたびに新しい id を振ると行が増える。
+#[test]
+fn 同じ許可を繰り返しても行は増えない() {
+    let mut core = core();
+
+    for _ in 0..4 {
+        core.set_parent_override(&allow("example.com"), now())
+            .expect("書ける");
+    }
+
+    let live: Vec<_> = core
+        .store()
+        .parent_overrides()
+        .expect("読める")
+        .into_iter()
+        .filter(|e| e.deleted_at.is_none())
+        .collect();
+    assert_eq!(live.len(), 1, "同じ許可が複数行に増えている");
+    assert_eq!(live[0].version, 4, "版数が進んでいない");
+}
+
+/// 増えたまま放置すると、1 件消しても残りが効き続ける。
+/// **画面には「取り消した」と出るのに、通り続ける。**
+#[test]
+fn 許可を取り消したら本当に通らなくなる() {
+    let mut core = core();
+    let target = domain("example.com");
+
+    for _ in 0..4 {
+        core.set_parent_override(&allow("example.com"), now())
+            .expect("書ける");
+    }
+    assert_eq!(
+        core.decide(&target, now(), RequestSource::Cli).decision,
+        Decision::Allow
+    );
+
+    assert_eq!(
+        core.clear_parent_overrides(&target, now()).expect("消せる"),
+        1
+    );
+    assert_eq!(
+        core.decide(&target, now(), RequestSource::Cli).decision,
+        Decision::Block,
+        "取り消したのに通っている"
+    );
+}
+
+/// 許可と拒否は別の設定なので、片方を足しても他方は残す。
+#[test]
+fn 許可と拒否は別の行として持つ() {
+    let mut core = core();
+    core.set_parent_override(&allow("example.com"), now())
+        .expect("書ける");
+    core.set_parent_override(&block("example.com"), now())
+        .expect("書ける");
+
+    let live = core
+        .store()
+        .parent_overrides()
+        .expect("読める")
+        .into_iter()
+        .filter(|e| e.deleted_at.is_none())
+        .count();
+    assert_eq!(live, 2);
+
+    // 保護者の拒否は 2 段目、許可は 4 段目。競合したら必ず拒否が勝つ
+    assert_eq!(
+        core.decide(&domain("example.com"), now(), RequestSource::Cli)
+            .decision,
+        Decision::Block
+    );
+}
+
+/// 取り消しは許可も拒否もまとめて消す。片方だけ残ると意図が読めない。
+#[test]
+fn 取り消しは許可と拒否の両方を消す() {
+    let mut core = core();
+    core.set_parent_override(&allow("example.com"), now())
+        .expect("書ける");
+    core.set_parent_override(&block("example.com"), now())
+        .expect("書ける");
+
+    assert_eq!(
+        core.clear_parent_overrides(&domain("example.com"), now())
+            .expect("消せる"),
+        2
+    );
+    let live = core
+        .store()
+        .parent_overrides()
+        .expect("読める")
+        .into_iter()
+        .filter(|e| e.deleted_at.is_none())
+        .count();
+    assert_eq!(live, 0);
+}
+
+/// **物理削除しない。** 消したことを他の端末へ伝えるには行が残っている必要がある。
+#[test]
+fn 取り消しても行は残る() {
+    let mut core = core();
+    core.set_parent_override(&allow("example.com"), now())
+        .expect("書ける");
+    core.clear_parent_overrides(&domain("example.com"), now())
+        .expect("消せる");
+
+    let all = core.store().parent_overrides().expect("読める");
+    assert_eq!(all.len(), 1);
+    assert!(all[0].deleted_at.is_some(), "行ごと消えている");
+}
+
+/// 無いものを消しても版数を進めない。進めると全サービスが無駄に読み直す。
+#[test]
+fn 対象が無ければ版数は進めない() {
+    let mut core = core();
+    let start = core.revision();
+
+    assert_eq!(
+        core.clear_parent_overrides(&domain("example.com"), now())
+            .expect("消せる"),
+        0
+    );
+    assert_eq!(core.revision(), start);
+}
+
+/// 複数行をまとめて消しても、版数は 1 回だけ進める。
+/// 1 行ごとに進めると、途中の状態を別プロセスに読み込ませることになる。
+#[test]
+fn まとめて消しても版数は一度だけ進む() {
+    let mut core = core();
+    core.set_parent_override(&allow("example.com"), now())
+        .expect("書ける");
+    core.set_parent_override(&block("example.com"), now())
+        .expect("書ける");
+
+    let start = core.revision();
+    core.clear_parent_overrides(&domain("example.com"), now())
+        .expect("消せる");
+    assert_eq!(core.revision(), start + 1);
+}

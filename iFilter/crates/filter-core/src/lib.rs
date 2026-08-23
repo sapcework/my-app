@@ -157,7 +157,10 @@ impl<S: PolicyStore> FilterCore<S> {
         )
     }
 
-    /// 保護者の上書き設定を保存し、判定に反映する。
+    /// 保護者の上書き設定をそのまま保存し、判定に反映する。
+    ///
+    /// **行を増やしてよいのは、呼ぶ側が id を決めているときだけ。** 保護者が
+    /// 画面や CLI から追加するときは [`Self::set_parent_override`] を使う。
     pub fn put_parent_override(
         &mut self,
         entry: &ParentOverride,
@@ -165,6 +168,69 @@ impl<S: PolicyStore> FilterCore<S> {
     ) -> Result<()> {
         self.store.upsert_parent_override(entry)?;
         self.commit(at)
+    }
+
+    /// 保護者の上書き設定を追加する。**同じドメイン・同じ動作なら行を増やさず置き換える。**
+    ///
+    /// 保存は `id` の衝突でしか上書きされないので、追加のたびに新しい id を振ると
+    /// 同じ設定が何行も並ぶ。判定は変わらない（`most_specific` が決定的に選ぶ）が、
+    /// **取り消しで 1 件消しても残りが効き続ける** —— 「許可を取り消したのに、
+    /// まだ通る」という、画面からは分からない形で出る。開発機の DB には
+    /// 同じ許可が実際に 4 件並んでいた。
+    ///
+    /// 取り消しは既存の行を書き換える操作なので [`Self::put_parent_override`] を使う。
+    pub fn set_parent_override(
+        &mut self,
+        entry: &ParentOverride,
+        at: OffsetDateTime,
+    ) -> Result<()> {
+        let existing = self.store.parent_overrides()?.into_iter().find(|e| {
+            e.deleted_at.is_none() && e.domain == entry.domain && e.action == entry.action
+        });
+
+        let mut entry = entry.clone();
+        if let Some(old) = existing {
+            // 既存の行を書き換える。作成日時は最初に設定したときのものを残す
+            entry.id = old.id;
+            entry.created_at = old.created_at;
+            entry.version = old.version + 1;
+        }
+        self.put_parent_override(&entry, at)
+    }
+
+    /// 指定ドメインの上書き設定を取り消し、取り消した件数を返す。
+    ///
+    /// **物理削除しない。** 消したことを他の端末へ伝えるには行が残っている必要がある
+    /// （docs/POLICY_MODEL.md §5）。
+    ///
+    /// 同じドメインに複数の行があれば**許可も拒否もまとめて**取り消す。1 件だけ
+    /// 消すと残りが効き続け、「消したのに変わらない」になる。
+    pub fn clear_parent_overrides(
+        &mut self,
+        domain: &DomainName,
+        at: OffsetDateTime,
+    ) -> Result<usize> {
+        let targets: Vec<ParentOverride> = self
+            .store
+            .parent_overrides()?
+            .into_iter()
+            .filter(|e| e.deleted_at.is_none() && &e.domain == domain)
+            .collect();
+
+        for entry in &targets {
+            let mut entry = entry.clone();
+            entry.deleted_at = Some(at);
+            entry.updated_at = at;
+            entry.version += 1;
+            self.store.upsert_parent_override(&entry)?;
+        }
+
+        // 版数を進めるのは最後に一度でよい。動いているサービスは版数だけを見ており、
+        // 1 行ごとに進めると、その途中の状態を読み込ませることになる
+        if !targets.is_empty() {
+            self.commit(at)?;
+        }
+        Ok(targets.len())
     }
 
     /// ドメインの分類を保存し、判定に反映する。

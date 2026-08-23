@@ -38,6 +38,8 @@ enum Command {
     Allow(OverrideArgs),
     /// 保護者の拒否を追加する
     Block(OverrideArgs),
+    /// 保護者の許可・拒否を取り消す
+    Remove(RemoveArgs),
     /// ドメインに分類を与える
     Classify(ClassifyArgs),
     /// 登録済みの設定を一覧する
@@ -84,6 +86,12 @@ struct OverrideArgs {
     /// 設定した理由
     #[arg(long, default_value = "")]
     reason: String,
+}
+
+#[derive(Debug, Args)]
+struct RemoveArgs {
+    /// 対象ドメイン。許可も拒否もまとめて取り消す
+    domain: String,
 }
 
 #[derive(Debug, Args)]
@@ -151,6 +159,7 @@ impl Cli {
             Command::Check(args) => cmd_check(&path, args),
             Command::Allow(args) => cmd_override(&path, args, OverrideAction::Allow),
             Command::Block(args) => cmd_override(&path, args, OverrideAction::Block),
+            Command::Remove(args) => cmd_remove(&path, args),
             Command::Classify(args) => cmd_classify(&path, args),
             Command::List => cmd_list(&path),
             Command::Log { limit } => cmd_log(&path, limit),
@@ -263,7 +272,9 @@ fn cmd_override(
         updated_at: at,
         deleted_at: None,
     };
-    core.put_parent_override(&entry, at)?;
+    // 同じドメインを 2 回許可しても行は増えない。増えると、取り消しで 1 件消しても
+    // 残りが効き続ける（＝「許可を取り消したのに、まだ通る」）
+    core.set_parent_override(&entry, at)?;
 
     if action == OverrideAction::Allow {
         warn_if_forced_block(&core, &domain);
@@ -279,6 +290,22 @@ fn cmd_override(
         "サブドメインを含む"
     };
     println!("{domain} を{label}に設定しました（{scope}）");
+    Ok(ExitCode::SUCCESS)
+}
+
+/// 保護者の設定を取り消す。
+///
+/// 件数を必ず表示する。**0 件だったことが分からないと「消したつもり」になる** ——
+/// 綴りを間違えたときや、サービスと CLI で別の DB を見ているときに起きる。
+fn cmd_remove(path: &PathBuf, args: RemoveArgs) -> std::result::Result<ExitCode, AnyError> {
+    let domain = parse_domain(&args.domain)?;
+    let at = now();
+    let mut core = FilterCore::load(open(path)?, ProfileId::Beginner, "cli", at)?;
+
+    match core.clear_parent_overrides(&domain, at)? {
+        0 => println!("{domain} に保護者の設定はありません"),
+        n => println!("{domain} の保護者の設定を {n} 件取り消しました"),
+    }
     Ok(ExitCode::SUCCESS)
 }
 
