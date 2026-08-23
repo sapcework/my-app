@@ -524,6 +524,52 @@ Google の PKI が抜けていた。ページは崩れないが接続のたび�
   文言の中身までテストで押さえる（`domainHint.test.ts` 9 件）
 - 拒否リストでも同じ助言を出す。こちらは間違えると**通ってしまう**側に倒れる
 
+### Edge / Firefox での確認 ✅ 完了（2026-08-23）
+
+Step 10 は Chrome だけだった。DoH の扱いが最も違う Firefox を含めて確認した
+（Firefox はこの時点で未インストールだったので winget で入れた）。
+
+**ブラウザポリシー**（`apply-browser-policy`。3 ブラウザとも「無効化済み」）
+
+| ブラウザ | 見たところ | 結果 |
+| --- | --- | --- |
+| Edge | `edge://policy` | `DnsOverHttpsMode = off` |
+| Firefox | `about:config` の `network.trr.mode` | `5`（完全無効）で**編集できない**＝ `Locked` が効いている |
+
+**DNS**（`--enforce-dns` で `Wi-Fi 2 → 127.0.0.1`。6 項目とも期待どおり）
+
+| ドメイン | 結果 | ルール |
+| --- | --- | --- |
+| `use-application-dns.net` | 遮断 | `beginner.forced.doh`（canary。NXDOMAIN で Firefox が DoH をやめる） |
+| `dns.google` / `cloudflare-dns.com` | 遮断 | `beginner.forced.doh` |
+| `example.org` | 遮断 | `beginner.unknown.block` |
+| `www.yahoo.co.jp` / `github.com` | 通る | `parent.allow` |
+
+`i1.livegrid.eset.systems` が `beginner.category.security` で ALLOW、Windows の
+テレメトリ（`v10.events.data.microsoft.com` など）が BLOCK として履歴に出ており、
+**ブラウザ以外も含めて PC 全体が通っている**ことも確認できた。
+
+`イーサネット 2`（実在しないアダプタ）の差し替えは今回も失敗したが、そこで止まらず
+本命の `Wi-Fi 2` に到達している。Step 10 で入れた `Outcome` 型がそのまま働いた。
+
+#### 確認手順で分かったこと
+
+**`start` の直後に DNS を読んでも、まだ差し替わっていない。** サービスは
+「待ち受けを始めてから」差し替える（先に向けると、その隙間で端末の名前解決が
+丸ごと失敗するため）。3 秒待って読む手順では**差し替えが効いていないように見える**。
+確認スクリプトは 127.0.0.1 になるまで最大 40 秒待つようにした。
+
+#### 見つかった限界（不具合ではない）
+
+`www.yahoo.co.jp` の許可では記事一覧（`quriosity.yahoo.co.jp`）に届かず、
+eTLD+1 の `yahoo.co.jp` を許可した。**直し方としては正しく、当日実装した提案機能が
+そのまま効くことの実証**にもなった。
+
+ただしその結果、トップページの記事・広告枠に小学生に見せたくない見出しが並んだ。
+外部の広告配信元（`ib.adnxs.com`・`criteo.com`）は BLOCK のままだったので、
+**それらは `yahoo.co.jp` 自身の配信**である。サイト全体を許可する以上、DNS の粒度では
+分離できない。**ARCHITECTURE.md §7-9** に記録した。
+
 ## Step 11 — WFP の設計・検証 ✅ 完了（2026-08-16）
 
 **ユーザーモード WFP（`FwpmFilterAdd` / ALE レイヤ）から始める。**
