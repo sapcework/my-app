@@ -252,6 +252,19 @@ Cloudflare 共有レンジ）。
 試したいときに**端末の名前解決ごと巻き込む**。
 `cargo run -p ifilter-wfp --example block_doh` を使う（管理者権限が要る）。
 
+### `windows-registry` の `open` は読み取り専用
+
+`LOCAL_MACHINE.open()` は `KEY_READ` だけで開く。そこから `remove_value` を呼ぶと
+**アクセス拒否で失敗する**。書き換えるなら `create()` か
+`options().read().write().open()` を使う。
+
+しかも失敗を `let _ =` で捨てると、**「取り消しました」と表示しながら設定が残る**。
+2026-08-23 の Edge / Firefox 確認の後始末で実際に起きた。保護者から見ると
+「解除したのに DoH が使えないまま」という、原因の分からない形になる。
+
+**レジストリを書き換えたら読み返して確かめる**（`browser_policy::remains`）。
+成功したと報告してよいのは、消えたことを確認できたときだけ。
+
 ### 日本語を含むファイルを PowerShell の文字列置換で書き換えない
 
 `Get-Content -Raw` → `-replace` → `Set-Content` は UTF-8 の日本語を壊す。
