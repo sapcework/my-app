@@ -97,3 +97,66 @@ describe('ドメイン入力の助言', () => {
     expect(hint?.text).toContain('a.b. 以外で始まる名前');
   });
 });
+
+// ARCHITECTURE 7-9。**遮断漏れではなく、DNS の粒度そのものの限界。**
+// 2026-08-23 の実機確認で、yahoo.co.jp を許可したらトップページの見出しに
+// 小学生へ見せたくないものが並んだ。外部の広告配信元は BLOCK のままだった。
+describe('サイト全体を許可することの注意', () => {
+  it('eTLD+1 を配下ごと許可するときに添える', () => {
+    const hint = domainHint({
+      ...base,
+      input: 'yahoo.co.jp',
+      check: check('yahoo.co.jp', 'yahoo.co.jp'),
+    });
+    expect(hint?.kind).toBe('info');
+    expect(hint?.caution).toContain('ページ単位では選べません');
+    expect(hint?.caution).toContain('子供向けの入口');
+  });
+
+  it('提案の時点で添える。受け入れてからでは遅い', () => {
+    // 提案を押すと「下の階層も」が立つので、押した結果はサイト全体の許可になる。
+    // いまのチェックの状態ではなく、受け入れた後に何が起きるかで決める
+    const hint = domainHint({
+      ...base,
+      includeSubdomains: false,
+      input: 'www.yahoo.co.jp',
+      check: check('www.yahoo.co.jp', 'yahoo.co.jp'),
+    });
+    expect(hint?.kind).toBe('suggest');
+    expect(hint?.suggestion).toBe('yahoo.co.jp');
+    expect(hint?.caution).toContain('ページ単位では選べません');
+  });
+
+  it('拒否には添えない。広げても保護する方向にしか働かない', () => {
+    const 拒否 = { ...base, action: 'block' as const };
+    expect(
+      domainHint({ ...拒否, input: 'yahoo.co.jp', check: check('yahoo.co.jp', 'yahoo.co.jp') })
+        ?.caution,
+    ).toBeNull();
+    expect(
+      domainHint({
+        ...拒否,
+        input: 'www.yahoo.co.jp',
+        check: check('www.yahoo.co.jp', 'yahoo.co.jp'),
+      })?.caution,
+    ).toBeNull();
+  });
+
+  it('この名前だけの許可には添えない。サイト全体にならない', () => {
+    const hint = domainHint({
+      ...base,
+      includeSubdomains: false,
+      input: 'yahoo.co.jp',
+      check: check('yahoo.co.jp', 'yahoo.co.jp'),
+    });
+    expect(hint?.kind).toBe('info');
+    expect(hint?.caution).toBeNull();
+  });
+
+  it('登録できない入力には添えない。そもそも登録されない', () => {
+    expect(domainHint({ ...base, input: 'co.jp', check: check('co.jp', null) })?.caution).toBeNull();
+    expect(
+      domainHint({ ...base, input: 'ht tp://', check: null, error: '解釈できません' })?.caution,
+    ).toBeNull();
+  });
+});

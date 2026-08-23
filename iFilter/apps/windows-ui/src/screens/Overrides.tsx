@@ -149,6 +149,13 @@ export function Overrides({ action }: { action: 'allow' | 'block' }) {
           <div className={`hint hint-${hint.kind}`}>
             <p className="hint-label">{hint.label}</p>
             <p>{hint.text}</p>
+            {hint.caution && (
+              // 提案ボタンより前に置く。押してから読むのでは遅い
+              <p className="hint-caution">
+                <span className="hint-caution-mark">サイト全体が対象</span>
+                {hint.caution}
+              </p>
+            )}
             {hint.suggestion && (
               <button
                 type="button"

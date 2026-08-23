@@ -392,6 +392,24 @@ h1 {
   color: var(--block);
 }
 
+/* サイト全体を許可することの意味（ARCHITECTURE 7-9）。
+   **色ではなく「サイト全体が対象」という言葉で区別する。** 電子ペーパーでは
+   注意色と本文が同じ濃さに潰れるため、印だけを頼りにさせない */
+.hint-caution {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.hint-caution-mark {
+  margin-right: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* ---- 入力 ---- */
 
 .row {
