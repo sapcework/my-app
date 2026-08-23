@@ -17,6 +17,7 @@
     "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run fmt:rust && npm run lint:rust && npm run test:rust",
     "preview": "vite preview",
+    "icon": "tauri icon src-tauri/app-icon.svg && node -e \"const fs=require('fs');for(const p of ['android','ios','icon.icns'])fs.rmSync('src-tauri/icons/'+p,{recursive:true,force:true})\"",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -286,6 +286,18 @@ Cloudflare 共有レンジ）。
 `Get-Content -Raw` → `-replace` → `Set-Content` は UTF-8 の日本語を壊す。
 編集は Edit / Write ツールで行うこと。
 
+### アイコンは `icons/` ではなく `app-icon.svg` を直す
+
+`src-tauri/icons/` は生成物。直接編集しても**次の `npm run icon` で消える**。
+原本は `src-tauri/app-icon.svg` の 1 枚だけ。
+
+`npm run icon` は Android / iOS / macOS の分も作るので、スクリプトの後半で消している
+（この製品は Windows だけを対象にする。Android 対応は Policy Engine の移植性として
+用意してあるだけで、`apps/android/` は作らない）。
+
+盾は **16x16 まで縮む**。縁取りや模様を足すと潰れて「何か青いもの」になる。
+意匠を変えたら、生成後に `icon.ico` の 16px を取り出して目で見ること。
+
 ### 判定履歴のテーブルに列を足さない
 
 `access_decisions` に保存してよいのは `timestamp` `device_id` `domain` `category`
