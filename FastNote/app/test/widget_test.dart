@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 class MemoryNoteDb implements NoteDb {
   final rows = <String, Note>{};
+  final folderRows = <String, Folder>{};
   @override
   Future<List<Note>> all() async => rows.values.toList()..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   @override
@@ -23,10 +24,23 @@ class MemoryNoteDb implements NoteDb {
   @override
   Future<void> delete(String id) async => rows.remove(id);
   @override
-  Future<void> insertAll(List<Note> notes) async => rows.addAll({for (final n in notes) n.id: n});
+  Future<void> deleteMany(Iterable<String> ids) async => ids.forEach(rows.remove);
   @override
-  Future<void> updateOrders(Map<String, int> orders) async =>
-      orders.forEach((id, o) => rows[id] = rows[id]!.copyWith(sortOrder: o));
+  Future<void> insertAll(List<Note> notes, {List<Folder> folders = const []}) async {
+    rows.addAll({for (final n in notes) n.id: n});
+    folderRows.addAll({for (final f in folders) f.id: f});
+  }
+
+  @override
+  Future<List<Folder>> folders() async => folderRows.values.toList()..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  @override
+  Future<void> upsertFolder(Folder f) async => folderRows[f.id] = f;
+  @override
+  Future<void> deleteFolder(String id) async {
+    folderRows.remove(id);
+    rows.updateAll((_, n) => n.folderId == id ? n.copyWith(folderId: () => null) : n);
+  }
+
   @override
   Future<void> close() async {}
 }
@@ -59,7 +73,7 @@ void main() {
   Future<void> start(WidgetTester tester, {List<String> bodies = const []}) async {
     db = MemoryNoteDb();
     for (final (i, b) in bodies.indexed) {
-      db.rows['id$i'] = Note(id: 'id$i', body: b, sortOrder: i, createdAt: 0, updatedAt: 0);
+      db.rows['id$i'] = Note(id: 'id$i', body: b, sortOrder: i, createdAt: i, updatedAt: 1000000 + i); // 後ろほど新しい
     }
     notes = NotesController(db);
     settings = SettingsController(MemoryJsonFile());
@@ -83,30 +97,42 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('新しいメモを書いて戻ると一覧に出る（1行目がタイトル）', (tester) async {
-    await start(tester);
-    expect(find.textContaining('メモはまだありません'), findsOneWidget);
+  Future<void> openDrawer(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('ナビゲーション メニューを開く'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> editorMenu(WidgetTester tester, String item) async {
+    await tester.tap(find.byTooltip('メニュー'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(item));
+    await tester.pumpAndSettle();
+  }
+
+  List<String> listedTitles(WidgetTester tester) => [
+        for (final e in tester.widgetList<Text>(find.descendant(of: find.byType(ListView), matching: find.byType(Text))))
+          if (e.style?.fontSize == settings.fontSize) e.data!,
+      ];
+
+  testWidgets('新しいメモを書いて戻ると一覧の先頭に出て、「保存されました」と出る', (tester) async {
+    await start(tester, bodies: ['前からあるメモ']);
+    expect(find.text('私のノート'), findsOneWidget);
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '買い物\n牛乳\n卵');
+    await tester.enterText(find.byType(TextField), '買い物\n牛乳');
     await tester.pump(const Duration(seconds: 1)); // 自動保存を待つ
-    expect(db.rows.values.single.body, '買い物\n牛乳\n卵', reason: '戻る前に保存されている');
+    expect(db.rows.values.where((n) => n.body == '買い物\n牛乳'), hasLength(1), reason: '戻る前に保存されている');
     await back(tester);
-    expect(find.text('買い物'), findsOneWidget);
-    expect(find.text('牛乳 卵'), findsOneWidget);
-    expect(find.text('メモ（1）'), findsOneWidget);
+    expect(find.text('保存されました'), findsOneWidget);
+    expect(listedTitles(tester), ['買い物', '前からあるメモ']);
   });
 
-  testWidgets('何も書かずに戻ったメモは作られない', (tester) async {
-    await start(tester);
+  testWidgets('何も書かずに戻ったメモは作られない／空にしたメモは消える', (tester) async {
+    await start(tester, bodies: ['消すメモ']);
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await back(tester);
-    expect(db.rows, isEmpty);
-  });
-
-  testWidgets('既存のメモを空にして戻ると消える', (tester) async {
-    await start(tester, bodies: ['消すメモ']);
+    expect(db.rows.length, 1);
     await tester.tap(find.text('消すメモ'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '');
@@ -114,18 +140,98 @@ void main() {
     expect(db.rows, isEmpty);
   });
 
-  testWidgets('編集画面で削除し、「元に戻す」で復元できる', (tester) async {
+  testWidgets('削除するとごみ箱に入り、「元に戻す」で戻る。ごみ箱から完全に削除できる', (tester) async {
     await start(tester, bodies: ['残すメモ', '大事なメモ']);
     await tester.tap(find.text('大事なメモ'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('削除'));
-    await tester.pumpAndSettle();
+    await editorMenu(tester, '削除');
     expect(find.text('大事なメモ'), findsNothing);
-    expect(db.rows.length, 1);
+    expect(db.rows['id1']!.inTrash, isTrue);
     await tester.tap(find.text('元に戻す'));
     await tester.pumpAndSettle();
     expect(find.text('大事なメモ'), findsOneWidget);
-    expect(db.rows.length, 2);
+
+    await tester.longPress(find.text('大事なメモ'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('削除（ごみ箱へ）'));
+    await tester.pumpAndSettle();
+    await openDrawer(tester);
+    await tester.tap(find.text('ごみ箱'));
+    await tester.pumpAndSettle();
+    expect(find.text('大事なメモ'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing, reason: 'ごみ箱ではメモを作らない');
+    await tester.tap(find.text('大事なメモ'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完全に削除'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '削除'));
+    await tester.pumpAndSettle();
+    expect(db.rows.containsKey('id1'), isFalse);
+    expect(find.text('ごみ箱は空です'), findsOneWidget);
+  });
+
+  testWidgets('☆を付けると古いメモでも一覧の先頭に固定される', (tester) async {
+    await start(tester, bodies: ['古いメモ', '新しいメモ']);
+    expect(listedTitles(tester), ['新しいメモ', '古いメモ']);
+    await tester.longPress(find.text('古いメモ'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('☆を付ける（先頭に固定）'));
+    await tester.pumpAndSettle();
+    expect(listedTitles(tester), ['古いメモ', '新しいメモ']);
+    expect(find.byIcon(Icons.star), findsOneWidget);
+  });
+
+  testWidgets('横メニューから新しいフォルダを作ると、そのフォルダに切り替わり、作ったメモはそこに入る', (tester) async {
+    await start(tester, bodies: ['私のノートのメモ']);
+    await openDrawer(tester);
+    await tester.tap(find.text('新しいフォルダ'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '仕事のためのアイデア');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.text('仕事のためのアイデア'), findsOneWidget, reason: 'タイトルがフォルダ名になる');
+    expect(find.text('このフォルダにメモはありません'), findsOneWidget);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '改善のための提案');
+    await back(tester); // 自動保存を待たずにすぐ戻っても保存される
+    expect(listedTitles(tester), ['改善のための提案']);
+
+    await openDrawer(tester);
+    await tester.tap(find.text('私のノート'));
+    await tester.pumpAndSettle();
+    expect(listedTitles(tester), ['私のノートのメモ']);
+  });
+
+  testWidgets('「色」でナイトモードとアプリの色を切り替えられる', (tester) async {
+    await start(tester);
+    await openDrawer(tester);
+    await tester.tap(find.text('色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(settings.themeMode, ThemeMode.dark);
+    expect(Theme.of(tester.element(find.text('アプリの色'))).brightness, Brightness.dark);
+    await tester.tap(find.bySemanticsLabel('緑'));
+    await tester.pumpAndSettle();
+    expect(settings.appColor, appColors[2].$2);
+  });
+
+  testWidgets('編集を元に戻す・最後へ', (tester) async {
+    await start(tester, bodies: ['一行目']);
+    await tester.tap(find.text('一行目'));
+    await tester.pumpAndSettle();
+    final field = find.byType(TextField);
+    await tester.tap(field); // 実際の操作と同じく、先にタップしてから打つ（同時だと履歴が残らない）
+    await tester.pump(const Duration(seconds: 1));
+    await tester.enterText(field, '一行目\n追記');
+    await tester.pump(const Duration(seconds: 1));
+    await editorMenu(tester, '編集を元に戻す');
+    expect(tester.widget<TextField>(field).controller!.text, '一行目');
+    await editorMenu(tester, '最後へ');
+    final c = tester.widget<TextField>(field).controller!;
+    expect(c.selection.baseOffset, c.text.length);
   });
 
   testWidgets('検索で本文も含めて絞り込める', (tester) async {
@@ -134,20 +240,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'りんご');
     await tester.pump();
-    expect(find.text('りんご'), findsWidgets);
-    expect(find.text('みかん'), findsOneWidget);
-    expect(find.text('ぶどう'), findsNothing);
+    expect(listedTitles(tester), unorderedEquals(['りんご', 'みかん']));
   });
 
   testWidgets('バックグラウンドから戻るとロック画面になり、PIN で解除できる', (tester) async {
     await start(tester, bodies: ['秘密のメモ']);
     await lock.setSecret(LockType.pin, '2468');
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused, AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+      tester.binding.handleAppLifecycleStateChanged(s);
+    }
     await tester.pumpAndSettle();
     expect(find.byType(LockScreen), findsOneWidget);
     expect(find.text('秘密のメモ'), findsNothing, reason: 'ロック中は下の画面を描かない');
@@ -158,7 +259,6 @@ void main() {
     }
     await tester.pumpAndSettle();
     expect(find.textContaining('違います'), findsOneWidget);
-
     for (final d in ['2', '4', '6', '8']) {
       await tester.tap(find.text(d));
       await tester.pump();

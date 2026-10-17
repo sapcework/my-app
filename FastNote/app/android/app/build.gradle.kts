@@ -21,6 +21,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true // 通知の予約（flutter_local_notifications）が要求する
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -66,4 +67,5 @@ flutter {
 
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0") // 生体認証ダイアログが AppCompat テーマを要求するため
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4") // 古い Android で java.time を使えるようにする
 }

@@ -208,6 +208,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text('メモの文字はこの大きさになります', style: TextStyle(fontSize: settings.fontSize)),
           ),
+          ListTile(
+            title: const Text('並び順'),
+            subtitle: const Text('☆を付けたメモは常に先頭に固定されます'),
+            trailing: DropdownButton<SortMode>(
+              value: settings.sort,
+              onChanged: (v) => settings.setSort(v!),
+              items: [for (final m in SortMode.values) DropdownMenuItem(value: m, child: Text(m.label))],
+            ),
+          ),
 
           header('セキュリティ'),
           ListTile(
