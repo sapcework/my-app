@@ -1,0 +1,4 @@
+# 実データ（個人情報を含むメモ）を誤ってコミットしないように
+temp/
+*.csv
+!app/test/fixtures/*.csv
