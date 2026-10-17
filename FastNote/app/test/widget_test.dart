@@ -300,10 +300,10 @@ void main() {
     await start(tester);
     await openSettings(tester);
     expect(find.byType(Slider), findsNothing, reason: 'スクロール中にうっかり触れて変わらないように');
-    expect(find.text('一覧 18・明細 16・行間 1.30・間隔 -0.3'), findsOneWidget);
+    expect(find.text('一覧 18・明細 16・行間 1.30・間隔 -0.3・余白 4'), findsOneWidget);
     await tester.tap(find.text('文字の大きさ・行間'));
     await tester.pumpAndSettle();
-    expect(find.byType(Slider), findsNWidgets(4));
+    expect(find.byType(Slider), findsNWidgets(5));
     await tester.scrollUntilVisible(find.text('初期値に戻す'), 300, scrollable: _scrollableIn(find.byType(TextLayoutScreen)));
     await tester.tap(find.text('初期値に戻す'));
     await tester.pumpAndSettle();

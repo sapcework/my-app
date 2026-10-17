@@ -1,0 +1,14 @@
+<!-- FastNote のアイコン（前景）。108x108 の座標で、絵柄は中心から半径33以内（どの形に切り抜かれても残る範囲）に収める -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- メモ用紙（右上を折り返している） -->
+  <path d="M38 30 H62 L72 40 V74 Q72 78 68 78 H38 Q34 78 34 74 V34 Q34 30 38 30 Z" fill="#FFFFFF"/>
+  <path d="M62 30 V36 Q62 40 66 40 H72 Z" fill="#D5DAFB"/>
+  <!-- 罫線 -->
+  <g stroke="#B8C0F8" stroke-width="3" stroke-linecap="round">
+    <line x1="41" y1="47" x2="62" y2="47"/>
+    <line x1="41" y1="55" x2="58" y2="55"/>
+    <line x1="41" y1="63" x2="52" y2="63"/>
+  </g>
+  <!-- 稲妻（すぐ書ける）。背景色の縁取りで用紙と切り離して見せる -->
+  <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="#FFC83D" stroke="#6D7CF2" stroke-width="3" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#6D7CF2</color> <!-- アプリの色（青）と同じ。icon/render_icons_test.dart の background と揃える -->
+</resources>

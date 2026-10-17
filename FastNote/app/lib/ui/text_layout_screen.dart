@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/settings.dart';
-import 'note_edit_screen.dart' show detailHorizontalPadding;
 
 // 文字の大きさ・行間・文字の間隔の調整画面。
 // 設定画面に直接スライダーを置くと、スクロール中にうっかり触れて値が変わるため、別の画面にしている
@@ -10,7 +9,7 @@ class TextLayoutScreen extends ConsumerWidget {
   const TextLayoutScreen({super.key});
 
   static String summary(SettingsController s) => // 設定画面の1行に出す現在値
-      '一覧 ${s.listFontSize.round()}・明細 ${s.detailFontSize.round()}・行間 ${s.lineHeight.toStringAsFixed(2)}・間隔 ${_spacing(s.letterSpacing)}';
+      '一覧 ${s.listFontSize.round()}・明細 ${s.detailFontSize.round()}・行間 ${s.lineHeight.toStringAsFixed(2)}・間隔 ${_spacing(s.letterSpacing)}・余白 ${s.detailPadding.round()}';
 
   static String _spacing(double v) => v == 0 ? '0' : v.toStringAsFixed(1);
 
@@ -46,12 +45,13 @@ class TextLayoutScreen extends ConsumerWidget {
         slider('文字サイズ', s.detailFontSize, SettingsController.minFontSize, SettingsController.maxFontSize, 1, size, s.setDetailFontSize),
         slider('行間', s.lineHeight, SettingsController.minLineHeight, SettingsController.maxLineHeight, 0.05, (v) => v.toStringAsFixed(2), s.setLineHeight),
         slider('文字の間隔', s.letterSpacing, SettingsController.minLetterSpacing, SettingsController.maxLetterSpacing, 0.1, _spacing, s.setLetterSpacing),
+        slider('左右の余白', s.detailPadding, SettingsController.minPadding, SettingsController.maxPadding, 1, size, s.setDetailPadding),
         preview(
           Text(
             '明日の予定\n10時 打ち合わせ（資料を印刷する）\n帰りに牛乳とパンを買う。Amazon の注文も確認する',
             style: TextStyle(fontSize: s.detailFontSize, height: s.lineHeight, letterSpacing: s.letterSpacing),
           ),
-          detailHorizontalPadding,
+          s.detailPadding,
         ),
         Align(
           alignment: Alignment.centerRight,

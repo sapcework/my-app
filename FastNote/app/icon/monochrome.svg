@@ -1,0 +1,17 @@
+<!-- テーマアイコン用（Android 13 以降）。形だけが使われ、色は端末が壁紙に合わせて塗る -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <defs>
+    <!-- 稲妻のまわりの枠線を削って、用紙と稲妻の境目を見せる -->
+    <mask id="gap" maskUnits="userSpaceOnUse" x="0" y="0" width="108" height="108">
+      <rect width="108" height="108" fill="#FFFFFF"/>
+      <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="#000000" stroke="#000000" stroke-width="8" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#gap)" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M38 30 H62 L72 40 V74 Q72 78 68 78 H38 Q34 78 34 74 V34 Q34 30 38 30 Z"/>
+    <path d="M62 30 V36 Q62 40 66 40 H72"/>
+    <line x1="41" y1="47" x2="62" y2="47"/>
+    <line x1="41" y1="55" x2="56" y2="55"/>
+  </g>
+  <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="#FFFFFF"/>
+</svg>

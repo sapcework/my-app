@@ -37,10 +37,12 @@ void main() {
     await a.setLineHeight(1.234);
     await a.setLetterSpacing(-5);
     await a.setListFontSize(99);
+    await a.setDetailPadding(0);
     final b = SettingsController(JsonFile(file));
     await b.load();
-    expect([b.lineHeight, b.letterSpacing, b.listFontSize], [1.25, SettingsController.minLetterSpacing, SettingsController.maxFontSize]);
+    expect([b.lineHeight, b.letterSpacing, b.listFontSize, b.detailPadding], [1.25, SettingsController.minLetterSpacing, SettingsController.maxFontSize, 0]);
     await b.resetTextLayout();
+    expect(b.detailPadding, SettingsController.defaultPadding);
     expect([b.listFontSize, b.detailFontSize, b.lineHeight, b.letterSpacing], [
       SettingsController.defaultListFontSize,
       SettingsController.defaultDetailFontSize,

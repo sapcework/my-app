@@ -10,6 +10,10 @@ const appDeveloper = 'sapcework';
 const appCopyright = '© 2026 $appDeveloper';
 
 const changelog = <(String version, String date, List<String> items)>[ // 新しい版を先頭に足していく
+  ('1.1.1', '2026-10-17', [
+    'ホーム画面のアイコンを専用のものにしました（Android 13 以降のテーマアイコンにも対応）',
+    'メモを開いた画面の左右の余白を狭くし、設定で調整できるようにしました',
+  ]),
   ('1.1.0', '2026-10-17', [
     '画面を高速メモ帳と同じ作りにしました（横メニュー・アプリの色・ナイトモード）',
     'フォルダ・☆（先頭に固定）・ごみ箱・リマインダーを追加しました',
@@ -39,13 +43,7 @@ class AboutScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final info = ref.watch(appInfoProvider);
     final count = ref.watch(notesProvider).notes.length;
-    final appColor = theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary;
-    final icon = Container( // アプリのアイコンの代わり（ランチャーのアイコンは Flutter から直接は描けないため）
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(color: appColor, borderRadius: BorderRadius.circular(18)),
-      child: const Icon(Icons.sticky_note_2_outlined, size: 40, color: Colors.white),
-    );
+    final icon = Image.asset('assets/icon/app_icon.png', width: 72, height: 72); // ホーム画面のアイコンと同じ絵柄
     Widget header(String t) => Padding(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
           child: Text(t, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary)),

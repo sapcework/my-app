@@ -29,6 +29,7 @@ class SettingsController extends ChangeNotifier {
   static const defaultDetailFontSize = 16.0; // 明細（メモを開いた画面）
   static const minLineHeight = 1.0, maxLineHeight = 2.0, defaultLineHeight = 1.3; // 明細の行間（文字の高さに対する倍率）
   static const minLetterSpacing = -1.0, maxLetterSpacing = 1.0, defaultLetterSpacing = -0.3; // 明細の文字間（論理ピクセル。マイナスで詰める）
+  static const minPadding = 0.0, maxPadding = 16.0, defaultPadding = 4.0; // 明細の左右の余白（論理ピクセル）。広いと1行に入る文字が減る
 
   final JsonFile _store;
   SettingsController(this._store);
@@ -38,6 +39,7 @@ class SettingsController extends ChangeNotifier {
   double _detailFontSize = defaultDetailFontSize;
   double _lineHeight = defaultLineHeight;
   double _letterSpacing = defaultLetterSpacing;
+  double _detailPadding = defaultPadding;
   ThemeMode _themeMode = ThemeMode.system; // ナイトモードを一度も切り替えていなければ端末の設定に合わせる
   int _appColor = defaultAppColor;
 
@@ -46,6 +48,7 @@ class SettingsController extends ChangeNotifier {
   double get detailFontSize => _detailFontSize;
   double get lineHeight => _lineHeight;
   double get letterSpacing => _letterSpacing;
+  double get detailPadding => _detailPadding;
   ThemeMode get themeMode => _themeMode;
   int get appColorIndex => _appColor;
   Color get appColor => appColors[_appColor].$2;
@@ -59,6 +62,7 @@ class SettingsController extends ChangeNotifier {
     _listFontSize = pick('listFontSize', old != null ? old + 2 : defaultListFontSize, minFontSize, maxFontSize); // 見出しは明細より少し大きく
     _lineHeight = pick('lineHeight', defaultLineHeight, minLineHeight, maxLineHeight);
     _letterSpacing = pick('letterSpacing', defaultLetterSpacing, minLetterSpacing, maxLetterSpacing);
+    _detailPadding = pick('detailPadding', defaultPadding, minPadding, maxPadding);
     _themeMode = ThemeMode.values.asNameMap()[m['themeMode']] ?? ThemeMode.system;
     final c = (m['appColor'] as num?)?.toInt() ?? defaultAppColor;
     _appColor = c >= 0 && c < appColors.length ? c : defaultAppColor;
@@ -71,6 +75,7 @@ class SettingsController extends ChangeNotifier {
         'detailFontSize': _detailFontSize,
         'lineHeight': _lineHeight,
         'letterSpacing': _letterSpacing,
+        'detailPadding': _detailPadding,
         'themeMode': _themeMode.name,
         'appColor': _appColor,
       });
@@ -105,11 +110,18 @@ class SettingsController extends ChangeNotifier {
     await _save();
   }
 
-  Future<void> resetTextLayout() async { // 文字サイズ・行間・文字間を初期値に戻す
+  Future<void> setDetailPadding(double v) async {
+    _detailPadding = v.clamp(minPadding, maxPadding).roundToDouble();
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> resetTextLayout() async { // 文字サイズ・行間・文字間・余白を初期値に戻す
     _listFontSize = defaultListFontSize;
     _detailFontSize = defaultDetailFontSize;
     _lineHeight = defaultLineHeight;
     _letterSpacing = defaultLetterSpacing;
+    _detailPadding = defaultPadding;
     notifyListeners();
     await _save();
   }

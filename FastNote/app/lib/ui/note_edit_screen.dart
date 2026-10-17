@@ -13,8 +13,6 @@ import 'note_actions.dart';
 import 'widgets/color_sheet.dart';
 
 // メモの編集画面。入力は少し間を置いて自動保存し、画面を離れるときとアプリが裏に回るときにも保存する
-const detailHorizontalPadding = 8.0; // 明細の左右の余白（1行に入る文字数を増やすため狭めにしている）
-
 class NoteEditScreen extends ConsumerStatefulWidget {
   final String? noteId; // null なら新規（何か書くまで保存しない）
   final String? folderId; // 新規メモを入れるフォルダ
@@ -218,9 +216,9 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
           textAlignVertical: TextAlignVertical.top,
           cursorColor: c.fg,
           style: TextStyle(fontSize: settings.detailFontSize, height: settings.lineHeight, letterSpacing: settings.letterSpacing, color: c.fg),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             border: InputBorder.none,
-            contentPadding: EdgeInsets.fromLTRB(detailHorizontalPadding, 8, detailHorizontalPadding, 24),
+            contentPadding: EdgeInsets.fromLTRB(settings.detailPadding, 8, settings.detailPadding, 24), // 左右の余白は設定で変えられる
             hintText: '1行目がタイトルになります',
           ),
         ),
