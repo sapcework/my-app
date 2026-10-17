@@ -93,14 +93,14 @@ class NotesController extends ChangeNotifier {
     await _db.updateOrders({for (final x in _notes) x.id: x.sortOrder});
   }
 
-  CsvImportPlan planImport(String csvText) => planCsvImport(
-        csvText,
+  ImportPlan planImportFrom(String text) => planImport( // 高速メモ帳のバックアップか CSV かは中身で判断する
+        text,
         existingIds: {for (final n in _notes) n.id},
         startOrder: _notes.isEmpty ? 0 : _notes.last.sortOrder + 1, // 既存メモの後ろに並べる
         nowMs: _now(),
       );
 
-  Future<void> applyImport(CsvImportPlan plan) async {
+  Future<void> applyImport(ImportPlan plan) async {
     await _db.insertAll(plan.notes);
     _notes = [..._notes, ...plan.notes];
     notifyListeners();

@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('parseCsv', () {
     test('BOM・CRLF・引用符内の改行と二重引用符', () {
-      final rows = parseCsv('﻿"a","b"\r\n"1\n2","x""y"\r\n');
+      final rows = parseCsv('\uFEFF"a","b"\r\n"1\n2","x""y"\r\n');
       expect(rows, [
         ['a', 'b'],
         ['1\n2', 'x"y'],
@@ -29,8 +29,18 @@ void main() {
       ]);
     });
 
-    test('引用符が閉じていなければエラー', () {
-      expect(() => parseCsv('"abc\n'), throwsFormatException);
+    test('引用符が閉じていなければ、始まった行番号つきでエラー', () {
+      expect(
+        () => parseCsv('"a","b"\r\n"1","2"\r\n"3","途中で\n切れた'),
+        throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('3 行目から'))),
+      );
+    });
+
+    test('フィールドの途中にある " はただの文字として読む', () {
+      expect(parseCsv('本文\n身長5\'8"の人\n'), [
+        ['本文'],
+        ['身長5\'8"の人'],
+      ]);
     });
 
     test('buildCsv → parseCsv で元に戻る', () {
@@ -40,7 +50,7 @@ void main() {
         ['😀', ''],
       ];
       final csv = buildCsv(rows);
-      expect(csv.startsWith('﻿"見出し","x"\r\n'), isTrue);
+      expect(csv.startsWith('\uFEFF"見出し","x"\r\n'), isTrue);
       expect(csv.endsWith('\r\n'), isTrue);
       expect(parseCsv(csv), rows);
     });

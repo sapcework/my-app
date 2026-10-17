@@ -78,41 +78,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _import() async {
     final lock = ref.read(lockProvider);
     final notes = ref.read(notesProvider);
-    final file = await lock.suspendRelock(() => openFile()); // 端末によっては CSV の種類判定が不正確なので絞り込まない
+    final file = await lock.suspendRelock(() => openFile()); // バックアップは拡張子が無く、CSV も端末によって種類判定が不正確なので絞り込まない
     if (file == null || !mounted) return;
     String text;
     try {
       text = utf8.decode(await file.readAsBytes());
     } on FormatException {
-      showMessage('UTF-8 の CSV ではありません');
+      showMessage('高速メモ帳のバックアップでも CSV でもありません（UTF-8 のテキストではありません）');
       return;
     }
-    final CsvImportPlan plan;
+    final ImportPlan plan;
     try {
-      plan = notes.planImport(text);
+      plan = notes.planImportFrom(text);
     } on FormatException catch (e) {
       if (mounted) await _alert('取り込めません', e.message);
       return;
     }
     if (!mounted) return;
+    final isBackup = plan.source == ImportSource.backup;
     final skipped = [
       if (plan.skippedExisting > 0) '同じメモが既にあるため ${plan.skippedExisting} 件',
       if (plan.skippedEmpty > 0) '本文が空のため ${plan.skippedEmpty} 件',
     ];
     if (plan.notes.isEmpty) {
-      await _alert('取り込むメモがありません', skipped.isEmpty ? 'CSV にメモが入っていません' : '${skipped.join('、')}を飛ばしました');
+      await _alert('取り込むメモがありません', skipped.isEmpty ? 'ファイルにメモが入っていません' : '${skipped.join('、')}を飛ばしました');
       return;
     }
+    const maxWarnings = 5; // 多すぎるとダイアログが読めなくなるので先頭だけ見せる
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('CSV を取り込む'),
-        content: Text([
-          '${file.name}\n',
-          '${plan.notes.length} 件のメモを追加します。',
-          if (skipped.isNotEmpty) '（${skipped.join('、')}は飛ばします）',
-          '\n今あるメモは変更しません。',
-        ].join('\n')),
+        title: Text(isBackup ? '高速メモ帳のバックアップを取り込む' : 'CSV を取り込む'),
+        content: SingleChildScrollView(
+          child: Text([
+            '${file.name}\n',
+            if (plan.hashOk == false) '⚠ 破損チェックに一致しません。ファイルが壊れているか、書き換えられている可能性があります。\n',
+            '${plan.notes.length} 件のメモを追加します。',
+            if (skipped.isNotEmpty) '（${skipped.join('、')}は飛ばします）',
+            if (plan.warnings.isNotEmpty) ...[
+              '\n気づいた点：',
+              for (final w in plan.warnings.take(maxWarnings)) '・$w',
+              if (plan.warnings.length > maxWarnings) '・ほか ${plan.warnings.length - maxWarnings} 件',
+            ],
+            '\n今あるメモは変更しません。',
+          ].join('\n')),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('取り込む')),
@@ -137,7 +147,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: const Text('CSV で書き出す'),
         content: Text('${notes.notes.length} 件のメモを CSV にして共有します。\n\n'
             'ファイルは暗号化されません。保存先や送り先に気をつけてください。\n'
-            'このファイルを「CSV を取り込む」で読み込むと復元できます。'),
+            'このファイルを「取り込む」で読み込むと復元できます。'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('書き出す')),
@@ -246,8 +256,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           header('データ'),
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
-            title: const Text('CSV を取り込む'),
-            subtitle: const Text('高速メモ帳 CSV 抽出ツールの出力や、このアプリで書き出したバックアップ'),
+            title: const Text('取り込む'),
+            subtitle: const Text('高速メモ帳のバックアップ、または CSV（抽出ツールの出力・このアプリの書き出し）'),
             onTap: _import,
           ),
           ListTile(

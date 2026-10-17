@@ -118,7 +118,7 @@ class _NoteListScreenState extends ConsumerState<NoteListScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(32),
                   child: Text(
-                    notes.notes.isEmpty ? 'メモはまだありません。\n右下の＋で作成するか、設定から CSV を取り込めます。' : '「${_query.text}」を含むメモはありません',
+                    notes.notes.isEmpty ? 'メモはまだありません。\n右下の＋で作成するか、設定から高速メモ帳のバックアップを取り込めます。' : '「${_query.text}」を含むメモはありません',
                     textAlign: TextAlign.center,
                   ),
                 ),

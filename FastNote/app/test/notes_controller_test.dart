@@ -83,11 +83,11 @@ void main() {
 
   test('取り込みは既存メモの後ろに追加し、書き出しで全件出る', () async {
     await notes.create('既存');
-    final plan = notes.planImport('表示順,ID,本文\n1,aaaa,取込1\n2,bbbb,取込2\n');
+    final plan = notes.planImportFrom('表示順,ID,本文\n1,aaaa,取込1\n2,bbbb,取込2\n');
     await notes.applyImport(plan);
     expect(notes.notes.map((n) => n.body), ['既存', '取込1', '取込2']);
     expect(await bodiesInDb(), ['既存', '取込1', '取込2']);
-    expect(notes.planImport('表示順,ID,本文\n1,aaaa,取込1\n').notes, isEmpty, reason: '2回目は増えない');
+    expect(notes.planImportFrom('表示順,ID,本文\n1,aaaa,取込1\n').notes, isEmpty, reason: '2回目は増えない');
     final csv = notes.exportCsv();
     expect(RegExp(r'取込\d').allMatches(csv).length, 4, reason: 'タイトルと本文に1回ずつ');
   });
