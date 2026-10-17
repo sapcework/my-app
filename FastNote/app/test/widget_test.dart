@@ -7,10 +7,14 @@ import 'package:fastnote/state/json_file.dart';
 import 'package:fastnote/state/lock.dart';
 import 'package:fastnote/state/notes.dart';
 import 'package:fastnote/state/settings.dart';
+import 'package:fastnote/ui/about_screen.dart';
 import 'package:fastnote/ui/lock_screen.dart';
+import 'package:fastnote/ui/settings_screen.dart';
+import 'package:fastnote/ui/text_layout_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // 画面の流れのテスト。ファイルや DB への実 I/O はフェイク時計の下では完了しないためメモリ上の代用品を使う
 
@@ -62,6 +66,8 @@ class NoBiometric implements BiometricAuth {
   Future<bool> authenticate() async => false;
 }
 
+Finder _scrollableIn(Finder screen) => find.descendant(of: screen, matching: find.byType(Scrollable)).first; // 画面が重なっているとき、どの画面をスクロールするか
+
 Future<String> fastHash(String secret, String salt) async => '$salt:$secret';
 
 void main() {
@@ -111,7 +117,7 @@ void main() {
 
   List<String> listedTitles(WidgetTester tester) => [
         for (final e in tester.widgetList<Text>(find.descendant(of: find.byType(ListView), matching: find.byType(Text))))
-          if (e.style?.fontSize == settings.fontSize) e.data!,
+          if (e.style?.fontSize == settings.listFontSize) e.data!,
       ];
 
   testWidgets('新しいメモを書いて戻ると一覧の先頭に出て、「保存されました」と出る', (tester) async {
@@ -268,10 +274,55 @@ void main() {
     expect(find.text('秘密のメモ'), findsOneWidget);
   });
 
-  testWidgets('文字サイズの設定が一覧に反映される', (tester) async {
-    await start(tester, bodies: ['大きな文字']);
-    await settings.setFontSize(24);
+  testWidgets('一覧と明細の文字サイズは別々に設定でき、明細には行間・文字間も反映される', (tester) async {
+    await start(tester, bodies: ['見出し\n本文']);
+    expect(tester.widget<Text>(find.text('見出し')).style!.fontSize, SettingsController.defaultListFontSize);
+    await settings.setListFontSize(24);
+    await settings.setDetailFontSize(14);
+    await settings.setLineHeight(1.2);
+    await settings.setLetterSpacing(-0.5);
     await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.text('大きな文字')).style!.fontSize, 24);
+    expect(tester.widget<Text>(find.text('見出し')).style!.fontSize, 24);
+    await tester.tap(find.text('見出し'));
+    await tester.pumpAndSettle();
+    final style = tester.widget<TextField>(find.byType(TextField)).style!;
+    expect([style.fontSize, style.height, style.letterSpacing], [14, 1.2, -0.5]);
+  });
+
+  Future<void> openSettings(WidgetTester tester) async {
+    await openDrawer(tester);
+    await tester.tap(find.text('設定'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('設定画面にはスライダーを置かず、「文字の大きさ・行間」を開いたときだけ調整できる', (tester) async {
+    PackageInfo.setMockInitialValues(appName: 'FastNote', packageName: 'com.sapcework.fastnote', version: '1.1.0', buildNumber: '2', buildSignature: '');
+    await start(tester);
+    await openSettings(tester);
+    expect(find.byType(Slider), findsNothing, reason: 'スクロール中にうっかり触れて変わらないように');
+    expect(find.text('一覧 18・明細 16・行間 1.30・間隔 -0.3'), findsOneWidget);
+    await tester.tap(find.text('文字の大きさ・行間'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Slider), findsNWidgets(4));
+    await tester.scrollUntilVisible(find.text('初期値に戻す'), 300, scrollable: _scrollableIn(find.byType(TextLayoutScreen)));
+    await tester.tap(find.text('初期値に戻す'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('「FastNote について」にバージョンと更新履歴が出る', (tester) async {
+    PackageInfo.setMockInitialValues(appName: 'FastNote', packageName: 'com.sapcework.fastnote', version: '1.1.0', buildNumber: '2', buildSignature: '');
+    await start(tester, bodies: ['メモ']);
+    await openSettings(tester);
+    await tester.scrollUntilVisible(find.text('FastNote について'), 300, scrollable: _scrollableIn(find.byType(SettingsScreen)));
+    expect(find.text('バージョン 1.1.0（ビルド 2）'), findsOneWidget);
+    await tester.ensureVisible(find.text('FastNote について')); // 下端ぎりぎりだとタップが届かないので、画面内に入れてから押す
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('FastNote について'));
+    await tester.pumpAndSettle();
+    expect(find.text('バージョン 1.1.0（ビルド 2）'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('1 件'), 300, scrollable: _scrollableIn(find.byType(AboutScreen)));
+    expect(find.text('1 件'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('1.1.0（2026-10-17）'), 300, scrollable: _scrollableIn(find.byType(AboutScreen)));
+    expect(find.text('1.1.0（2026-10-17）'), findsOneWidget);
   });
 }

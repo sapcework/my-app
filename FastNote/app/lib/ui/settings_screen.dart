@@ -13,8 +13,10 @@ import '../data/note_csv.dart';
 import '../state/lock.dart';
 import '../state/notes.dart';
 import '../state/settings.dart';
+import 'about_screen.dart';
 import 'note_actions.dart';
 import 'passcode_setup_screen.dart';
+import 'text_layout_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -193,20 +195,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: ListView(children: [
           header('表示'),
           ListTile(
-            title: const Text('文字サイズ'),
-            trailing: Text('${settings.fontSize.round()}'),
-            subtitle: Slider(
-              min: SettingsController.minFontSize,
-              max: SettingsController.maxFontSize,
-              divisions: (SettingsController.maxFontSize - SettingsController.minFontSize).round(),
-              value: settings.fontSize,
-              label: '${settings.fontSize.round()}',
-              onChanged: settings.setFontSize,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text('メモの文字はこの大きさになります', style: TextStyle(fontSize: settings.fontSize)),
+            leading: const Icon(Icons.format_size),
+            title: const Text('文字の大きさ・行間'),
+            subtitle: Text(TextLayoutScreen.summary(settings)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TextLayoutScreen())),
           ),
           ListTile(
             title: const Text('並び順'),
@@ -281,6 +274,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               'メモはこの端末の中だけに保存され、通信は一切しません。端末の自動バックアップにも含まれないため、機種変更の前には CSV で書き出してください。',
               style: theme.textTheme.bodySmall,
             ),
+          ),
+
+          header('このアプリについて'),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('FastNote について'),
+            subtitle: Text(appVersionLabel(ref.watch(appInfoProvider))),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
         ]),
       ),

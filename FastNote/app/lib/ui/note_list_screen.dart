@@ -242,7 +242,7 @@ class _NoteListScreenState extends ConsumerState<NoteListScreen> {
                 itemBuilder: (_, i) => NoteTile(
                   key: ValueKey(list[i].id),
                   note: list[i],
-                  fontSize: settings.fontSize,
+                  fontSize: settings.listFontSize,
                   onTap: () => list[i].inTrash ? _noteMenu(list[i]) : _open(list[i].id), // ごみ箱のメモは開かずに戻す・消すを選ぶ
                   onLongPress: () => _noteMenu(list[i]),
                 ),
@@ -277,7 +277,7 @@ class NoteTile extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6), // 左右は狭めにして1行に入る文字を増やす
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               if (note.starred)

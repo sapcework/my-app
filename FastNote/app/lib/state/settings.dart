@@ -22,20 +22,30 @@ const appColors = <(String, Color)>[ // 高速メモ帳の「アプリの色」�
 ];
 const defaultAppColor = 3; // 青
 
-// 表示まわりの設定（並び順・文字サイズ・テーマ）
+// 表示まわりの設定（並び順・文字サイズ・行間・文字間・テーマ）
 class SettingsController extends ChangeNotifier {
-  static const minFontSize = 12.0, maxFontSize = 28.0, defaultFontSize = 16.0;
+  static const minFontSize = 12.0, maxFontSize = 32.0;
+  static const defaultListFontSize = 18.0; // 一覧の見出し（タイトル）
+  static const defaultDetailFontSize = 16.0; // 明細（メモを開いた画面）
+  static const minLineHeight = 1.0, maxLineHeight = 2.0, defaultLineHeight = 1.3; // 明細の行間（文字の高さに対する倍率）
+  static const minLetterSpacing = -1.0, maxLetterSpacing = 1.0, defaultLetterSpacing = -0.3; // 明細の文字間（論理ピクセル。マイナスで詰める）
 
   final JsonFile _store;
   SettingsController(this._store);
 
   SortMode _sort = SortMode.updatedDesc;
-  double _fontSize = defaultFontSize;
+  double _listFontSize = defaultListFontSize;
+  double _detailFontSize = defaultDetailFontSize;
+  double _lineHeight = defaultLineHeight;
+  double _letterSpacing = defaultLetterSpacing;
   ThemeMode _themeMode = ThemeMode.system; // ナイトモードを一度も切り替えていなければ端末の設定に合わせる
   int _appColor = defaultAppColor;
 
   SortMode get sort => _sort;
-  double get fontSize => _fontSize;
+  double get listFontSize => _listFontSize;
+  double get detailFontSize => _detailFontSize;
+  double get lineHeight => _lineHeight;
+  double get letterSpacing => _letterSpacing;
   ThemeMode get themeMode => _themeMode;
   int get appColorIndex => _appColor;
   Color get appColor => appColors[_appColor].$2;
@@ -43,15 +53,27 @@ class SettingsController extends ChangeNotifier {
   Future<void> load() async {
     final m = await _store.read();
     _sort = SortMode.values.asNameMap()[m['sort']] ?? SortMode.updatedDesc; // 旧版の「手動」は更新順にする
-    final f = (m['fontSize'] as num?)?.toDouble() ?? defaultFontSize;
-    _fontSize = f.clamp(minFontSize, maxFontSize);
+    double pick(String key, double def, double min, double max) => ((m[key] as num?)?.toDouble() ?? def).clamp(min, max);
+    final old = (m['fontSize'] as num?)?.toDouble(); // 旧版は一覧と明細で共通の1つだけだった
+    _detailFontSize = pick('detailFontSize', old ?? defaultDetailFontSize, minFontSize, maxFontSize);
+    _listFontSize = pick('listFontSize', old != null ? old + 2 : defaultListFontSize, minFontSize, maxFontSize); // 見出しは明細より少し大きく
+    _lineHeight = pick('lineHeight', defaultLineHeight, minLineHeight, maxLineHeight);
+    _letterSpacing = pick('letterSpacing', defaultLetterSpacing, minLetterSpacing, maxLetterSpacing);
     _themeMode = ThemeMode.values.asNameMap()[m['themeMode']] ?? ThemeMode.system;
     final c = (m['appColor'] as num?)?.toInt() ?? defaultAppColor;
     _appColor = c >= 0 && c < appColors.length ? c : defaultAppColor;
     notifyListeners();
   }
 
-  Future<void> _save() => _store.write({'sort': _sort.name, 'fontSize': _fontSize, 'themeMode': _themeMode.name, 'appColor': _appColor});
+  Future<void> _save() => _store.write({
+        'sort': _sort.name,
+        'listFontSize': _listFontSize,
+        'detailFontSize': _detailFontSize,
+        'lineHeight': _lineHeight,
+        'letterSpacing': _letterSpacing,
+        'themeMode': _themeMode.name,
+        'appColor': _appColor,
+      });
 
   Future<void> setSort(SortMode v) async {
     _sort = v;
@@ -59,8 +81,35 @@ class SettingsController extends ChangeNotifier {
     await _save();
   }
 
-  Future<void> setFontSize(double v) async {
-    _fontSize = v.clamp(minFontSize, maxFontSize).roundToDouble();
+  Future<void> setListFontSize(double v) async {
+    _listFontSize = v.clamp(minFontSize, maxFontSize).roundToDouble();
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> setDetailFontSize(double v) async {
+    _detailFontSize = v.clamp(minFontSize, maxFontSize).roundToDouble();
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> setLineHeight(double v) async {
+    _lineHeight = (v.clamp(minLineHeight, maxLineHeight) * 20).round() / 20; // 0.05 刻み
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> setLetterSpacing(double v) async {
+    _letterSpacing = (v.clamp(minLetterSpacing, maxLetterSpacing) * 10).round() / 10; // 0.1 刻み
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> resetTextLayout() async { // 文字サイズ・行間・文字間を初期値に戻す
+    _listFontSize = defaultListFontSize;
+    _detailFontSize = defaultDetailFontSize;
+    _lineHeight = defaultLineHeight;
+    _letterSpacing = defaultLetterSpacing;
     notifyListeners();
     await _save();
   }
