@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:"> <!-- 外部との通信をブラウザ側で遮断する -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>高速メモ帳 CSV 抽出</title>
+<style>
+  :root { --fg: #000; --bg: #fff; --sub: #444; --line: #000; } /* E-ink 向けに白黒と線で区別する */
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 16px/1.6 "Yu Gothic UI", "Meiryo", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 16px; color: var(--sub); }
+  #drop { border: 3px dashed var(--line); padding: 28px 16px; text-align: center; cursor: pointer; }
+  #drop.over { border-style: solid; background: #ddd; } /* ドラッグ中は実線＋灰色 */
+  #drop input { display: none; }
+  section { margin-top: 20px; }
+  .box { border: 2px solid var(--line); padding: 12px 16px; }
+  .ok { font-weight: bold; }
+  .ng { font-weight: bold; text-decoration: underline; }
+  ul.warn { margin: 8px 0 0; padding-left: 20px; }
+  ul.warn li::marker { content: "⚠ "; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #000; color: #fff; font-weight: bold; }
+  td.body { white-space: pre-wrap; word-break: break-all; }
+  td.num, td.date { white-space: nowrap; }
+  tr.bad td { border-width: 3px; } /* 異常のある行は太線 */
+  button { font: inherit; font-weight: bold; padding: 10px 24px; border: 3px solid var(--line); background: var(--fg); color: var(--bg); cursor: pointer; }
+  button:disabled { background: var(--bg); color: var(--sub); border-style: dashed; cursor: default; }
+  .note { font-size: 14px; color: var(--sub); margin-top: 8px; }
+  .wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>高速メモ帳 CSV 抽出</h1>
+  <p class="lead">高速メモ帳のバックアップファイルを読み込み、CSV で保存します。処理はこのブラウザの中だけで行い、通信は一切しません。</p>
+
+  <label id="drop">
+    <input type="file" id="file">
+    <strong>ここをクリックしてバックアップファイルを選択</strong><br>
+    （またはファイルをここへドラッグ＆ドロップ）
+  </label>
+
+  <section id="result" hidden>
+    <div class="box" id="summary"></div>
+    <p>
+      <button id="save" disabled>CSV を保存</button>
+    </p>
+    <p class="note">CSV は Excel で開けるよう BOM 付き UTF-8 です。本文が「= + - @」で始まるメモは、Excel で式として扱われることがあります（データ自体はそのまま保存されます）。</p>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>#</th><th>タイトル</th><th>更新日時</th><th>文字数</th><th>状態</th><th>本文（先頭）</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script id="parser">
+'use strict';
+const SECTION_SEP = '{[!*|@]}'; // バックアップ内の JSON の区切り
+const ENTRY_RE = /\^!([0-9a-z]{1,32});([^;]*);(#[0-9A-Fa-f]{8});(\d+);([^;]*);(#[0-9A-Fa-f]{8});(\d+);([^;]*);/g; // index の1件分の先頭部分
+
+function findJsonEnd(s, pos) { // s[pos] から始まる JSON オブジェクトの終わり（直後の位置）を返す
+  if (s[pos] !== '{') throw new Error(`位置 ${pos} に JSON がありません`);
+  let depth = 0, inStr = false, esc = false;
+  for (let i = pos; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) { // 文字列の中の括弧は数えない
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return i + 1;
+  }
+  throw new Error('JSON が途中で終わっています（ファイルが壊れている可能性があります）');
+}
+
+function countChars(s) { // 文字数をコードポイント単位と UTF-16 単位で数える
+  return { cp: [...s].length, u16: s.length };
+}
+
+function parseIndex(index, warnings) { // index 文字列をメモ一覧に分解する
+  const heads = [];
+  ENTRY_RE.lastIndex = 0;
+  for (let m; (m = ENTRY_RE.exec(index)); ) heads.push({ m, start: m.index, end: ENTRY_RE.lastIndex });
+  if (index && (heads.length === 0 || heads[0].start !== 0)) {
+    warnings.push(`index の先頭 ${heads.length ? heads[0].start : index.length} 文字を解釈できませんでした`);
+  }
+  return heads.map((h, i) => {
+    const restEnd = i + 1 < heads.length ? heads[i + 1].start : index.length; // 次のメモの手前まで
+    const rest = index.slice(h.end, restEnd);
+    let reminder = '', title = rest;
+    if (rest[0] === '{') { // リマインダー JSON とタイトルに分ける
+      try {
+        const e = findJsonEnd(rest, 0);
+        reminder = rest.slice(0, e);
+        title = rest[e] === ';' ? rest.slice(e + 1) : rest.slice(e);
+      } catch (err) {
+        warnings.push(`ID ${h.m[1]} のリマインダー情報を解釈できませんでした`);
+      }
+    }
+    return {
+      id: h.m[1],
+      textColor: h.m[3],
+      updatedAt: Number(h.m[4]),
+      bgColor: h.m[6],
+      length: Number(h.m[7]),
+      reminder,
+      title,
+    };
+  });
+}
+
+function parseBackup(text) { // バックアップ全体を解析する（ハッシュ検証は verifyHash で別途行う）
+  const warnings = [];
+  const src = text.replace(/^﻿/, '').replace(/\s+$/, ''); // BOM と末尾の改行を除く
+  const sharp = src.indexOf('#');
+  if (sharp < 0) throw new Error('高速メモ帳のバックアップ形式ではありません（「#」が見つかりません）');
+  const hash = src.slice(0, sharp);
+  if (!/^[0-9a-f]{40}$/i.test(hash)) throw new Error('高速メモ帳のバックアップ形式ではありません（先頭のハッシュが不正です）');
+  const body = src.slice(sharp + 1);
+
+  const sections = [];
+  let pos = 0;
+  for (let n = 0; n < 3; n++) { // JSON を3つ順に切り出す
+    if (n > 0) {
+      if (!body.startsWith(SECTION_SEP, pos)) throw new Error(`${n + 1} 番目のデータの区切りが見つかりません`);
+      pos += SECTION_SEP.length;
+    }
+    const end = findJsonEnd(body, pos);
+    sections.push(JSON.parse(body.slice(pos, end)));
+    pos = end;
+  }
+  if (pos !== body.length) warnings.push(`末尾に解釈できないデータが ${body.length - pos} 文字あります`);
+
+  const [meta, extra, data] = sections;
+  if (Object.keys(extra).length) warnings.push(`2 番目のデータが空ではありません（内容不明・CSV には含まれません）：${JSON.stringify(extra).slice(0, 200)}`);
+
+  const contents = new Map(); // id → 本文
+  for (const [k, v] of Object.entries(data)) {
+    if (k.startsWith('_')) contents.set(k.slice(1), String(v));
+  }
+
+  const entries = parseIndex(typeof meta.index === 'string' ? meta.index : '', warnings);
+  const notes = [];
+  const seen = new Set();
+  for (const e of entries) {
+    if (seen.has(e.id)) warnings.push(`ID ${e.id} が index に重複しています`);
+    seen.add(e.id);
+    const has = contents.has(e.id);
+    const note = { order: notes.length + 1, ...e, body: has ? contents.get(e.id) : '', status: has ? '正常' : '本文なし' };
+    if (has) {
+      const c = countChars(note.body);
+      if (c.cp !== e.length && c.u16 !== e.length) warnings.push(`「${e.title}」の文字数が記録（${e.length}）と本文（${c.cp}）で一致しません`);
+    } else {
+      warnings.push(`「${e.title}」（ID ${e.id}）は一覧にありますが本文がありません`);
+    }
+    notes.push(note);
+  }
+  for (const [id, b] of contents) { // 本文はあるが一覧にないもの
+    if (seen.has(id)) continue;
+    const title = b.split('\n')[0];
+    warnings.push(`「${title}」（ID ${id}）は本文がありますが一覧にありません`);
+    notes.push({ order: notes.length + 1, id, textColor: '', updatedAt: null, bgColor: '', length: countChars(b).cp, reminder: '', title, body: b, status: 'index なし' });
+  }
+  return { hash: hash.toLowerCase(), body, notes, warnings };
+}
+
+async function verifyHash(result) { // 先頭のハッシュが本文の SHA-1 と一致するか（true/false、検証できなければ null）
+  const subtle = globalThis.crypto && globalThis.crypto.subtle;
+  if (!subtle) return null;
+  const buf = await subtle.digest('SHA-1', new TextEncoder().encode(result.body));
+  const hex = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  return hex === result.hash;
+}
+
+function formatDate(sec) { // UNIX 秒 → "YYYY-MM-DD HH:MM:SS"（ローカル時刻）
+  if (sec == null || !Number.isFinite(sec)) return '';
+  const d = new Date(sec * 1000), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+const CSV_HEADER = ['表示順', 'ID', 'タイトル', '本文', '更新日時', '更新日時UNIX', '文字色', '背景色', '文字数', 'リマインダー', '状態'];
+
+function toCsv(notes) { // RFC 4180 形式の CSV（BOM 付き・CRLF・全フィールドを引用符で囲む）
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [CSV_HEADER, ...notes.map(n => [
+    n.order, n.id, n.title, n.body, formatDate(n.updatedAt), n.updatedAt ?? '', n.textColor, n.bgColor, n.length, n.reminder, n.status,
+  ])];
+  return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n') + '\r\n';
+}
+</script>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+let current = null; // 直近に読み込んだ解析結果
+
+function el(tag, text, cls) { // テキストだけを入れた要素を作る（HTML として解釈させない）
+  const e = document.createElement(tag);
+  if (text != null) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+
+async function load(file) {
+  const summary = $('summary'), rows = $('rows');
+  $('result').hidden = false;
+  summary.replaceChildren(el('p', `${file.name} を読み込み中…`));
+  rows.replaceChildren();
+  $('save').disabled = true;
+  current = null;
+  try {
+    const result = parseBackup(await file.text());
+    const ok = await verifyHash(result);
+    current = result;
+    const hashMsg = ok === true ? 'ハッシュ一致（ファイルは壊れていません）' : ok === false ? 'ハッシュ不一致（ファイルが壊れているか、書き換えられています）' : 'このブラウザではハッシュを検証できません';
+    summary.replaceChildren(
+      el('p', `ファイル：${file.name}`),
+      el('p', hashMsg, ok === false ? 'ng' : 'ok'),
+      el('p', `メモ件数：${result.notes.length} 件`, 'ok'),
+    );
+    if (result.warnings.length) {
+      const ul = el('ul', null, 'warn');
+      for (const w of result.warnings) ul.append(el('li', w));
+      summary.append(el('p', `警告 ${result.warnings.length} 件：`, 'ng'), ul);
+    }
+    for (const n of result.notes) {
+      const tr = el('tr', null, n.status === '正常' ? '' : 'bad');
+      const head = n.body.length > 120 ? n.body.slice(0, 120) + '…' : n.body;
+      tr.append(el('td', n.order, 'num'), el('td', n.title), el('td', formatDate(n.updatedAt), 'date'), el('td', n.length, 'num'), el('td', n.status), el('td', head, 'body'));
+      rows.append(tr);
+    }
+    $('save').disabled = result.notes.length === 0;
+  } catch (err) {
+    summary.replaceChildren(el('p', `読み込めませんでした：${err.message}`, 'ng'));
+  }
+}
+
+$('file').addEventListener('change', e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; });
+const drop = $('drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);
+});
+
+$('save').addEventListener('click', () => {
+  if (!current) return;
+  const blob = new Blob([toCsv(current.notes)], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const p = n => String(n).padStart(2, '0'), d = new Date();
+  a.href = url;
+  a.download = `fastnote_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000); // ダウンロード開始後に解放する
+});
+</script>
+</body>
+</html>
