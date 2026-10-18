@@ -418,4 +418,23 @@ void main() {
     expect(find.text('端末の空き容量が足りません'), findsOneWidget);
     expect(find.textContaining('削除はしないでください'), findsOneWidget);
   });
+
+  testWidgets('フォルダやごみ箱で戻るボタンを押すと、終了せずにマイノートに戻る', (tester) async {
+    await start(tester, bodies: ['マイノートのメモ']);
+    await openDrawer(tester);
+    await tester.tap(find.text('ごみ箱'));
+    await tester.pumpAndSettle();
+    expect(find.text('ごみ箱は空です'), findsOneWidget);
+
+    expect(await tester.binding.handlePopRoute(), isTrue, reason: 'アプリ側で処理した（終了しない）');
+    await tester.pumpAndSettle();
+    expect(listedTitles(tester), ['マイノートのメモ']);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('マイノート')), findsOneWidget);
+
+    await openDrawer(tester); // 横メニューが開いているときの戻るは、メニューを閉じるだけ
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(Drawer), findsNothing);
+    expect(listedTitles(tester), ['マイノートのメモ']);
+  });
 }

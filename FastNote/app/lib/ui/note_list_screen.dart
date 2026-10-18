@@ -282,10 +282,16 @@ class _NoteListScreenState extends ConsumerState<NoteListScreen> {
     _selected.removeWhere((id) => !list.any((n) => n.id == id)); // 消えたり絞り込みで見えなくなったメモは選択から外す
 
     return PopScope(
-      canPop: !_searching && !_selecting, // 戻るボタンは、まず選択を解除し、次に検索を閉じる
+      canPop: !_searching && !_selecting && _scope == NoteScope.home, // 戻るボタンは、選択の解除 → 検索を閉じる → マイノートへ → 終了の順
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        _selecting ? _clearSelection() : _closeSearch();
+        if (_selecting) {
+          _clearSelection();
+        } else if (_searching) {
+          _closeSearch();
+        } else {
+          setState(() => _scope = NoteScope.home); // フォルダやごみ箱からはマイノートに戻る（いきなり終了しない）
+        }
       },
       child: Scaffold(
         drawer: _selecting ? null : _drawer(notes),
