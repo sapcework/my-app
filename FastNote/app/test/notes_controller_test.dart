@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:fastnote/data/encrypted_backup.dart';
 import 'package:fastnote/data/note.dart';
 import 'package:fastnote/data/note_db.dart';
 import 'package:fastnote/state/notes.dart';
@@ -218,5 +219,21 @@ void main() {
     expect(await upgraded.folders(), isEmpty);
     await upgraded.close();
     dir.deleteSync(recursive: true);
+  });
+
+  test('暗号化バックアップ：書き出し → 暗号化 → 別の端末で復号 → 取り込みで、フォルダ・☆まで戻る', () async {
+    final f = await notes.createFolder('家計');
+    final a = await notes.create('口座番号メモ', folderId: f.id);
+    await notes.setStarred(a.id, true);
+    final enc = await encryptBackup(notes.exportCsv(), 'secret-pw', iterations: 1000);
+
+    final db2 = await NoteDb.open(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+    final other = NotesController(db2, reminders: FakeReminders(), now: () => clock);
+    await other.load();
+    expect(() => decryptBackup(enc, 'wrong'), throwsA(isA<BackupPasswordException>()));
+    await other.applyImport(other.planImportFrom(await decryptBackup(enc, 'secret-pw')));
+    final a2 = other.byId(a.id)!;
+    expect([a2.body, a2.starred, other.folderById(a2.folderId)!.name], ['口座番号メモ', true, '家計']);
+    await db2.close();
   });
 }

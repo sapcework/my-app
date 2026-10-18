@@ -15,10 +15,11 @@ String generateSaltB64() {
 
 String pbkdf2HashTask(Map<String, String> args) { // compute() から呼ぶ（重いので別 isolate で実行する）
   final salt = base64Decode(args['saltB64']!);
-  return base64Encode(_pbkdf2Sha256(utf8.encode(args['secret']!), salt, kPasscodeIterations, 32));
+  return base64Encode(pbkdf2Sha256(utf8.encode(args['secret']!), salt, kPasscodeIterations, 32));
 }
 
-Uint8List _pbkdf2Sha256(List<int> password, List<int> salt, int iterations, int dkLen) {
+Uint8List pbkdf2Sha256( // 暗号化バックアップの鍵の導出にも使う
+    List<int> password, List<int> salt, int iterations, int dkLen) {
   final hmac = Hmac(sha256, password);
   final blockCount = (dkLen / 32).ceil(); // SHA-256 の出力は32バイト
   final out = <int>[];

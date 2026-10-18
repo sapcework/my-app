@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart' show openFile;
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus, XFile;
 
+import '../data/encrypted_backup.dart';
 import '../data/note_csv.dart';
 import '../state/lock.dart';
 import '../state/notes.dart';
@@ -17,6 +19,7 @@ import 'about_screen.dart';
 import 'note_actions.dart';
 import 'passcode_setup_screen.dart';
 import 'text_layout_screen.dart';
+import 'widgets/backup_password_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -77,17 +80,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // ---- データ ----
 
+  Future<T> _withProgress<T>(String label, Future<T> Function() task) async { // 鍵の導出に1〜2秒かかるので、待っていることを見せる
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(content: Row(children: [const CircularProgressIndicator(), const SizedBox(width: 20), Expanded(child: Text(label))])),
+      ),
+    );
+    try {
+      return await task();
+    } finally {
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
+  Future<String?> _decryptWithPrompt(Uint8List bytes) async { // パスワードを聞いて復号する。違えば聞き直す
+    String? error;
+    while (true) {
+      if (!mounted) return null;
+      final pw = await askBackupPassword(context, confirm: false, error: error);
+      if (pw == null || !mounted) return null;
+      try {
+        return await _withProgress('復号しています…', () => decryptBackup(bytes, pw));
+      } on BackupPasswordException {
+        error = 'パスワードが違うか、ファイルが壊れています';
+      } on FormatException catch (e) {
+        if (mounted) await _alert('取り込めません', e.message);
+        return null;
+      }
+    }
+  }
+
   Future<void> _import() async {
     final lock = ref.read(lockProvider);
     final notes = ref.read(notesProvider);
-    final file = await lock.suspendRelock(() => openFile()); // バックアップは拡張子が無く、CSV も端末によって種類判定が不正確なので絞り込まない
+    final file = await lock.suspendRelock(() => openFile()); // バックアップは拡張子が端末任せで、CSV も種類判定が不正確なので絞り込まない
     if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    final encrypted = looksLikeEncryptedBackup(bytes);
     String text;
-    try {
-      text = utf8.decode(await file.readAsBytes());
-    } on FormatException {
-      showMessage('高速メモ帳のバックアップでも CSV でもありません（UTF-8 のテキストではありません）');
-      return;
+    if (encrypted) {
+      final t = await _decryptWithPrompt(bytes);
+      if (t == null) return;
+      text = t;
+    } else {
+      try {
+        text = utf8.decode(bytes);
+      } on FormatException {
+        showMessage('FastNote のバックアップでも、高速メモ帳のバックアップでも、CSV でもありません');
+        return;
+      }
     }
     final ImportPlan plan;
     try {
@@ -97,7 +141,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     if (!mounted) return;
-    final isBackup = plan.source == ImportSource.backup;
+    final title = encrypted
+        ? 'バックアップを取り込む'
+        : plan.source == ImportSource.backup
+            ? '高速メモ帳のバックアップを取り込む'
+            : 'CSV を取り込む';
     final skipped = [
       if (plan.skippedExisting > 0) '同じメモが既にあるため ${plan.skippedExisting} 件',
       if (plan.skippedEmpty > 0) '本文が空のため ${plan.skippedEmpty} 件',
@@ -110,12 +158,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isBackup ? '高速メモ帳のバックアップを取り込む' : 'CSV を取り込む'),
+        title: Text(title),
         content: SingleChildScrollView(
           child: Text([
             '${file.name}\n',
             if (plan.hashOk == false) '⚠ 破損チェックに一致しません。ファイルが壊れているか、書き換えられている可能性があります。\n',
             '${plan.notes.length} 件のメモを追加します。',
+            if (plan.newFolders.isNotEmpty) '（フォルダ「${plan.newFolders.map((f) => f.name).join('」「')}」を作ります）',
             if (skipped.isNotEmpty) '（${skipped.join('、')}は飛ばします）',
             if (plan.warnings.isNotEmpty) ...[
               '\n気づいた点：',
@@ -137,34 +186,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _export() async {
-    final lock = ref.read(lockProvider);
     final notes = ref.read(notesProvider);
     if (notes.notes.isEmpty) {
       showMessage('書き出すメモがありません');
       return;
     }
-    final ok = await showDialog<bool>(
+    final format = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('CSV で書き出す'),
-        content: Text('${notes.notes.length} 件のメモを CSV にして共有します。\n\n'
-            'ファイルは暗号化されません。保存先や送り先に気をつけてください。\n'
-            'このファイルを「取り込む」で読み込むと復元できます。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('書き出す')),
+      builder: (context) => SimpleDialog(
+        title: const Text('書き出す形式'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'encrypted'),
+            child: const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.lock_outline),
+              title: Text('暗号化バックアップ（おすすめ）'),
+              subtitle: Text('パスワードが無いと開けません。メモ帳や Excel で開いても読めません。フォルダ・☆なども残ります'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'csv'),
+            child: const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.table_chart_outlined),
+              title: Text('CSV（暗号化なし）'),
+              subtitle: Text('Excel で中身を確かめられます。誰でも読めるので、保存先や送り先に気をつけてください'),
+            ),
+          ),
         ],
       ),
     );
-    if (ok != true) return;
+    if (format == null || !mounted) return;
     final dir = await getTemporaryDirectory();
     await for (final f in dir.list()) { // 前回の書き出しファイルを残さない
-      if (f is File && p.basename(f.path).startsWith('fastnote_') && f.path.endsWith('.csv')) await f.delete();
+      final name = p.basename(f.path);
+      if (f is File && name.startsWith('fastnote_') && (name.endsWith('.csv') || name.endsWith('.$backupExtension'))) await f.delete();
     }
-    final name = 'fastnote_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv'; // 抽出ツールと同じ名前の形
-    final file = File(p.join(dir.path, name));
-    await file.writeAsString(notes.exportCsv(), flush: true);
-    await lock.suspendRelock(() => SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: 'text/csv')], subject: name)));
+    final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final File file;
+    final String mime;
+    if (!mounted) return;
+    if (format == 'encrypted') {
+      final pw = await askBackupPassword(context, confirm: true);
+      if (pw == null || !mounted) return;
+      final data = await _withProgress('暗号化しています…', () => encryptBackup(notes.exportCsv(), pw));
+      file = File(p.join(dir.path, 'fastnote_$stamp.$backupExtension'));
+      await file.writeAsBytes(data, flush: true);
+      mime = 'application/octet-stream';
+    } else {
+      file = File(p.join(dir.path, 'fastnote_$stamp.csv')); // 抽出ツールと同じ名前の形
+      await file.writeAsString(notes.exportCsv(), flush: true);
+      mime = 'text/csv';
+    }
+    final lock = ref.read(lockProvider);
+    await lock.suspendRelock(() => SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: mime)], subject: p.basename(file.path))));
   }
 
   Future<void> _alert(String title, String body) => showDialog<void>(
@@ -259,19 +335,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
             title: const Text('取り込む'),
-            subtitle: const Text('高速メモ帳のバックアップ、または CSV（抽出ツールの出力・このアプリの書き出し）'),
+            subtitle: const Text('このアプリのバックアップ、高速メモ帳のバックアップ、CSV'),
             onTap: _import,
           ),
           ListTile(
             leading: const Icon(Icons.file_upload_outlined),
-            title: const Text('CSV で書き出す（バックアップ）'),
-            subtitle: Text('$count 件のメモ'),
+            title: const Text('バックアップを書き出す'),
+            subtitle: Text('$count 件のメモ（暗号化バックアップ または CSV）'),
             onTap: _export,
           ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'メモはこの端末の中だけに保存され、通信は一切しません。端末の自動バックアップにも含まれないため、機種変更の前には CSV で書き出してください。',
+              'メモはこの端末の中だけに保存され、通信は一切しません。端末の自動バックアップにも含まれないため、機種変更の前には「バックアップを書き出す」で保存してください。',
               style: theme.textTheme.bodySmall,
             ),
           ),

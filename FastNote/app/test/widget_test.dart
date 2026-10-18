@@ -11,6 +11,7 @@ import 'package:fastnote/ui/about_screen.dart';
 import 'package:fastnote/ui/lock_screen.dart';
 import 'package:fastnote/ui/settings_screen.dart';
 import 'package:fastnote/ui/text_layout_screen.dart';
+import 'package:fastnote/ui/widgets/backup_password_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -324,5 +325,31 @@ void main() {
     expect(find.text('1 件'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('1.1.0（2026-10-17）'), 300, scrollable: _scrollableIn(find.byType(AboutScreen)));
     expect(find.text('1.1.0（2026-10-17）'), findsOneWidget);
+  });
+
+  testWidgets('バックアップのパスワード：短すぎる・確認が一致しないときは進めない', (tester) async {
+    String? result = 'まだ';
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+          onPressed: () async => result = await askBackupPassword(context, confirm: true),
+          child: const Text('開く'),
+        ))));
+    await tester.tap(find.text('開く'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('誰にも復元できません'), findsOneWidget);
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'abc');
+    await tester.enterText(fields.at(1), 'abc');
+    await tester.tap(find.text('暗号化して書き出す'));
+    await tester.pump();
+    expect(find.text('4文字以上にしてください'), findsOneWidget); // 入力欄の見出し「（4文字以上）」と区別する
+    await tester.enterText(fields.at(0), 'abcd1234');
+    await tester.enterText(fields.at(1), 'abcd1235');
+    await tester.tap(find.text('暗号化して書き出す'));
+    await tester.pump();
+    expect(find.text('確認用の入力が一致しません'), findsOneWidget);
+    await tester.enterText(fields.at(1), 'abcd1234');
+    await tester.tap(find.text('暗号化して書き出す'));
+    await tester.pumpAndSettle();
+    expect(result, 'abcd1234');
   });
 }
