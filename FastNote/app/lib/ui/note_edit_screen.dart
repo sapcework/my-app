@@ -167,7 +167,8 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
     final settings = ref.watch(settingsProvider);
     final notes = ref.watch(notesProvider);
     final note = _id == null ? null : notes.byId(_id!);
-    final c = noteColors(note?.bgColor, note?.textColor);
+    final scheme = Theme.of(context).colorScheme;
+    final c = noteColors(note?.bgColor, note?.textColor, surface: scheme.surface, onSurface: scheme.onSurface);
     final upcoming = note?.reminderAt != null && note!.reminderAt! > DateTime.now().millisecondsSinceEpoch;
 
     PopupMenuItem<_Menu> item(_Menu v, IconData icon, String label, {bool enabled = true}) => PopupMenuItem(

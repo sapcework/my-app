@@ -54,6 +54,18 @@ class ImportPlan { // 取り込み前の確認用。apply するまで DB は変
   final List<String> warnings; // 解析で気づいたこと（取り込み自体は続けられるもの）
   const ImportPlan(this.source, this.notes, this.skippedExisting, this.skippedEmpty,
       {this.newFolders = const [], this.hashOk, this.warnings = const []});
+
+  int get coloredCount => notes.where((n) => n.textColor != null || n.bgColor != null).length;
+
+  ImportPlan withoutColors() => ImportPlan( // 色を取り込まない（高速メモ帳は、画面で使っていない色の値を保存していることがあるため）
+        source,
+        [for (final n in notes) n.copyWith(textColor: () => null, bgColor: () => null)],
+        skippedExisting,
+        skippedEmpty,
+        newFolders: newFolders,
+        hashOk: hashOk,
+        warnings: warnings,
+      );
 }
 
 class ImportRecord { // 取り込み元を問わない1件分
@@ -61,7 +73,7 @@ class ImportRecord { // 取り込み元を問わない1件分
   final String body;
   final int? updatedUnix; // 秒
   final String? textColor, bgColor; // "#AARRGGBB"（正規化前）
-  final String folderName; // 空なら「私のノート」
+  final String folderName; // 空なら「マイノート」
   final bool starred;
   final int? deletedUnix, reminderUnix; // 秒
   const ImportRecord({
@@ -165,7 +177,7 @@ ImportPlan planCsvImport(
   }
 
   String? folderFor(String name) { // 同じ名前のフォルダがあればそこへ、無ければ作る
-    if (name.isEmpty || name == defaultFolderName) return null;
+    if (name.isEmpty || isDefaultFolderName(name)) return null;
     return folderIds[name] ??= () {
       final f = Folder(id: freshId(), name: name, sortOrder: (1 << 20) + newFolders.length); // 既存フォルダの後ろに並ぶ
       newFolders.add(f);

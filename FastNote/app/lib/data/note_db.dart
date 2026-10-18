@@ -78,11 +78,21 @@ class NoteDb {
     });
   }
 
+  Future<void> clearColors(Iterable<String> ids) async { // メモの色をまとめて消す（1トランザクション）
+    await _db.transaction((txn) async {
+      final b = txn.batch();
+      for (final id in ids) {
+        b.update('notes', {'text_color': null, 'bg_color': null}, where: 'id = ?', whereArgs: [id]);
+      }
+      await b.commit(noResult: true);
+    });
+  }
+
   Future<List<Folder>> folders() async => (await _db.query('folders', orderBy: 'sort_order')).map(Folder.fromMap).toList();
 
   Future<void> upsertFolder(Folder f) => _db.insert('folders', f.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
 
-  Future<void> deleteFolder(String id) async { // 中のメモは「私のノート」へ戻す
+  Future<void> deleteFolder(String id) async { // 中のメモは「マイノート」へ戻す
     await _db.transaction((txn) async {
       await txn.update('notes', {'folder_id': null}, where: 'folder_id = ?', whereArgs: [id]);
       await txn.delete('folders', where: 'id = ?', whereArgs: [id]);

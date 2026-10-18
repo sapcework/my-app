@@ -119,6 +119,19 @@ void main() {
     expect(() => plan('${'0' * 40}#{"index":""}{}{}'), throwsFormatException);
   });
 
+  test('「高速メモ帳の色を取り込む」がオフなら、色だけを外して本文や日時は残す', () {
+    final text = makeBackup(
+      entry('aaaaaaaaaaaaaaaa', 1784182773, 1, 'a', fg: '#FF6A1B9A', bg: '#FFEDE7F6') + entry('bbbbbbbbbbbbbbbb', 1784183000, 1, 'b'),
+      {'_aaaaaaaaaaaaaaaa': 'a', '_bbbbbbbbbbbbbbbb': 'b'},
+    );
+    final p = plan(text);
+    expect(p.coloredCount, 1);
+    final plain = p.withoutColors();
+    expect(plain.coloredCount, 0);
+    expect(plain.notes.map((n) => [n.id, n.body, n.updatedAt]), p.notes.map((n) => [n.id, n.body, n.updatedAt]));
+    expect([plain.source, plain.hashOk, plain.skippedExisting], [p.source, p.hashOk, p.skippedExisting]);
+  });
+
   test('バックアップでも CSV でもないファイルはエラー', () {
     expect(() => plan('ただのテキスト'), throwsFormatException);
   });

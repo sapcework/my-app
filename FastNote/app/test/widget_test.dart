@@ -37,6 +37,13 @@ class MemoryNoteDb implements NoteDb {
   }
 
   @override
+  Future<void> clearColors(Iterable<String> ids) async {
+    for (final id in ids) {
+      rows[id] = rows[id]!.copyWith(textColor: () => null, bgColor: () => null);
+    }
+  }
+
+  @override
   Future<List<Folder>> folders() async => folderRows.values.toList()..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   @override
   Future<void> upsertFolder(Folder f) async => folderRows[f.id] = f;
@@ -123,7 +130,7 @@ void main() {
 
   testWidgets('新しいメモを書いて戻ると一覧の先頭に出て、「保存されました」と出る', (tester) async {
     await start(tester, bodies: ['前からあるメモ']);
-    expect(find.text('私のノート'), findsOneWidget);
+    expect(find.text('マイノート'), findsOneWidget);
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '買い物\n牛乳');
@@ -189,7 +196,7 @@ void main() {
   });
 
   testWidgets('横メニューから新しいフォルダを作ると、そのフォルダに切り替わり、作ったメモはそこに入る', (tester) async {
-    await start(tester, bodies: ['私のノートのメモ']);
+    await start(tester, bodies: ['マイノートのメモ']);
     await openDrawer(tester);
     await tester.tap(find.text('新しいフォルダ'));
     await tester.pumpAndSettle();
@@ -206,9 +213,9 @@ void main() {
     expect(listedTitles(tester), ['改善のための提案']);
 
     await openDrawer(tester);
-    await tester.tap(find.text('私のノート'));
+    await tester.tap(find.text('マイノート'));
     await tester.pumpAndSettle();
-    expect(listedTitles(tester), ['私のノートのメモ']);
+    expect(listedTitles(tester), ['マイノートのメモ']);
   });
 
   testWidgets('「色」でナイトモードとアプリの色を切り替えられる', (tester) async {

@@ -9,7 +9,7 @@ class Note {
   final int updatedAt; // 更新日時（UNIX ミリ秒）
   final String? textColor; // "#AARRGGBB"。null は既定色
   final String? bgColor; // "#AARRGGBB"。null は既定色
-  final String? folderId; // null は「私のノート」
+  final String? folderId; // null は「マイノート」
   final bool starred; // ☆。一覧の先頭に固定する
   final int? deletedAt; // ごみ箱に入れた日時（UNIX ミリ秒）。null なら通常のメモ
   final int? reminderAt; // リマインダーの日時（UNIX ミリ秒）
@@ -105,7 +105,10 @@ class Folder {
   factory Folder.fromMap(Map<String, Object?> m) => Folder(id: m['id'] as String, name: m['name'] as String, sortOrder: m['sort_order'] as int);
 }
 
-const defaultFolderName = '私のノート'; // folderId が null のメモの入れ物（高速メモ帳と同じ名前）
+const defaultFolderName = 'マイノート'; // folderId が null のメモの入れ物の表示名
+const legacyDefaultFolderNames = {'私のノート'}; // 1.2.0 までの表示名。CSV に残っていても既定フォルダとして扱う
+
+bool isDefaultFolderName(String name) => name == defaultFolderName || legacyDefaultFolderNames.contains(name);
 
 final _idRand = Random.secure();
 const _idChars = '0123456789abcdefghijklmnopqrstuvwxyz';

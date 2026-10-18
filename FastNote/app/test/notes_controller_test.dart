@@ -84,7 +84,7 @@ void main() {
     expect(i.title, 'いちご');
   });
 
-  test('フォルダの作成・移動・名前の変更・削除（中のメモは「私のノート」へ）', () async {
+  test('フォルダの作成・移動・名前の変更・削除（中のメモは「マイノート」へ）', () async {
     final f = await notes.createFolder(' 仕事 ');
     expect(f.name, '仕事');
     final a = await notes.create('会議', folderId: f.id);
@@ -129,7 +129,7 @@ void main() {
     expect((await reload()).notes.map((n) => n.title), ['C']);
   });
 
-  test('ごみ箱に入れたメモのフォルダが消えていたら、戻すと「私のノート」に入る', () async {
+  test('ごみ箱に入れたメモのフォルダが消えていたら、戻すと「マイノート」に入る', () async {
     final f = await notes.createFolder('一時');
     final a = await notes.create('A', folderId: f.id);
     await notes.moveToTrash(a.id);
@@ -235,5 +235,29 @@ void main() {
     final a2 = other.byId(a.id)!;
     expect([a2.body, a2.starred, other.folderById(a2.folderId)!.name], ['口座番号メモ', true, '家計']);
     await db2.close();
+  });
+
+  test('メモの色をすべて消す：色付きのメモだけ消え、更新日時と並びは変わらない', () async {
+    final a = await notes.create('青いメモ');
+    clock = 2000;
+    final b = await notes.create('色なしのメモ');
+    await notes.updateColors(a.id, bg: '#FFE3F2FD', fg: '#1A2196F3');
+    expect(notes.coloredCount, 1);
+    final before = titles(NoteScope.home);
+    expect(await notes.clearAllColors(), 1);
+    expect([notes.byId(a.id)!.bgColor, notes.byId(a.id)!.textColor], [null, null]);
+    expect(notes.byId(a.id)!.updatedAt, 1000);
+    expect(notes.byId(b.id)!.updatedAt, 2000);
+    expect(titles(NoteScope.home), before);
+    expect(notes.coloredCount, 0);
+    final saved = (await reload()).byId(a.id)!;
+    expect([saved.bgColor, saved.textColor], [null, null]);
+    expect(await notes.clearAllColors(), 0);
+  });
+
+  test('CSV のフォルダ列が旧名「私のノート」でも、フォルダを作らずにマイノートに入れる', () async {
+    final plan = notes.planImportFrom('本文,フォルダ\n旧版のメモ,私のノート\n新版のメモ,マイノート\n');
+    expect(plan.newFolders, isEmpty);
+    expect(plan.notes.every((n) => n.folderId == null), isTrue);
   });
 }

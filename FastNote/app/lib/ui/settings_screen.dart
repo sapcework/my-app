@@ -155,33 +155,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     const maxWarnings = 5; // 多すぎるとダイアログが読めなくなるので先頭だけ見せる
+    final askColors = !encrypted && plan.source == ImportSource.backup && plan.coloredCount > 0; // 色を選べるのは高速メモ帳のバックアップだけ（自分で付けた色は必ず戻す）
+    var importColors = false; // 高速メモ帳は画面で使っていない色の値を保存していることがあるので、初期値は取り込まない
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Text([
-            '${file.name}\n',
-            if (plan.hashOk == false) '⚠ 破損チェックに一致しません。ファイルが壊れているか、書き換えられている可能性があります。\n',
-            '${plan.notes.length} 件のメモを追加します。',
-            if (plan.newFolders.isNotEmpty) '（フォルダ「${plan.newFolders.map((f) => f.name).join('」「')}」を作ります）',
-            if (skipped.isNotEmpty) '（${skipped.join('、')}は飛ばします）',
-            if (plan.warnings.isNotEmpty) ...[
-              '\n気づいた点：',
-              for (final w in plan.warnings.take(maxWarnings)) '・$w',
-              if (plan.warnings.length > maxWarnings) '・ほか ${plan.warnings.length - maxWarnings} 件',
-            ],
-            '\n今あるメモは変更しません。',
-          ].join('\n')),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text([
+                '${file.name}\n',
+                if (plan.hashOk == false) '⚠ 破損チェックに一致しません。ファイルが壊れているか、書き換えられている可能性があります。\n',
+                '${plan.notes.length} 件のメモを追加します。',
+                if (plan.newFolders.isNotEmpty) '（フォルダ「${plan.newFolders.map((f) => f.name).join('」「')}」を作ります）',
+                if (skipped.isNotEmpty) '（${skipped.join('、')}は飛ばします）',
+                if (plan.warnings.isNotEmpty) ...[
+                  '\n気づいた点：',
+                  for (final w in plan.warnings.take(maxWarnings)) '・$w',
+                  if (plan.warnings.length > maxWarnings) '・ほか ${plan.warnings.length - maxWarnings} 件',
+                ],
+                '\n今あるメモは変更しません。',
+              ].join('\n')),
+              if (askColors)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: importColors,
+                  onChanged: (v) => setState(() => importColors = v ?? false),
+                  title: const Text('高速メモ帳の色を取り込む'),
+                  subtitle: Text('色の付いたメモ ${plan.coloredCount} 件。高速メモ帳で色を使っていなければ、オフのままにしてください'),
+                ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('取り込む')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('取り込む')),
-        ],
       ),
     );
     if (ok != true) return;
-    await notes.applyImport(plan);
+    await notes.applyImport(askColors && !importColors ? plan.withoutColors() : plan);
     showMessage('${plan.notes.length} 件のメモを取り込みました');
   }
 
@@ -243,6 +258,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await lock.suspendRelock(() => SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: mime)], subject: p.basename(file.path))));
   }
 
+  Future<void> _clearColors() async { // 取り込んだメモに想定外の色が付いていたときなどに使う
+    final notes = ref.read(notesProvider);
+    final n = notes.coloredCount;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('メモの色をすべて消す'),
+        content: Text('色の付いたメモ $n 件の文字色と背景色を消して、既定の色に戻します。\nメモの本文と並び順は変わりません。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('色を消す')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final cleared = await notes.clearAllColors();
+    showMessage('$cleared 件のメモの色を消しました');
+  }
+
   Future<void> _alert(String title, String body) => showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -257,6 +291,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.watch(settingsProvider);
     final lock = ref.watch(lockProvider);
     final count = ref.watch(notesProvider).notes.length;
+    final colored = ref.watch(notesProvider).coloredCount;
     final theme = Theme.of(context);
     Widget header(String t) => Padding(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
@@ -343,6 +378,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: const Text('バックアップを書き出す'),
             subtitle: Text('$count 件のメモ（暗号化バックアップ または CSV）'),
             onTap: _export,
+          ),
+          ListTile(
+            leading: const Icon(Icons.format_color_reset),
+            title: const Text('メモの色をすべて消す'),
+            subtitle: Text(colored == 0 ? '色の付いたメモはありません' : '色の付いたメモ $colored 件を既定の色に戻します'),
+            enabled: colored > 0,
+            onTap: _clearColors,
           ),
           Padding(
             padding: const EdgeInsets.all(16),

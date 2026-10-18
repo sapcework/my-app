@@ -265,8 +265,8 @@ class NoteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final c = noteColors(note.bgColor, note.textColor);
-    final sub = c.fg?.withValues(alpha: 0.7) ?? theme.colorScheme.onSurfaceVariant;
+    final c = noteColors(note.bgColor, note.textColor, surface: theme.colorScheme.surface, onSurface: theme.colorScheme.onSurface);
+    final sub = c.bg != null || note.textColor != null ? c.fg.withValues(alpha: 0.7) : theme.colorScheme.onSurfaceVariant; // 色付きのメモは文字色に合わせて薄く
     final small = theme.textTheme.bodySmall?.copyWith(color: sub);
     final upcoming = note.reminderAt != null && !note.inTrash && note.reminderAt! > DateTime.now().millisecondsSinceEpoch;
 

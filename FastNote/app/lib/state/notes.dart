@@ -7,7 +7,7 @@ import '../data/note_db.dart';
 import 'reminders.dart';
 import 'settings.dart';
 
-// 一覧に表示する範囲。フォルダ（null は「私のノート」）か、ごみ箱
+// 一覧に表示する範囲。フォルダ（null は「マイノート」）か、ごみ箱
 @immutable
 class NoteScope {
   final String? folderId;
@@ -62,7 +62,7 @@ class NotesController extends ChangeNotifier {
   Future<void> load() async {
     _notes = await _db.all();
     _folders = await _db.folders();
-    if (_folders.isNotEmpty) { // 消えたフォルダを指すメモは「私のノート」に見せる（DB はそのまま）
+    if (_folders.isNotEmpty) { // 消えたフォルダを指すメモは「マイノート」に見せる（DB はそのまま）
       final ids = {for (final f in _folders) f.id};
       _notes = [for (final n in _notes) n.folderId != null && !ids.contains(n.folderId) ? n.copyWith(folderId: () => null) : n];
     } else {
@@ -104,6 +104,18 @@ class NotesController extends ChangeNotifier {
   Future<Note> updateColors(String id, {required String? bg, required String? fg}) => // 色・☆・フォルダの変更では更新日時を変えない（並びが動かないように）
       _put(byId(id)!.copyWith(bgColor: () => bg, textColor: () => fg));
 
+  int get coloredCount => _notes.where((n) => n.textColor != null || n.bgColor != null).length;
+
+  Future<int> clearAllColors() async { // 色の付いたメモをすべて既定の色に戻す（更新日時は変えないので並びは動かない）
+    final ids = [for (final n in _notes) if (n.textColor != null || n.bgColor != null) n.id];
+    if (ids.isEmpty) return 0;
+    final set = ids.toSet();
+    _notes = [for (final n in _notes) set.contains(n.id) ? n.copyWith(textColor: () => null, bgColor: () => null) : n];
+    notifyListeners();
+    await _db.clearColors(ids);
+    return ids.length;
+  }
+
   Future<Note> setStarred(String id, bool v) => _put(byId(id)!.copyWith(starred: v));
 
   Future<Note> moveToFolder(String id, String? folderId) => _put(byId(id)!.copyWith(folderId: () => folderId));
@@ -125,7 +137,7 @@ class NotesController extends ChangeNotifier {
   }
 
   Future<Note> restoreFromTrash(String id) async {
-    final n = await _put(byId(id)!.copyWith(deletedAt: () => null, folderId: () => folderById(byId(id)!.folderId)?.id)); // フォルダが消えていたら「私のノート」へ
+    final n = await _put(byId(id)!.copyWith(deletedAt: () => null, folderId: () => folderById(byId(id)!.folderId)?.id)); // フォルダが消えていたら「マイノート」へ
     if (n.reminderAt != null && n.reminderAt! > _now()) await _reminders.schedule(n);
     return n;
   }
@@ -179,7 +191,7 @@ class NotesController extends ChangeNotifier {
     await _db.upsertFolder(_folders[i]);
   }
 
-  Future<void> deleteFolder(String id) async { // 中のメモは「私のノート」へ（ごみ箱のメモも、戻したときに「私のノート」へ入る）
+  Future<void> deleteFolder(String id) async { // 中のメモは「マイノート」へ（ごみ箱のメモも、戻したときに「マイノート」へ入る）
     _folders.removeWhere((f) => f.id == id);
     _notes = [for (final n in _notes) n.folderId == id ? n.copyWith(folderId: () => null) : n];
     notifyListeners();

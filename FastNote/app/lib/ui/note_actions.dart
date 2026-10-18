@@ -47,7 +47,7 @@ Future<String?> askFolderName(BuildContext context, {String title = '新しい�
         TextButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('OK')),
       ],
     ),
-  ).then((v) => v == null || v.trim().isEmpty || v.trim() == defaultFolderName ? null : v.trim()); // 空と「私のノート」は作らない
+  ).then((v) => v == null || v.trim().isEmpty || isDefaultFolderName(v.trim()) ? null : v.trim()); // 空と既定フォルダの名前（旧名も）は作らない
 }
 
 Future<void> moveToFolderDialog(BuildContext context, NotesController notes, Note note) async { // 移動先のフォルダを選ぶ
