@@ -77,7 +77,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     if (lock.inPenalty) {
       _startCountdown();
     } else {
-      setState(() => _error = '違います（あと${lock.remainingAttempts}回で30秒ロック）');
+      setState(() => _error = '違います（あと${lock.remainingAttempts}回で${LockController.formatWait(lock.nextPenalty)}ロック）');
     }
   }
 
@@ -102,7 +102,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                   height: 28,
                   child: Center(
                     child: Text(
-                      lock.inPenalty ? '${lock.penaltySeconds}秒後に再試行できます' : (_error ?? ''),
+                      lock.inPenalty ? '${LockController.formatWait(Duration(seconds: lock.penaltySeconds))}後に再試行できます' : (_error ?? ''),
                       style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
                     ),
                   ),

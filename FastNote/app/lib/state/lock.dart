@@ -48,7 +48,13 @@ Future<String> _pbkdf2(String secret, String saltB64) => compute(pbkdf2HashTask,
 // ロックの設定とセッション中の施錠状態
 class LockController extends ChangeNotifier {
   static const maxAttempts = 5; // この回数連続で失敗すると一時ロック
-  static const penalty = Duration(seconds: 30);
+  static const penalties = [ // 一時ロックの待ち時間。ロックされるたびに延ばして、総当たりに時間がかかるようにする
+    Duration(seconds: 30),
+    Duration(minutes: 1),
+    Duration(minutes: 5),
+    Duration(minutes: 15),
+    Duration(minutes: 30), // 以後はこれ
+  ];
   static const relockChoices = [0, 60, 300]; // バックグラウンドから戻ったときに再ロックするまでの秒数
 
   final JsonFile _store;
@@ -68,6 +74,7 @@ class LockController extends ChangeNotifier {
   int _relockSeconds = 0;
   bool _hideInRecents = true;
   int _failed = 0;
+  int _lockouts = 0; // 解除に成功するまでに一時ロックされた回数（再起動しても残す）
   DateTime? _lockedUntil;
 
   bool _locked = false; // 今ロック画面を出しているか（保存しない）
@@ -82,8 +89,14 @@ class LockController extends ChangeNotifier {
   int get relockSeconds => _relockSeconds;
   bool get hideInRecents => _hideInRecents;
   int get remainingAttempts => maxAttempts - _failed;
+  static String formatWait(Duration d) { // 「30秒」「5分」「1分30秒」の形
+    final m = d.inMinutes, sec = d.inSeconds % 60;
+    return m == 0 ? '$sec秒' : (sec == 0 ? '$m分' : '$m分$sec秒');
+  }
+
+  Duration get nextPenalty => penalties[_lockouts < penalties.length ? _lockouts : penalties.length - 1]; // 次に一時ロックされたときの待ち時間
   bool get inPenalty => _lockedUntil != null && _now().isBefore(_lockedUntil!);
-  int get penaltySeconds => inPenalty ? _lockedUntil!.difference(_now()).inMilliseconds ~/ 1000 + 1 : 0;
+  int get penaltySeconds => inPenalty ? (_lockedUntil!.difference(_now()).inMilliseconds + 999) ~/ 1000 : 0; // 端数は切り上げ（ちょうど30秒なら30）
 
   Future<void> load() async {
     final m = await _store.read();
@@ -95,6 +108,7 @@ class LockController extends ChangeNotifier {
     _relockSeconds = (m['relockSeconds'] as num?)?.toInt() ?? 0;
     _hideInRecents = m['hideInRecents'] != false;
     _failed = (m['failed'] as num?)?.toInt() ?? 0;
+    _lockouts = (m['lockouts'] as num?)?.toInt() ?? 0;
     final until = (m['lockedUntil'] as num?)?.toInt() ?? 0;
     _lockedUntil = until > 0 ? DateTime.fromMillisecondsSinceEpoch(until) : null;
     if (enabled && (_salt == null || _hashB64 == null)) _type = LockType.none; // 壊れた設定ではロックしない（締め出し防止）
@@ -111,6 +125,7 @@ class LockController extends ChangeNotifier {
         'relockSeconds': _relockSeconds,
         'hideInRecents': _hideInRecents,
         'failed': _failed,
+        'lockouts': _lockouts,
         'lockedUntil': _lockedUntil?.millisecondsSinceEpoch ?? 0,
       });
 
@@ -122,6 +137,7 @@ class LockController extends ChangeNotifier {
     _type = type;
     _pinLength = type == LockType.pin ? secret.length : 0;
     _failed = 0;
+    _lockouts = 0;
     _lockedUntil = null;
     _locked = false; // 設定した本人はそのまま使い続けられる
     await _save();
@@ -134,6 +150,7 @@ class LockController extends ChangeNotifier {
     _pinLength = 0;
     _useBiometric = false;
     _failed = 0;
+    _lockouts = 0;
     _lockedUntil = null;
     _locked = false;
     await _save();
@@ -163,6 +180,7 @@ class LockController extends ChangeNotifier {
     final h = await _hash(secret, _salt!);
     if (constantTimeEquals(h, _hashB64!)) {
       _failed = 0;
+      _lockouts = 0;
       _lockedUntil = null;
       _locked = false;
       await _save();
@@ -171,7 +189,8 @@ class LockController extends ChangeNotifier {
     }
     _failed++;
     if (_failed >= maxAttempts) {
-      _lockedUntil = _now().add(penalty);
+      _lockedUntil = _now().add(nextPenalty);
+      _lockouts++;
       _failed = 0;
     }
     await _save();

@@ -147,4 +147,48 @@ void main() {
     expect(a, pbkdf2HashTask({'secret': '1234', 'saltB64': 'AAAAAAAAAAAAAAAAAAAAAA=='}));
     expect(a, isNot(pbkdf2HashTask({'secret': '1234', 'saltB64': 'AQAAAAAAAAAAAAAAAAAAAA=='})));
   });
+
+  test('一時ロックのたびに待ち時間が延び、再起動しても回数が残り、解除に成功すると最初に戻る', () async {
+    final l = make();
+    await l.load();
+    await l.setSecret(LockType.pin, '1234');
+    Future<void> failFive(LockController c) async {
+      for (var i = 0; i < LockController.maxAttempts; i++) {
+        await c.verify('0000');
+      }
+    }
+
+    await failFive(l);
+    expect(l.penaltySeconds, inInclusiveRange(29, 30));
+    now = now.add(const Duration(seconds: 31));
+    await failFive(l);
+    expect(l.penaltySeconds, inInclusiveRange(59, 60), reason: '2回目は1分');
+
+    final restarted = make();
+    await restarted.load();
+    now = now.add(const Duration(minutes: 2));
+    await failFive(restarted);
+    expect(restarted.penaltySeconds, inInclusiveRange(299, 300), reason: '再起動しても回数が残るので3回目の5分');
+
+    now = now.add(const Duration(minutes: 6));
+    expect(await restarted.verify('1234'), isTrue);
+    await failFive(restarted);
+    expect(restarted.penaltySeconds, inInclusiveRange(29, 30), reason: '解除に成功したら最初の30秒に戻る');
+  });
+
+  test('待ち時間は最大30分で止まる', () async {
+    final l = make();
+    await l.load();
+    await l.setSecret(LockType.pin, '1234');
+    for (var round = 0; round < 8; round++) {
+      for (var i = 0; i < LockController.maxAttempts; i++) {
+        await l.verify('0000');
+      }
+      now = now.add(const Duration(hours: 1));
+    }
+    expect(l.nextPenalty, const Duration(minutes: 30));
+    expect(LockController.formatWait(const Duration(seconds: 90)), '1分30秒');
+    expect(LockController.formatWait(const Duration(minutes: 5)), '5分');
+    expect(LockController.formatWait(const Duration(seconds: 30)), '30秒');
+  });
 }

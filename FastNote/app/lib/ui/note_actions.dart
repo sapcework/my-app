@@ -18,6 +18,13 @@ Future<void> trashWithUndo(NotesController notes, Note note) async { // 確認�
   showMessage('「${noteLabel(note)}」をごみ箱に移しました', action: SnackBarAction(label: '元に戻す', onPressed: () => notes.restore(note)));
 }
 
+Future<void> trashManyWithUndo(NotesController notes, Iterable<String> ids) async { // まとめて削除しても「元に戻す」で全件戻る
+  final before = await notes.trashMany(ids);
+  if (before.isEmpty) return;
+  final label = before.length == 1 ? '「${noteLabel(before.first)}」' : '${before.length} 件のメモ';
+  showMessage('$labelをごみ箱に移しました', action: SnackBarAction(label: '元に戻す', onPressed: () => notes.restoreAll(before)));
+}
+
 String formatDateTime(int ms) { // 高速メモ帳と同じ「2019/02/26 午後4:52:20」の形
   final d = DateTime.fromMillisecondsSinceEpoch(ms);
   String p(int n) => n.toString().padLeft(2, '0');
@@ -50,7 +57,10 @@ Future<String?> askFolderName(BuildContext context, {String title = '新しい�
   ).then((v) => v == null || v.trim().isEmpty || isDefaultFolderName(v.trim()) ? null : v.trim()); // 空と既定フォルダの名前（旧名も）は作らない
 }
 
-Future<void> moveToFolderDialog(BuildContext context, NotesController notes, Note note) async { // 移動先のフォルダを選ぶ
+Future<void> moveToFolderDialog(BuildContext context, NotesController notes, Note note) => moveNotesToFolderDialog(context, notes, [note]);
+
+Future<void> moveNotesToFolderDialog(BuildContext context, NotesController notes, List<Note> targets) async { // 移動先のフォルダを選ぶ（1件でもまとめてでも）
+  final current = targets.map((n) => n.folderId).toSet().length == 1 ? targets.first.folderId : '__mixed__'; // 全部同じフォルダならそこに印を付ける
   const newFolder = '__new__'; // 「新しいフォルダ」を選んだ印（フォルダ ID は英小文字と数字だけなので重ならない）
   final picked = await showDialog<(String?,)>(
     context: context,
@@ -61,7 +71,7 @@ Future<void> moveToFolderDialog(BuildContext context, NotesController notes, Not
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context, (id,)),
             child: Row(children: [
-              Icon(id == note.folderId ? Icons.radio_button_checked : Icons.radio_button_off, size: 20),
+              Icon(id == current ? Icons.radio_button_checked : Icons.radio_button_off, size: 20),
               const SizedBox(width: 12),
               Expanded(child: Text(name)),
             ]),
@@ -80,9 +90,10 @@ Future<void> moveToFolderDialog(BuildContext context, NotesController notes, Not
     if (name == null) return;
     target = (await notes.createFolder(name)).id;
   }
-  if (target == note.folderId) return;
-  await notes.moveToFolder(note.id, target);
-  showMessage('「${notes.scopeName(NoteScope.folder(target))}」へ移動しました');
+  if (target == current) return;
+  await notes.moveManyToFolder(targets.map((n) => n.id), target);
+  final where = notes.scopeName(NoteScope.folder(target));
+  showMessage(targets.length == 1 ? '「$where」へ移動しました' : '${targets.length} 件を「$where」へ移動しました');
 }
 
 Future<void> editReminder(BuildContext context, NotesController notes, ReminderScheduler reminders, Note note) async {

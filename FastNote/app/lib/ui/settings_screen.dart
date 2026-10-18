@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus, XFile;
 
+import '../core/export_files.dart';
 import '../data/encrypted_backup.dart';
 import '../data/note_csv.dart';
 import '../state/lock.dart';
@@ -20,6 +21,9 @@ import 'note_actions.dart';
 import 'passcode_setup_screen.dart';
 import 'text_layout_screen.dart';
 import 'widgets/backup_password_dialog.dart';
+import 'widgets/max_width.dart';
+
+const maxImportBytes = 20 * 1024 * 1024; // 取り込むファイルの上限（メモ数万件分でも十分に収まる）
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -118,6 +122,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final notes = ref.read(notesProvider);
     final file = await lock.suspendRelock(() => openFile()); // バックアップは拡張子が端末任せで、CSV も種類判定が不正確なので絞り込まない
     if (file == null || !mounted) return;
+    if (await file.length() > maxImportBytes) { // 誤って巨大なファイルを選んでもメモリ不足で落ちないように
+      await _alert('取り込めません', 'ファイルが大きすぎます（${maxImportBytes ~/ (1024 * 1024)}MB まで）。FastNote のバックアップ・高速メモ帳のバックアップ・CSV のどれかを選んでください。');
+      return;
+    }
+    if (!mounted) return;
     final bytes = await file.readAsBytes();
     final encrypted = looksLikeEncryptedBackup(bytes);
     String text;
@@ -150,7 +159,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (plan.skippedExisting > 0) '同じメモが既にあるため ${plan.skippedExisting} 件',
       if (plan.skippedEmpty > 0) '本文が空のため ${plan.skippedEmpty} 件',
     ];
-    if (plan.notes.isEmpty) {
+    if (plan.isEmpty) {
       await _alert('取り込むメモがありません', skipped.isEmpty ? 'ファイルにメモが入っていません' : '${skipped.join('、')}を飛ばしました');
       return;
     }
@@ -167,7 +176,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text([
                 '${file.name}\n',
                 if (plan.hashOk == false) '⚠ 破損チェックに一致しません。ファイルが壊れているか、書き換えられている可能性があります。\n',
-                '${plan.notes.length} 件のメモを追加します。',
+                if (plan.notes.isNotEmpty) '${plan.notes.length} 件のメモを追加します。',
+                if (plan.updates.isNotEmpty) '${plan.updates.length} 件のメモを、取り込むデータの新しい内容に更新します（フォルダ・☆・色はそのまま）。',
                 if (plan.newFolders.isNotEmpty) '（フォルダ「${plan.newFolders.map((f) => f.name).join('」「')}」を作ります）',
                 if (skipped.isNotEmpty) '（${skipped.join('、')}は飛ばします）',
                 if (plan.warnings.isNotEmpty) ...[
@@ -175,7 +185,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   for (final w in plan.warnings.take(maxWarnings)) '・$w',
                   if (plan.warnings.length > maxWarnings) '・ほか ${plan.warnings.length - maxWarnings} 件',
                 ],
-                '\n今あるメモは変更しません。',
+                plan.updates.isEmpty ? '\n今あるメモは変更しません。' : '\nそれ以外の今あるメモは変更しません。',
               ].join('\n')),
               if (askColors)
                 CheckboxListTile(
@@ -197,7 +207,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (ok != true) return;
     await notes.applyImport(askColors && !importColors ? plan.withoutColors() : plan);
-    showMessage('${plan.notes.length} 件のメモを取り込みました');
+    showMessage('${[
+      if (plan.notes.isNotEmpty) '${plan.notes.length} 件を追加',
+      if (plan.updates.isNotEmpty) '${plan.updates.length} 件を更新',
+    ].join('・')}しました');
   }
 
   Future<void> _export() async {
@@ -226,7 +239,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.table_chart_outlined),
               title: Text('CSV（暗号化なし）'),
-              subtitle: Text('Excel で中身を確かめられます。誰でも読めるので、保存先や送り先に気をつけてください'),
+              subtitle: Text('Excel で中身を確かめられます。誰でも読めるので、保存先や送り先に気をつけてください。Excel では「=」「+」で始まる行が式として扱われることがあります'),
             ),
           ),
         ],
@@ -235,8 +248,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (format == null || !mounted) return;
     final dir = await getTemporaryDirectory();
     await for (final f in dir.list()) { // 前回の書き出しファイルを残さない
-      final name = p.basename(f.path);
-      if (f is File && name.startsWith('fastnote_') && (name.endsWith('.csv') || name.endsWith('.$backupExtension'))) await f.delete();
+      if (f is File && isExportFileName(p.basename(f.path))) await f.delete();
     }
     final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final File file;
@@ -301,7 +313,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
-      body: AbsorbPointer(
+      body: MaxWidth(child: AbsorbPointer( // タブレットでは読みやすい幅に収める
         absorbing: _busy,
         child: ListView(children: [
           header('表示'),
@@ -403,7 +415,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
         ]),
-      ),
+      )),
     );
   }
 }

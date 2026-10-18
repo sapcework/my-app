@@ -47,13 +47,16 @@ enum ImportSource { backup, csv }
 class ImportPlan { // 取り込み前の確認用。apply するまで DB は変えない
   final ImportSource source;
   final List<Note> notes; // 新しく追加するメモ（表示順どおり）
+  final List<Note> updates; // 内容を新しくする既存のメモ（フォルダ・☆・色などは FastNote 側のまま）
   final List<Folder> newFolders; // 取り込みのために新しく作るフォルダ
-  final int skippedExisting; // 同じ ID のメモが既にあるため飛ばした件数
+  final int skippedExisting; // 同じ ID のメモが既にあり、内容が同じか FastNote 側が新しいため飛ばした件数
   final int skippedEmpty; // 本文が空のため飛ばした件数
   final bool? hashOk; // バックアップの破損チェック結果（CSV では null）
   final List<String> warnings; // 解析で気づいたこと（取り込み自体は続けられるもの）
   const ImportPlan(this.source, this.notes, this.skippedExisting, this.skippedEmpty,
-      {this.newFolders = const [], this.hashOk, this.warnings = const []});
+      {this.updates = const [], this.newFolders = const [], this.hashOk, this.warnings = const []});
+
+  bool get isEmpty => notes.isEmpty && updates.isEmpty;
 
   int get coloredCount => notes.where((n) => n.textColor != null || n.bgColor != null).length;
 
@@ -62,6 +65,7 @@ class ImportPlan { // 取り込み前の確認用。apply するまで DB は変
         [for (final n in notes) n.copyWith(textColor: () => null, bgColor: () => null)],
         skippedExisting,
         skippedEmpty,
+        updates: updates, // 既存メモの色は FastNote 側のままなので、そのまま
         newFolders: newFolders,
         hashOk: hashOk,
         warnings: warnings,
@@ -92,6 +96,7 @@ class ImportRecord { // 取り込み元を問わない1件分
 ImportPlan planImport( // 中身を見てバックアップか CSV かを判断する
   String text, {
   required Set<String> existingIds,
+  Map<String, Note> existingNotes = const {}, // ID → 既存のメモ。渡すと、取り込むデータの方が新しいメモは内容を更新する
   Map<String, String> existingFolders = const {}, // フォルダ名 → ID
   required int startOrder, // 追加するメモの最初の sort_order（既存メモの後ろに並べる）
   required int nowMs,
@@ -102,16 +107,17 @@ ImportPlan planImport( // 中身を見てバックアップか CSV かを判断�
       for (final n in b.notes)
         ImportRecord(id: n.id, body: n.body, updatedUnix: n.updatedUnix, textColor: n.textColor, bgColor: n.bgColor),
     ];
-    final p = _plan(records, existingIds: existingIds, existingFolders: existingFolders, startOrder: startOrder, nowMs: nowMs);
+    final p = _plan(records, existingIds: existingIds, existingNotes: existingNotes, existingFolders: existingFolders, startOrder: startOrder, nowMs: nowMs);
     return ImportPlan(ImportSource.backup, p.notes, p.skippedExisting, p.skippedEmpty,
-        newFolders: p.newFolders, hashOk: b.hashOk, warnings: b.warnings);
+        updates: p.updates, newFolders: p.newFolders, hashOk: b.hashOk, warnings: b.warnings);
   }
-  return planCsvImport(text, existingIds: existingIds, existingFolders: existingFolders, startOrder: startOrder, nowMs: nowMs);
+  return planCsvImport(text, existingIds: existingIds, existingNotes: existingNotes, existingFolders: existingFolders, startOrder: startOrder, nowMs: nowMs);
 }
 
 ImportPlan planCsvImport(
   String text, {
   required Set<String> existingIds,
+  Map<String, Note> existingNotes = const {},
   Map<String, String> existingFolders = const {},
   required int startOrder,
   required int nowMs,
@@ -150,18 +156,21 @@ ImportPlan planCsvImport(
         reminderUnix: intCell(r, iReminder),
       ),
   ];
-  final p = _plan(records, existingIds: existingIds, existingFolders: existingFolders, startOrder: startOrder, nowMs: nowMs);
-  return ImportPlan(ImportSource.csv, p.notes, p.skippedExisting, p.skippedEmpty, newFolders: p.newFolders);
+  final p = _plan(records, existingIds: existingIds, existingNotes: existingNotes, existingFolders: existingFolders, startOrder: startOrder, nowMs: nowMs);
+  return ImportPlan(ImportSource.csv, p.notes, p.skippedExisting, p.skippedEmpty, updates: p.updates, newFolders: p.newFolders);
 }
 
-({List<Note> notes, List<Folder> newFolders, int skippedExisting, int skippedEmpty}) _plan(
+({List<Note> notes, List<Note> updates, List<Folder> newFolders, int skippedExisting, int skippedEmpty}) _plan(
   List<ImportRecord> records, {
   required Set<String> existingIds,
+  required Map<String, Note> existingNotes,
   required Map<String, String> existingFolders,
   required int startOrder,
   required int nowMs,
 }) {
   final notes = <Note>[];
+  final updates = <Note>[];
+  final updatedIds = <String>{};
   final newFolders = <Folder>[];
   final folderIds = {...existingFolders};
   final seen = <String>{...existingIds, ...existingFolders.values};
@@ -196,7 +205,13 @@ ImportPlan planCsvImport(
     String id;
     if (_idRe.hasMatch(r.id)) {
       if (seen.contains(r.id)) { // 取り込み済み（同じファイルを2回取り込んでも増えない）
-        skippedExisting++;
+        final current = existingNotes[r.id];
+        final incoming = ms(r.updatedUnix);
+        if (current != null && !current.inTrash && incoming != null && incoming > current.updatedAt && body != current.body && updatedIds.add(r.id)) {
+          updates.add(current.copyWith(body: body, updatedAt: incoming)); // 取り込む側で書き換えられていれば、内容だけ新しくする（同じ ID が2回あっても1回だけ）
+        } else {
+          skippedExisting++;
+        }
         continue;
       }
       id = r.id;
@@ -219,5 +234,5 @@ ImportPlan planCsvImport(
       reminderAt: ms(r.reminderUnix),
     ));
   }
-  return (notes: notes, newFolders: newFolders, skippedExisting: skippedExisting, skippedEmpty: skippedEmpty);
+  return (notes: notes, updates: updates, newFolders: newFolders, skippedExisting: skippedExisting, skippedEmpty: skippedEmpty);
 }

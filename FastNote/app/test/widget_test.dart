@@ -9,6 +9,9 @@ import 'package:fastnote/state/notes.dart';
 import 'package:fastnote/state/settings.dart';
 import 'package:fastnote/ui/about_screen.dart';
 import 'package:fastnote/ui/lock_screen.dart';
+import 'package:fastnote/ui/note_list_screen.dart';
+import 'package:fastnote/ui/startup_error_app.dart';
+import 'package:fastnote/ui/widgets/max_width.dart';
 import 'package:fastnote/ui/settings_screen.dart';
 import 'package:fastnote/ui/text_layout_screen.dart';
 import 'package:fastnote/ui/widgets/backup_password_dialog.dart';
@@ -123,10 +126,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  List<String> listedTitles(WidgetTester tester) => [
-        for (final e in tester.widgetList<Text>(find.descendant(of: find.byType(ListView), matching: find.byType(Text))))
-          if (e.style?.fontSize == settings.listFontSize) e.data!,
-      ];
+  List<String> listedTitles(WidgetTester tester) => [for (final t in tester.widgetList<NoteTile>(find.byType(NoteTile))) t.note.title];
+
+  double? titleFontSize(WidgetTester tester, String title) => // 一覧のタイトルは検索語を太字にするため Text.rich で描いている
+      (tester.widget<Text>(find.text(title)).textSpan as TextSpan?)?.children?.first.style?.fontSize;
 
   testWidgets('新しいメモを書いて戻ると一覧の先頭に出て、「保存されました」と出る', (tester) async {
     await start(tester, bodies: ['前からあるメモ']);
@@ -165,9 +168,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('大事なメモ'), findsOneWidget);
 
-    await tester.longPress(find.text('大事なメモ'));
+    await tester.longPress(find.text('大事なメモ')); // 長押しで選択モード
     await tester.pumpAndSettle();
-    await tester.tap(find.text('削除（ごみ箱へ）'));
+    await tester.tap(find.byTooltip('削除'));
     await tester.pumpAndSettle();
     await openDrawer(tester);
     await tester.tap(find.text('ごみ箱'));
@@ -189,7 +192,7 @@ void main() {
     expect(listedTitles(tester), ['新しいメモ', '古いメモ']);
     await tester.longPress(find.text('古いメモ'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('☆を付ける（先頭に固定）'));
+    await tester.tap(find.byTooltip('☆を付ける'));
     await tester.pumpAndSettle();
     expect(listedTitles(tester), ['古いメモ', '新しいメモ']);
     expect(find.byIcon(Icons.star), findsOneWidget);
@@ -284,13 +287,13 @@ void main() {
 
   testWidgets('一覧と明細の文字サイズは別々に設定でき、明細には行間・文字間も反映される', (tester) async {
     await start(tester, bodies: ['見出し\n本文']);
-    expect(tester.widget<Text>(find.text('見出し')).style!.fontSize, SettingsController.defaultListFontSize);
+    expect(titleFontSize(tester, '見出し'), SettingsController.defaultListFontSize);
     await settings.setListFontSize(24);
     await settings.setDetailFontSize(14);
     await settings.setLineHeight(1.2);
     await settings.setLetterSpacing(-0.5);
     await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.text('見出し')).style!.fontSize, 24);
+    expect(titleFontSize(tester, '見出し'), 24);
     await tester.tap(find.text('見出し'));
     await tester.pumpAndSettle();
     final style = tester.widget<TextField>(find.byType(TextField)).style!;
@@ -348,7 +351,7 @@ void main() {
     await tester.enterText(fields.at(1), 'abc');
     await tester.tap(find.text('暗号化して書き出す'));
     await tester.pump();
-    expect(find.text('4文字以上にしてください'), findsOneWidget); // 入力欄の見出し「（4文字以上）」と区別する
+    expect(find.text('8文字以上にしてください'), findsOneWidget); // 入力欄の見出し「（8文字以上）」と区別する
     await tester.enterText(fields.at(0), 'abcd1234');
     await tester.enterText(fields.at(1), 'abcd1235');
     await tester.tap(find.text('暗号化して書き出す'));
@@ -358,5 +361,61 @@ void main() {
     await tester.tap(find.text('暗号化して書き出す'));
     await tester.pumpAndSettle();
     expect(result, 'abcd1234');
+  });
+
+  testWidgets('長押しで選択モードになり、まとめて削除しても「元に戻す」で全件戻る。戻るボタンで選択を解除できる', (tester) async {
+    await start(tester, bodies: ['一つ目', '二つ目', '三つ目']);
+    await tester.longPress(find.text('一つ目'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 件を選択'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing, reason: '選択中は新規作成を出さない');
+    await tester.tap(find.text('二つ目')); // 選択中のタップは選択の足し引き
+    await tester.pumpAndSettle();
+    expect(find.text('2 件を選択'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('削除'));
+    await tester.pumpAndSettle();
+    expect(listedTitles(tester), ['三つ目']);
+    expect(find.text('2 件のメモをごみ箱に移しました'), findsOneWidget);
+    await tester.tap(find.text('元に戻す'));
+    await tester.pumpAndSettle();
+    expect(listedTitles(tester), unorderedEquals(['一つ目', '二つ目', '三つ目']));
+
+    await tester.longPress(find.text('三つ目'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('すべて選択'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 件を選択'), findsOneWidget);
+    await tester.binding.handlePopRoute(); // 端末の戻るボタン
+    await tester.pumpAndSettle();
+    expect(find.textContaining('件を選択'), findsNothing);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+  });
+
+  testWidgets('検索すると、本文で一致した箇所の前後が出て、検索語が太字になる', (tester) async {
+    await start(tester, bodies: ['買い物\n牛乳と卵とパン', '予定\n会議']);
+    await tester.tap(find.byTooltip('検索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '卵');
+    await tester.pump();
+    expect(listedTitles(tester), ['買い物']);
+    final snippet = tester.widget<Text>(find.text('牛乳と卵とパン'));
+    final bold = (snippet.textSpan! as TextSpan).children!.whereType<TextSpan>().where((s) => s.style?.fontWeight == FontWeight.bold);
+    expect(bold.map((s) => s.text), ['卵']);
+  });
+
+  testWidgets('タブレットのような広い画面では、一覧の幅を720px以内に収める', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await start(tester, bodies: ['広い画面のメモ']);
+    expect(tester.getSize(find.byType(NoteTile)).width, lessThanOrEqualTo(contentMaxWidth));
+  });
+
+  testWidgets('起動に失敗したときは、白い画面ではなく原因と対処を出す', (tester) async {
+    await tester.pumpWidget(const StartupErrorApp(error: FileSystemException('No space left on device')));
+    expect(find.text('FastNote を起動できませんでした'), findsOneWidget);
+    expect(find.text('端末の空き容量が足りません'), findsOneWidget);
+    expect(find.textContaining('削除はしないでください'), findsOneWidget);
   });
 }

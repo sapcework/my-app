@@ -1,0 +1,49 @@
+name: FastNote CI
+
+on:
+  push:
+    branches: [master]
+    paths: ['FastNote/**', '.github/workflows/fastnote-ci.yml']
+  pull_request:
+    paths: ['FastNote/**', '.github/workflows/fastnote-ci.yml']
+
+# 同じブランチで新しい push があれば古い実行は打ち切る
+concurrency:
+  group: fastnote-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FastNote/app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Flutter を準備（開発 PC と同じ版）
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      # テストは DB に sqflite_common_ffi を使い、システムの SQLite を読み込む
+      - name: SQLite を入れる
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: 依存を取得
+        run: flutter pub get
+
+      - name: 静的解析（指摘ゼロ必須）
+        run: flutter analyze
+
+      - name: テスト
+        run: flutter test
+
+      - name: CSV 抽出ツールのテスト
+        working-directory: FastNote
+        run: node --test tool/test/parse.test.mjs

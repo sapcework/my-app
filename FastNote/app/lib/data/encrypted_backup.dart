@@ -17,7 +17,7 @@ import '../core/passcode_hash.dart';
 
 const backupExtension = 'fnbak';
 const backupIterations = 300000; // 1〜2秒かかる程度（パスワードの総当たりを遅くする）
-const minBackupPasswordLength = 4;
+const minBackupPasswordLength = 8; // ファイルを手に入れた人に総当たりされにくい長さ（取り込み時は問わない）
 
 const _magic = [0x46, 0x4E, 0x42, 0x4B]; // "FNBK"
 const _version = 1;

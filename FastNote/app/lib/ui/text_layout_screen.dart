@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/settings.dart';
+import 'widgets/max_width.dart';
 
 // 文字の大きさ・行間・文字の間隔の調整画面。
 // 設定画面に直接スライダーを置くと、スクロール中にうっかり触れて値が変わるため、別の画面にしている
@@ -36,7 +37,7 @@ class TextLayoutScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('文字の大きさ・行間')),
-      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+      body: MaxWidth(child: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
         header('一覧'),
         slider('見出しの文字サイズ', s.listFontSize, SettingsController.minFontSize, SettingsController.maxFontSize, 1, size, s.setListFontSize),
         preview(Text('買い物リスト', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: s.listFontSize)), 10),
@@ -60,7 +61,7 @@ class TextLayoutScreen extends ConsumerWidget {
             child: TextButton(onPressed: s.resetTextLayout, child: const Text('初期値に戻す')),
           ),
         ),
-      ]),
+      ])),
     );
   }
 }

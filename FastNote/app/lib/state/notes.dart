@@ -99,10 +99,12 @@ class NotesController extends ChangeNotifier {
     return _put(n, added: true);
   }
 
-  Future<Note> updateBody(String id, String body) => _put(byId(id)!.copyWith(body: body, updatedAt: _now()));
+  // 操作の対象が見つからない（別の画面で消された）ときは何もしない。例外で落とさない
 
-  Future<Note> updateColors(String id, {required String? bg, required String? fg}) => // 色・☆・フォルダの変更では更新日時を変えない（並びが動かないように）
-      _put(byId(id)!.copyWith(bgColor: () => bg, textColor: () => fg));
+  Future<Note?> updateBody(String id, String body) => _edit(id, (n) => n.copyWith(body: body, updatedAt: _now()));
+
+  Future<Note?> updateColors(String id, {required String? bg, required String? fg}) => // 色・☆・フォルダの変更では更新日時を変えない（並びが動かないように）
+      _edit(id, (n) => n.copyWith(bgColor: () => bg, textColor: () => fg));
 
   int get coloredCount => _notes.where((n) => n.textColor != null || n.bgColor != null).length;
 
@@ -116,43 +118,84 @@ class NotesController extends ChangeNotifier {
     return ids.length;
   }
 
-  Future<Note> setStarred(String id, bool v) => _put(byId(id)!.copyWith(starred: v));
+  Future<Note?> setStarred(String id, bool v) => _edit(id, (n) => n.copyWith(starred: v));
 
-  Future<Note> moveToFolder(String id, String? folderId) => _put(byId(id)!.copyWith(folderId: () => folderId));
+  Future<Note?> moveToFolder(String id, String? folderId) => _edit(id, (n) => n.copyWith(folderId: () => folderId));
 
-  Future<Note> setReminder(String id, int? at) async {
-    final n = await _put(byId(id)!.copyWith(reminderAt: () => at));
+  Future<Note?> setReminder(String id, int? at) async {
+    final n = await _edit(id, (n) => n.copyWith(reminderAt: () => at));
+    if (n == null) return null;
     if (at == null) {
-      await _reminders.cancel(n);
+      await _cancelReminder(n);
     } else {
       await _reminders.schedule(n);
     }
     return n;
   }
 
-  Future<Note> moveToTrash(String id) async {
-    final n = await _put(byId(id)!.copyWith(deletedAt: () => _now()));
-    if (n.reminderAt != null) await _reminders.cancel(n); // ごみ箱のメモは通知しない
-    return n;
+  Future<Note?> moveToTrash(String id) async => (await trashMany([id])).firstOrNull;
+
+  Future<Note?> restoreFromTrash(String id) async => (await restoreManyFromTrash([id])).firstOrNull;
+
+  Future<void> restore(Note n) => restoreAll([n]);
+
+  Future<void> deletePermanently(String id) => deleteManyPermanently([id]);
+
+  // ---- まとめて操作（一覧の「まとめて選択」から使う。DB への書き込みは1回にまとめる）----
+
+  Future<void> setStarredMany(Iterable<String> ids, bool v) => _editMany(ids, (n) => n.copyWith(starred: v));
+
+  Future<void> moveManyToFolder(Iterable<String> ids, String? folderId) => _editMany(ids, (n) => n.copyWith(folderId: () => folderId));
+
+  Future<void> updateColorsMany(Iterable<String> ids, {required String? bg, required String? fg}) =>
+      _editMany(ids, (n) => n.copyWith(bgColor: () => bg, textColor: () => fg));
+
+  Future<List<Note>> trashMany(Iterable<String> ids) async { // ごみ箱へ移す。戻り値は移す前の状態（「元に戻す」に使う）
+    final before = [for (final id in ids) ?byId(id)].where((n) => !n.inTrash).toList();
+    final now = _now();
+    await _editMany(before.map((n) => n.id), (n) => n.copyWith(deletedAt: () => now));
+    for (final n in before) {
+      if (n.reminderAt != null) await _cancelReminder(n); // ごみ箱のメモは通知しない
+    }
+    return before;
   }
 
-  Future<Note> restoreFromTrash(String id) async {
-    final n = await _put(byId(id)!.copyWith(deletedAt: () => null, folderId: () => folderById(byId(id)!.folderId)?.id)); // フォルダが消えていたら「マイノート」へ
-    if (n.reminderAt != null && n.reminderAt! > _now()) await _reminders.schedule(n);
-    return n;
+  Future<List<Note>> restoreManyFromTrash(Iterable<String> ids) async {
+    final restored = await _editMany(ids, (n) => n.copyWith(deletedAt: () => null, folderId: () => folderById(n.folderId)?.id)); // フォルダが消えていたら「マイノート」へ
+    for (final n in restored) {
+      if (n.reminderAt != null && n.reminderAt! > _now()) await _reminders.schedule(n);
+    }
+    return restored;
   }
 
-  Future<void> restore(Note n) async { // 操作の取り消し（削除前の状態にそのまま戻す）
-    await _put(n, added: byId(n.id) == null);
-    if (n.reminderAt != null && !n.inTrash && n.reminderAt! > _now()) await _reminders.schedule(n);
-  }
-
-  Future<void> deletePermanently(String id) async {
-    final n = byId(id);
-    _notes.removeWhere((x) => x.id == id);
+  Future<void> restoreAll(List<Note> notes) async { // 操作の取り消し（操作前の状態にそのまま戻す）
+    if (notes.isEmpty) return;
+    final byIdNow = {for (final (i, n) in _notes.indexed) n.id: i};
+    for (final n in notes) {
+      final i = byIdNow[n.id];
+      if (i == null) {
+        _notes.add(n);
+      } else {
+        _notes[i] = n;
+      }
+    }
     notifyListeners();
-    await _db.delete(id);
-    if (n?.reminderAt != null) await _reminders.cancel(n!);
+    await _db.insertAll(notes);
+    for (final n in notes) {
+      if (n.reminderAt != null && !n.inTrash && n.reminderAt! > _now()) await _reminders.schedule(n);
+    }
+  }
+
+  Future<void> deleteManyPermanently(Iterable<String> ids) async {
+    final gone = [for (final id in ids) ?byId(id)];
+    if (gone.isEmpty) return;
+    final set = {for (final n in gone) n.id};
+    _notes.removeWhere((x) => set.contains(x.id));
+    notifyListeners();
+    await _db.deleteMany(set);
+    for (final n in gone) {
+      if (n.reminderAt != null) await _cancelReminder(n);
+    }
   }
 
   Future<int> emptyTrash() async {
@@ -161,6 +204,32 @@ class NotesController extends ChangeNotifier {
     notifyListeners();
     await _db.deleteMany(ids);
     return ids.length;
+  }
+
+  Future<void> _cancelReminder(Note n) async { // 通知の取り消しに失敗しても、メモの操作は続ける（ログには残す）
+    try {
+      await _reminders.cancel(n);
+    } catch (e) {
+      debugPrint('リマインダーを取り消せませんでした: $e');
+    }
+  }
+
+  Future<Note?> _edit(String id, Note Function(Note) change) async {
+    final n = byId(id);
+    return n == null ? null : _put(change(n));
+  }
+
+  Future<List<Note>> _editMany(Iterable<String> ids, Note Function(Note) change) async {
+    final set = ids.toSet();
+    final changed = <Note>[];
+    _notes = [
+      for (final n in _notes)
+        if (set.contains(n.id)) (changed..add(change(n))).last else n,
+    ];
+    if (changed.isEmpty) return changed;
+    notifyListeners();
+    await _db.insertAll(changed); // 同じ ID は置き換えになる（1トランザクション）
+    return changed;
   }
 
   Future<Note> _put(Note n, {bool added = false}) async {
@@ -203,6 +272,7 @@ class NotesController extends ChangeNotifier {
   ImportPlan planImportFrom(String text) => planImport( // 高速メモ帳のバックアップか CSV かは中身で判断する
         text,
         existingIds: {for (final n in _notes) n.id},
+        existingNotes: {for (final n in _notes) n.id: n},
         existingFolders: {for (final f in _folders) f.name: f.id},
         startOrder: _nextOrder(),
         nowMs: _now(),
@@ -211,9 +281,10 @@ class NotesController extends ChangeNotifier {
   Future<void> applyImport(ImportPlan plan) async {
     final base = _folders.isEmpty ? 0 : _folders.last.sortOrder + 1;
     final folders = [for (final (i, f) in plan.newFolders.indexed) f.copyWith(sortOrder: base + i)]; // 既存フォルダの後ろに並べ直す
-    await _db.insertAll(plan.notes, folders: folders);
+    await _db.insertAll([...plan.notes, ...plan.updates], folders: folders);
     _folders = [..._folders, ...folders];
-    _notes = [..._notes, ...plan.notes];
+    final updated = {for (final n in plan.updates) n.id: n};
+    _notes = [for (final n in _notes) updated[n.id] ?? n, ...plan.notes];
     notifyListeners();
     for (final n in plan.notes) {
       if (n.reminderAt != null && !n.inTrash && n.reminderAt! > _now()) await _reminders.schedule(n);

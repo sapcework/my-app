@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../state/notes.dart';
+import 'widgets/max_width.dart';
 
 // 「FastNote について」画面（バージョン・更新履歴・プライバシー・ライセンスなど）
 
@@ -10,6 +11,15 @@ const appDeveloper = 'sapcework';
 const appCopyright = '© 2026 $appDeveloper';
 
 const changelog = <(String version, String date, List<String> items)>[ // 新しい版を先頭に足していく
+  ('1.3.0', '2026-10-18', [
+    'メモを長押しすると選択モードになり、まとめて☆・色・フォルダへ移動・削除ができるようになりました',
+    '検索すると、一致した箇所の前後を表示し、検索語を太字で示すようにしました',
+    '高速メモ帳のバックアップを取り込み直すと、書き換えたメモの内容も反映されるようにしました（FastNote 側の方が新しければそのまま）',
+    'タブレットなど広い画面で、一覧やメモが読みやすい幅に収まるようにしました',
+    'PIN・パスワードを何度も間違えたときの待ち時間を、回数に応じて長くしました（最大30分）',
+    '暗号化バックアップのパスワードを8文字以上にしました',
+    '起動できないときに、原因と対処を表示するようにしました',
+  ]),
   ('1.2.1', '2026-10-18', [
     '高速メモ帳から取り込んだ一部のメモで、文字が透けて読めなくなる不具合を直しました（どんな色でも文字が読めるようにしました）',
     '設定に「メモの色をすべて消す」を追加しました',
@@ -65,7 +75,7 @@ class AboutScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('FastNote について')),
-      body: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
+      body: MaxWidth(child: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
         const SizedBox(height: 24),
         Center(child: icon),
         const SizedBox(height: 12),
@@ -118,7 +128,7 @@ class AboutScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         Center(child: Text(appCopyright, style: theme.textTheme.bodySmall)),
-      ]),
+      ])),
     );
   }
 }

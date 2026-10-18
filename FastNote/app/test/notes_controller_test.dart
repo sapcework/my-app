@@ -260,4 +260,69 @@ void main() {
     expect(plan.newFolders, isEmpty);
     expect(plan.notes.every((n) => n.folderId == null), isTrue);
   });
+
+  test('別の画面で消されたメモを操作しても落ちない', () async {
+    final a = await notes.create('A');
+    await notes.deletePermanently(a.id);
+    expect(await notes.updateBody(a.id, 'x'), isNull);
+    expect(await notes.setStarred(a.id, true), isNull);
+    expect(await notes.moveToFolder(a.id, null), isNull);
+    expect(await notes.setReminder(a.id, 99000), isNull);
+    expect(await notes.moveToTrash(a.id), isNull);
+    expect(await notes.restoreFromTrash(a.id), isNull);
+    await notes.deletePermanently(a.id);
+    expect(reminders.scheduled, isEmpty);
+  });
+
+  test('まとめて☆・移動・色・削除し、「元に戻す」で全件が元どおりになる', () async {
+    final f = await notes.createFolder('仕事');
+    final a = await notes.create('A'), b = await notes.create('B'), c = await notes.create('C');
+    await notes.setStarredMany([a.id, b.id], true);
+    await notes.moveManyToFolder([a.id, b.id], f.id);
+    await notes.updateColorsMany([a.id, b.id], bg: '#FFFFF3B0', fg: null);
+    final r = await reload();
+    expect([for (final id in [a.id, b.id, c.id]) [r.byId(id)!.starred, r.byId(id)!.folderId == f.id, r.byId(id)!.bgColor]], [
+      [true, true, '#FFFFF3B0'],
+      [true, true, '#FFFFF3B0'],
+      [false, false, null],
+    ]);
+
+    final before = await notes.trashMany([a.id, b.id, 'missing']);
+    expect(before.map((n) => n.id), unorderedEquals([a.id, b.id]));
+    expect(notes.count(const NoteScope.trash()), 2);
+    await notes.restoreAll(before);
+    expect(notes.count(const NoteScope.trash()), 0);
+    expect(notes.byId(a.id)!.toMap(), before.firstWhere((n) => n.id == a.id).toMap());
+
+    await notes.trashMany([a.id, b.id]);
+    await notes.restoreManyFromTrash([a.id]);
+    await notes.deleteManyPermanently([b.id]);
+    expect((await reload()).notes.map((n) => n.title), unorderedEquals(['A', 'C']));
+  });
+
+  test('取り込み直し：取り込む側が新しく本文が違えば更新し、FastNote 側の☆・フォルダは残す', () async {
+    final f = await notes.createFolder('仕事');
+    await notes.applyImport(notes.planImportFrom('ID,本文,更新日時UNIX\naaaa,最初の本文,100\nbbbb,そのまま,100\ncccc,捨てる,100\n'));
+    await notes.setStarred('aaaa', true);
+    await notes.moveToFolder('aaaa', f.id);
+    await notes.moveToTrash('cccc');
+
+    final plan = notes.planImportFrom('ID,本文,更新日時UNIX\naaaa,書き換えた本文,200\nbbbb,そのまま,300\ncccc,ごみ箱のメモ,300\ndddd,新しいメモ,300\n');
+    expect(plan.updates.map((n) => n.id), ['aaaa'], reason: '本文が同じもの・ごみ箱のものは更新しない');
+    expect(plan.notes.map((n) => n.id), ['dddd']);
+    expect(plan.skippedExisting, 2);
+    await notes.applyImport(plan);
+    final a = (await reload()).byId('aaaa')!;
+    expect([a.body, a.updatedAt, a.starred, a.folderId], ['書き換えた本文', 200000, true, f.id]);
+    expect(notes.byId('cccc')!.body, '捨てる');
+  });
+
+  test('取り込み直し：FastNote 側で書き換えた方が新しければ残す', () async {
+    await notes.applyImport(notes.planImportFrom('ID,本文,更新日時UNIX\naaaa,高速メモ帳の本文,100\n'));
+    clock = 500000;
+    await notes.updateBody('aaaa', 'FastNote で書き換えた本文');
+    final plan = notes.planImportFrom('ID,本文,更新日時UNIX\naaaa,高速メモ帳で書き換えた本文,200\n');
+    expect(plan.isEmpty, isTrue);
+    expect(plan.skippedExisting, 1);
+  });
 }

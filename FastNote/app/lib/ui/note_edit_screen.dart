@@ -11,6 +11,7 @@ import '../state/reminders.dart';
 import '../state/settings.dart';
 import 'note_actions.dart';
 import 'widgets/color_sheet.dart';
+import 'widgets/max_width.dart';
 
 // メモの編集画面。入力は少し間を置いて自動保存し、画面を離れるときとアプリが裏に回るときにも保存する
 class NoteEditScreen extends ConsumerStatefulWidget {
@@ -204,7 +205,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
         ],
       ),
       body: SafeArea(
-        child: TextField(
+        child: MaxWidth(child: TextField( // タブレットでは読みやすい幅に収める
           controller: _text,
           undoController: _undo,
           scrollController: _scroll,
@@ -222,7 +223,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
             contentPadding: EdgeInsets.fromLTRB(settings.detailPadding, 8, settings.detailPadding, 24), // 左右の余白は設定で変えられる
             hintText: '1行目がタイトルになります',
           ),
-        ),
+        )),
       ),
     );
   }
