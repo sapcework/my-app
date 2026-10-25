@@ -8,6 +8,7 @@ import '../../../domain/entities/category.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/expense_providers.dart';
 import '../../providers/repository_providers.dart';
+import '../../widgets/japanese_date_picker.dart';
 
 class ExpenseFormScreen extends ConsumerStatefulWidget {
   final String? editId;
@@ -109,7 +110,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   }
 
   Future<void> _selectDate() async {
-    final picked = await showDatePicker(
+    final picked = await showJapaneseDatePicker( // 日曜・祝日を赤、土曜を青で表示する日本語のカレンダー
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),

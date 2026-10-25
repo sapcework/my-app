@@ -9,10 +9,12 @@ import '../../providers/expense_table_provider.dart';
 import '../stats/category_expense_list_screen.dart';
 
 // セルサイズ定数
-const double _catWidth = 88.0;
-const double _cellW = 84.0;
-const double _cellH = 44.0;
-const double _headerH = 56.0;
+const double _catWidth = 104.0;
+const double _cellW = 108.0; // 14pxで「¥1,234,567」が入る幅
+const double _cellH = 48.0;
+const double _headerH = 60.0;
+const double _fontSize = 14.0; // 以前はWeb版の表と同じ11pxで、スマホでは小さすぎた
+const double _headerFontSize = 13.0;
 
 class ExpenseTableScreen extends ConsumerWidget {
   const ExpenseTableScreen({super.key});
@@ -194,7 +196,7 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                               child: Text(
                                 '${m.month}月\n${m.year}',
                                 textAlign: TextAlign.center,
-                                style: _headerStyle(cs, fontSize: 11),
+                                style: _headerStyle(cs),
                               ),
                             )),
                         _cell(
@@ -249,7 +251,7 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: _fontSize,
                                     fontWeight:
                                         (isTotal || isBudget) ? FontWeight.bold : FontWeight.normal,
                                     color: isBudget ? cs.primary : null,
@@ -297,7 +299,7 @@ class _TableBodyState extends ConsumerState<_TableBody> {
                                       child: Text(
                                         budget != null ? '¥${fmt.format(budget)}' : '—',
                                         style: TextStyle(
-                                          fontSize: 11,
+                                          fontSize: _fontSize,
                                           color: budget != null
                                               ? cs.primary
                                               : cs.onSurface.withValues(alpha: 0.3),
@@ -372,7 +374,7 @@ class _TableBodyState extends ConsumerState<_TableBody> {
     return i.isEven ? cs.surface : cs.surfaceContainerLowest;
   }
 
-  TextStyle _headerStyle(ColorScheme cs, {Color? color, double fontSize = 12}) {
+  TextStyle _headerStyle(ColorScheme cs, {Color? color, double fontSize = _headerFontSize}) {
     return TextStyle(
       fontWeight: FontWeight.bold,
       fontSize: fontSize,
@@ -431,14 +433,20 @@ class _DataCell extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Center(
-          child: Text(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: FittedBox( // 列に入りきらない桁数では文字を縮めて全桁出す
+            fit: BoxFit.scaleDown,
+            child: Text(
             amount > 0 ? '¥${fmt.format(amount)}' : '—',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: _fontSize,
               fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
               color: amount > 0
                   ? (isOver ? Colors.red : cs.onSurface)
                   : cs.onSurface.withValues(alpha: 0.3),
+            ),
+          ),
             ),
           ),
         ),
@@ -458,12 +466,12 @@ class _BudgetAverageCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final budgetMonths = data.months.where((m) => data.budget(m) != null).toList();
     if (budgetMonths.isEmpty) {
-      return Text('—', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.3)));
+      return Text('—', style: TextStyle(fontSize: _fontSize, color: cs.onSurface.withValues(alpha: 0.3)));
     }
     final avg = budgetMonths.fold<double>(0, (s, m) => s + data.budget(m)!) / budgetMonths.length;
     return Text(
       '¥${fmt.format(avg)}',
-      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: cs.primary),
+      style: TextStyle(fontSize: _fontSize, fontWeight: FontWeight.bold, color: cs.primary),
     );
   }
 }
@@ -486,12 +494,12 @@ class _AverageCell extends StatelessWidget {
         ? data.totalAverage()
         : (cat?.id != null ? data.categoryAverage(cat!.id!) : 0);
     if (avg == 0) {
-      return Text('—', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.3)));
+      return Text('—', style: TextStyle(fontSize: _fontSize, color: cs.onSurface.withValues(alpha: 0.3)));
     }
     return Text(
       '¥${fmt.format(avg)}',
       style: TextStyle(
-        fontSize: 11,
+        fontSize: _fontSize,
         fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
         color: isTotal ? cs.onTertiaryContainer : cs.onSurface,
       ),

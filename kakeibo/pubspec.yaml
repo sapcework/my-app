@@ -1,13 +1,15 @@
 name: kakeibo
 description: 支出管理アプリ
 publish_to: none
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.5.0 <4.0.0' # file_selector が Dart 3.5 以上を要求するため引き上げ
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations: # カレンダー・コピー貼り付けのメニューなど標準の部品を日本語で表示する
     sdk: flutter
   flutter_riverpod: ^2.5.1
   go_router: ^14.2.7
@@ -16,11 +18,12 @@ dependencies:
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
   fl_chart: ^0.68.0
-  intl: ^0.19.0
+  intl: ^0.20.2 # flutter_localizations が 0.20.2 に固定しているため合わせる
   path_provider: ^2.1.3 # Isar初期化時のDBパス取得用
   crypto: ^3.0.3 # パスコードのPBKDF2-SHA256ハッシュ用
   share_plus: ^13.3.0 # 書き出したファイルを共有シートで取り出す
   file_selector: ^1.1.0 # 端末内のバックアップJSONを選んで取り込む（Web版からの移行用）
+  package_info_plus: ^10.2.2 # 「家計簿について」にバージョンを表示する
 
 dev_dependencies:
   flutter_test:
@@ -32,6 +35,9 @@ dev_dependencies:
   freezed: ^2.5.2
   isar_generator: ^3.1.0+1
   json_serializable: ^6.8.0
+  flutter_svg: ^2.3.0 # アイコンの原本（icon/*.svg）を PNG にする
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/app_icon.png # 「家計簿について」に出すアイコン

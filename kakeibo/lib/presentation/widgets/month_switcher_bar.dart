@@ -5,13 +5,14 @@ import 'package:intl/intl.dart';
 import '../providers/expense_providers.dart';
 import '../providers/repository_providers.dart';
 
-// 支出一覧・統計画面で共用する月切り替えバー
-// AppBar.bottom に配置するため PreferredSizeWidget を実装
-class MonthSwitcherBar extends ConsumerWidget implements PreferredSizeWidget {
+class MonthSwitcherBar extends ConsumerWidget { // ホーム・支出・統計・予算で共用する月切り替え。Web版と同じくタイトルと同じ行の右側（AppBar.actions）に置く
   const MonthSwitcherBar({super.key});
 
-  @override
-  Size get preferredSize => const Size.fromHeight(48);
+  static final _arrowStyle = IconButton.styleFrom( // 幅だけ48→40に詰める。高さ48は残して押しやすさを保つ
+    minimumSize: const Size(40, 48),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
 
   static Future<void> _showMonthPicker(BuildContext context, WidgetRef ref) async {
     final months = await ref.read(expenseRepositoryProvider).getAvailableMonths();
@@ -60,9 +61,10 @@ class MonthSwitcherBar extends ConsumerWidget implements PreferredSizeWidget {
     final isCurrentMonth = month.year == now.year && month.month == now.month;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisSize: MainAxisSize.min, // タイトルの横に収まるよう幅を詰める（幅360dpの端末でも1行に入る）
       children: [
         IconButton(
+          style: _arrowStyle,
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
             ref.read(selectedMonthProvider.notifier).state =
@@ -70,13 +72,14 @@ class MonthSwitcherBar extends ConsumerWidget implements PreferredSizeWidget {
           },
         ),
         TextButton(
+          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
           onPressed: () => _showMonthPicker(context, ref),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 DateFormat('yyyy年M月').format(month),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleSmall, // titleMedium だと幅360dpの予算設定（戻る矢印あり）でタイトルが切れる
               ),
               const SizedBox(width: 2),
               const Icon(Icons.arrow_drop_down, size: 20),
@@ -84,6 +87,7 @@ class MonthSwitcherBar extends ConsumerWidget implements PreferredSizeWidget {
           ),
         ),
         IconButton(
+          style: _arrowStyle,
           icon: const Icon(Icons.chevron_right),
           onPressed: isCurrentMonth
               ? null // 今月より未来には進めない

@@ -95,7 +95,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('統計'),
-        bottom: const MonthSwitcherBar(),
+        actions: const [MonthSwitcherBar(), SizedBox(width: 4)],
       ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -128,7 +128,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
+                      Expanded( // 合計の桁が多いときに縮められるよう幅を決める
+                        child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
@@ -139,13 +140,18 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                                 ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            formatWan(total), // Web版と同じく1万円以上は「¥1.7万」のように省略表示
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          FittedBox( // 万単位に丸めず全桁出す。入りきらない桁数では文字を縮める
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              formatYen(total),
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
                           ),
                         ],
+                      ),
                       ),
                       TextButton.icon(
                         onPressed: () => _exportCsv(context, ref, selectedMonth),

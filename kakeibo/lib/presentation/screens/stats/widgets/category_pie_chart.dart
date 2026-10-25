@@ -75,7 +75,7 @@ class CategoryPieChart extends StatelessWidget {
                 )
               : _CenterLabel(
                   label: '合計',
-                  amount: formatWan(total), // デフォルト表示のみWeb版と同じ「万」省略表示
+                  amount: formatYen(total), // 万単位に丸めず全桁出す
                 ),
         ),
       ],
@@ -121,9 +121,16 @@ class _CenterLabel extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
           ),
         const SizedBox(height: 2),
-        Text(
-          amount,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        SizedBox(
+          width: 96, // ドーナツの穴（直径104）に収まる幅。桁が多いときは文字を縮める
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              amount,
+              maxLines: 1,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
         ),
       ],
     );

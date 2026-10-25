@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/constants/app_strings.dart';
@@ -7,6 +8,13 @@ import 'presentation/providers/app_init_provider.dart';
 import 'presentation/providers/passcode_provider.dart';
 import 'presentation/router/app_router.dart';
 import 'presentation/screens/lock/passcode_lock_screen.dart';
+
+const _locale = Locale('ja', 'JP'); // 標準の部品（ダイアログ・コピー貼り付けのメニュー・ライセンス画面など）を日本語で表示する
+const _localizationsDelegates = [
+  GlobalMaterialLocalizations.delegate,
+  GlobalWidgetsLocalizations.delegate,
+  GlobalCupertinoLocalizations.delegate,
+];
 
 class App extends ConsumerWidget {
   const App({super.key});
@@ -34,6 +42,9 @@ class App extends ConsumerWidget {
             themeMode: ThemeMode.system,
             home: const PasscodeLockScreen(),
             debugShowCheckedModeBanner: false,
+          locale: _locale,
+          supportedLocales: const [_locale],
+          localizationsDelegates: _localizationsDelegates,
           );
         }
         final router = ref.watch(appRouterProvider);
@@ -44,6 +55,9 @@ class App extends ConsumerWidget {
           themeMode: ThemeMode.system,
           routerConfig: router,
           debugShowCheckedModeBanner: false,
+          locale: _locale,
+          supportedLocales: const [_locale],
+          localizationsDelegates: _localizationsDelegates,
           // Web版はモバイルファースト（max-w-lg=512px）で、広いウィンドウでは中央寄せになる。
           // デスクトップの広いウィンドウでも同じ見た目になるよう、全画面をこの幅に制限して中央寄せにする。
           builder: (context, child) {

@@ -1,0 +1,32 @@
+<!-- 家計簿のアイコン（前景）。108x108 の座標で、絵柄は中心から半径33以内（どの形に切り抜かれても残る範囲）に収める。形を変えたら legacy.svg・monochrome.svg も直す -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <defs>
+    <linearGradient id="cover" x1="32" y1="29" x2="68" y2="79" gradientUnits="userSpaceOnUse"> <!-- 表紙：薄い黄緑 -->
+      <stop offset="0" stop-color="#EEF8D6"/>
+      <stop offset="1" stop-color="#C5E39A"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="56" y1="54" x2="82" y2="80" gradientUnits="userSpaceOnUse"> <!-- 金貨 -->
+      <stop offset="0" stop-color="#FFE082"/>
+      <stop offset="1" stop-color="#F6A609"/>
+    </linearGradient>
+  </defs>
+  <rect x="35" y="33" width="36" height="50" rx="6" fill="#33691E" fill-opacity="0.16"/> <!-- 影（ぼかしは使えないので半透明の図形をずらす） -->
+  <rect x="35" y="31" width="35" height="50" rx="5" fill="#FFFFFF" stroke="#C9DDA8" stroke-width="1.2"/> <!-- 表紙の後ろからのぞく紙 -->
+  <rect x="32" y="29" width="36" height="50" rx="6" fill="url(#cover)" stroke="#9CC566" stroke-width="1.2"/> <!-- 表紙 -->
+  <path d="M38 29 H40 V79 H38 Q32 79 32 73 V35 Q32 29 38 29 Z" fill="#9CCC65"/> <!-- 背表紙 -->
+  <rect x="45" y="37" width="18" height="13" rx="2.5" fill="#FFFFFF"/> <!-- 題名の紙 -->
+  <g stroke="#8BC34A" stroke-width="2" stroke-linecap="round"> <!-- 題名の紙の罫線 -->
+    <line x1="48.5" y1="41.5" x2="59.5" y2="41.5"/>
+    <line x1="48.5" y1="45.5" x2="56" y2="45.5"/>
+  </g>
+  <path d="M55 79 H60 V86 L57.5 84 L55 86 Z" fill="#EC407A"/> <!-- しおり -->
+  <circle cx="70.5" cy="69" r="13" fill="#5D3A00" fill-opacity="0.18"/> <!-- 金貨の影 -->
+  <circle cx="69" cy="67" r="13" fill="url(#coin)" stroke="#D88A00" stroke-width="1.8"/> <!-- 金貨 -->
+  <circle cx="69" cy="67" r="9.6" fill="none" stroke="#FFF6D5" stroke-opacity="0.8" stroke-width="1.2"/> <!-- 金貨の内側の縁 -->
+  <g stroke="#7A4A00" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"> <!-- ¥ -->
+    <path d="M63.8 60.2 L69 66.4 L74.2 60.2"/>
+    <line x1="69" y1="66.4" x2="69" y2="74.2"/>
+    <line x1="64.8" y1="67.6" x2="73.2" y2="67.6"/>
+    <line x1="64.8" y1="71.2" x2="73.2" y2="71.2"/>
+  </g>
+</svg>

@@ -69,11 +69,15 @@ class MonthlySummaryCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            formatWan(total), // Web版と同じく1万円以上は「¥1.7万」のように省略表示
-                            style: textTheme.headlineLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.5,
+                          FittedBox( // 万単位に丸めず全桁出す。入りきらない桁数では文字を縮める
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              formatYen(total),
+                              style: textTheme.headlineLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.5,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 2),

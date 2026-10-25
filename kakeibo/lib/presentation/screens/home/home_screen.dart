@@ -24,7 +24,7 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('家計簿'), // Web版のホーム画面と同じくアプリ名を見出しに表示
-        bottom: const MonthSwitcherBar(),
+        actions: const [MonthSwitcherBar(), SizedBox(width: 4)],
       ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

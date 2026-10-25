@@ -23,6 +23,7 @@ import '../../providers/passcode_provider.dart';
 import '../../providers/recurring_expense_providers.dart';
 import '../../providers/repository_providers.dart';
 import '../../widgets/pin_pad.dart';
+import 'about_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -587,8 +588,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── バージョン情報セクション ──
-                const _SectionLabel('バージョン情報'),
+                // ── このアプリについて（FastNote と同じく別画面にまとめる） ──
+                const _SectionLabel('このアプリについて'),
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -596,88 +597,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     side: BorderSide(
                         color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [Color(0xFF6366F1), Color(0xFF7C3AED)],
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Text('📒', style: TextStyle(fontSize: 26)),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('家計簿',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        )),
-                                const SizedBox(height: 2),
-                                Text('シンプルな支出管理アプリ',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        )),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        const Divider(),
-                        ...[
-                          ('バージョン', '1.1.0'),
-                          ('ビルド', '2026.07'),
-                          ('プラットフォーム', 'Flutter'),
-                          ('データ保存', 'Isar（ローカル）'),
-                        ].map(
-                          (row) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(row.$1,
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        )),
-                                Text(row.$2,
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        )),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Center(
-                          child: Text(
-                            '© 2025 Kakeibo App',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.outlineVariant,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _SettingsTile(
+                    icon: Icons.info_outline,
+                    iconBgColor: const Color(0xFFEEF2FF), // indigo-50
+                    iconColor: const Color(0xFF4F46E5), // indigo-600
+                    title: '家計簿について',
+                    subtitle: appVersionLabel(ref.watch(appInfoProvider)),
+                    onTap: () => context.push('/about'),
                   ),
                 ),
               ],

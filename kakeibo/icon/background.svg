@@ -1,0 +1,10 @@
+<!-- 家計簿のアイコン（背景）。108x108 の全面を塗り、端末がこれを丸・角丸などに切り抜く。白を基調に、右下へわずかに黄緑を足す -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2F8E8"/>
+    </linearGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#base)"/>
+</svg>

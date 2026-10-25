@@ -95,8 +95,9 @@ class _BudgetSettingScreenState extends ConsumerState<BudgetSettingScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 8, // 戻る矢印があるぶん幅が足りず、幅360dpでタイトルが切れるため余白を詰める
         title: const Text('予算設定'),
-        bottom: const MonthSwitcherBar(),
+        actions: const [MonthSwitcherBar(), SizedBox(width: 4)],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

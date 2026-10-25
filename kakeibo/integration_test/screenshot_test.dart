@@ -5,6 +5,7 @@
 // Run with: flutter test integration_test/screenshot_test.dart -d windows
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -41,6 +42,15 @@ void main() {
     await tester.pumpAndSettle();
     await _capture('table');
 
+    await tester.tap(find.text('検索'));
+    await tester.pumpAndSettle();
+    await _capture('search');
+    await tester.tap(find.text('検索する'));
+    await tester.pumpAndSettle();
+    await _capture('search_results');
+    await tester.tap(find.byType(BackButton)); // pageBack は英語の「Back」を探すため、日本語表示では使えない
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('統計'));
     await tester.pumpAndSettle();
     await _capture('stats');
@@ -53,21 +63,21 @@ void main() {
     await tester.tap(find.text('カテゴリ'));
     await tester.pumpAndSettle();
     await _capture('categories');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton)); // pageBack は英語の「Back」を探すため、日本語表示では使えない
     await tester.pumpAndSettle();
 
     // 設定 → 予算設定
     await tester.tap(find.text('予算設定'));
     await tester.pumpAndSettle();
     await _capture('budget');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton)); // pageBack は英語の「Back」を探すため、日本語表示では使えない
     await tester.pumpAndSettle();
 
     // 設定 → 定期支出
     await tester.tap(find.text('定期支出'));
     await tester.pumpAndSettle();
     await _capture('recurring');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton)); // pageBack は英語の「Back」を探すため、日本語表示では使えない
     await tester.pumpAndSettle();
   });
 }

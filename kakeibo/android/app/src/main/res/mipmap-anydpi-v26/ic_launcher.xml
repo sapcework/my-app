@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8 以降のアダプティブアイコン。端末が丸・角丸などに切り抜く。原本は icon/*.svg（flutter test icon/render_icons_test.dart で PNG を作る） -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" /> <!-- Android 13 以降のテーマアイコン -->
+</adaptive-icon>

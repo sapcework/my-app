@@ -3,8 +3,8 @@
 Flutter 製の支出管理（家計簿）アプリ。ローカルDB（Isar）にデータを保存し、オフラインで完結する。
 Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えている。
 
-- 最終更新: 2026-07-20
-- バージョン: 1.1.0+2（Web版 v1.1.0 の改良を反映）
+- 最終更新: 2026-10-25
+- バージョン: 1.2.0+3（更新履歴は「家計簿について」画面の `changelog` に記載）
 
 ---
 
@@ -18,7 +18,8 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 | ローカルDB | isar ^3.1.0+1（isar_flutter_libs） |
 | モデル生成 | freezed ^2.5.2 / json_serializable |
 | グラフ | fl_chart ^0.68.0 |
-| 日付・数値整形 | intl ^0.19.0 |
+| 日付・数値整形 | intl ^0.20.2（flutter_localizations の固定に合わせる） |
+| 日本語表示 | flutter_localizations（ロケール ja_JP 固定。標準のダイアログ・コピー貼り付けのメニュー・ライセンス画面が日本語になる） |
 | ファイルパス取得 | path_provider ^2.1.3 |
 | ハッシュ | crypto ^3.0.3（パスコードのPBKDF2-SHA256） |
 | ファイル共有 | share_plus ^13.3.0（モバイルのエクスポート） |
@@ -34,15 +35,19 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 
 ## 2. 画面構成・ルーティング
 
-### BottomNavigationBar（ShellRoute 共有・5タブ）
+### BottomNavigationBar（ShellRoute 共有・6タブ）
 
 | Index | パス | 画面 | ファイル |
 |-------|------|------|---------|
 | 0 | `/` | ホーム | `home_screen.dart` |
 | 1 | `/expenses` | 支出一覧 | `expense_list_screen.dart` |
 | 2 | `/table` | 月別支出表 | `expense_table_screen.dart` |
-| 3 | `/stats` | 統計 | `stats_screen.dart` |
-| 4 | `/settings` | 設定 | `settings_screen.dart` |
+| 3 | `/search` | 検索 | `search_screen.dart` |
+| 4 | `/stats` | 統計 | `stats_screen.dart` |
+| 5 | `/settings` | 設定 | `settings_screen.dart` |
+
+- **戻るボタン**: タブは `context.go` で切り替えるため履歴が残らない。`_AppShell` の `PopScope` で、ホーム以外のタブではホームへ戻し、ホームでだけアプリを終了する（Android。FastNote と同じ）
+- **選択年月**: `selectedMonthProvider` を全画面（ホーム・支出・統計・予算）で共有する。起動時は今月で、どの画面で切り替えても他の画面に引き継がれる（Web版と同じ。2026-10-25 にこの方針で確定）
 
 ### モーダル系ルート（BottomNavなし）
 
@@ -53,6 +58,8 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 | `/categories` | カテゴリ管理 |
 | `/budget` | 予算設定 |
 | `/recurring` | 定期支出管理 |
+| `/search/results` | 検索結果（戻ると検索条件に戻る） |
+| `/about` | 家計簿について（バージョン・更新履歴・プライバシー・ライセンス） |
 | `/calculator` | 電卓（`extra` で初期値を受け取る） |
 
 このほか統計画面から `CategoryExpenseListScreen`（カテゴリ別明細）へ `Navigator.push` で遷移する。
@@ -141,10 +148,10 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 ### 4.3 ホーム画面
 
 - AppBarタイトルは「家計簿」（アプリ名。Web版のH1見出しと同じ。他画面は「ホーム」ではなく画面名を表示）
-- 選択月は他画面と共有の `selectedMonthProvider`。AppBar下部の `MonthSwitcherBar` で任意の月に切り替えられる（Web版と同じ。以前は常に実際の「今月」固定だったが月切り替え対応に修正）
+- 選択月は他画面と共有の `selectedMonthProvider`。AppBar右側（タイトルと同じ行）の `MonthSwitcherBar` で任意の月に切り替えられる（Web版と同じ。以前は常に実際の「今月」固定だったが月切り替え対応に修正）
 - 選択月の支出をリアルタイム監視（StreamProvider）して月間サマリーカードに表示
 - サマリーカード（`monthly_summary_card.dart`）: グラデーション上部バー、予算進捗バー、予算バッジ（超過→rose / 残り→emerald）
-- 合計金額は `formatWan()`（`core/utils/format.dart`）で1万円以上を「¥1.7万」のように省略表示（Web版と同じ。内訳・一覧の金額は通常のカンマ区切りのまま）
+- 合計金額は `formatYen()`（`core/utils/format.dart`）でカンマ区切りの全桁を出す。入りきらない桁数では `FittedBox` で文字を縮める（2026-10-25 に「¥1.7万」と丸める省略表示をやめた。**Web版とは異なる**）
 - **前月比表示**: 選択月の前月に支出がある場合のみ「前月±¥n」を件数の横に表示（増加は赤・減少は緑）
 
 ### 4.4 支出の登録・編集（`expense_form_screen.dart`）
@@ -171,7 +178,7 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 ### 4.6 統計画面（`stats_screen.dart`）
 
 - 選択月のカテゴリ別支出を円グラフ（fl_chart）と内訳リストで表示
-- 合計カード・ドーナツ中央のデフォルトラベルは `formatWan()` で省略表示（タッチ中カテゴリのラベルや内訳リストは通常のカンマ区切り。Web版と同じ使い分け）
+- 合計カード・ドーナツ中央のラベルも `formatYen()` で全桁。ドーナツの穴（直径104）に入りきらない桁数では文字を縮める
 - ドーナツ中央ラベル: 通常時は「合計＋金額」、カテゴリをタップ中はそのカテゴリのアイコン・名前・金額を表示
 - 円グラフ下に2列のカラー凡例（色ドット＋カテゴリ名＋割合）を表示。タップでカテゴリ明細へ遷移
 - カテゴリ別リストは角丸カード＋シェブロン付き（`category_breakdown_tile.dart`）
@@ -182,12 +189,28 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 
 - 縦軸: カテゴリ / 横軸: 月 の2次元スクロール表
 - 表示範囲: **直近12ヶ月**（データがある月＋当月。Web版 TablePage と同じ範囲）
+- 文字は14px（見出し13px）、列幅108px・分類列104px。Web版の11px・72pxではスマホで小さすぎたため大きくした。金額が列に入りきらないときは `FittedBox` で縮める
 - 4つの ScrollController と NotificationListener で行・列ヘッダーを本体と同期スクロール
 - データは `expenseTableDataProvider`（FutureProvider.autoDispose）で構築
 
+### 4.7.1 検索（`search/search_screen.dart` / `search_result_screen.dart`）
+
+- 全期間の支出を条件で絞り込む（選択年月とは無関係）。Web版には未実装
+- 条件（`SearchCondition`、`domain/usecases/expense/search_expenses.dart`）
+  - 日付: 開始日〜終了日（日単位。終了日はその日の終わりまで含む）。どちらか片方だけでもよい
+  - 金額: 最低額〜最高額（その金額を含む）
+  - 分類: `FilterChip` で選ぶ。初期値は全選択。**除外した分類を持つ**（`excludedCategoryIds`）ので、後から追加した分類も自動で対象に入る
+  - 項目名・メモ: キーワード（スペース区切りで複数）＋方式。空欄なら絞り込まない。大文字・小文字と全角・半角の英数字・スペースは区別しない
+    - 全て含む＝すべての語を含む / 一部含む＝どれか1語 / 一致＝入力全体と完全に同じ / 含まない＝どの語も含まない（空欄の支出も当てはまる）
+  - 順序: 日付の古い順・新しい順（初期値）・金額の高い順・低い順。同じ値は登録日時順で安定させる
+- 日付・金額の欄は縦に並べ、右に「から／まで」「円以上／円以下」を添える（横に2つ並べると幅の狭い端末で日付が折り返し、大きな金額がはみ出したため）。日付は曜日付き1行、金額は12桁まで
+- 開始日＞終了日・最低額＞最高額・分類が1つも無い場合は「検索する」を押せず、理由を表示する
+- 条件は `searchConditionProvider` に持つので、結果画面から戻っても・タブを移っても残る。「条件をクリア」で初期値に戻す
+- 結果画面: 件数・合計・使っている条件の要約と、`ExpenseListTile`（クイック削除あり・タップで編集）の一覧。`searchResultsProvider` が全件の Stream に条件をかけるので、編集・削除がその場で反映される
+
 ### 4.8 予算管理（`budget_setting_screen.dart`）
 
-- 選択月は他画面と共有の `selectedMonthProvider`。AppBar下部の `MonthSwitcherBar` で月を切り替えると、その月の予算をフォームへ再読込する
+- 選択月は他画面と共有の `selectedMonthProvider`。AppBar右側（タイトルと同じ行。Web版と同じ）の `MonthSwitcherBar` で月を切り替えると、その月の予算をフォームへ再読込する
 - 金額入力は電卓画面（`/calculator`）と連携
 - 保存してもページ遷移せず留まる（Web版と同じ挙動）。保存後はスナックバーで「YYYY年M月の予算を保存しました」と通知
 - 予算設定済みの月には進捗カードを表示: 支出額・予算額・使用率プログレスバー（0〜79%: primary、80〜99%: amber、超過: red）・残り/超過バッジ
@@ -248,8 +271,10 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
   - **5回連続で間違えると30秒間ロック**し、カウントダウンを表示（ブルートフォース対策）
   - 設定画面から有効化（新PINを2回入力）・解除（現PINを検証）
 
-**バージョン情報**
-- アプリアイコン・バージョン・プラットフォーム等を表示
+**このアプリについて**
+- 「家計簿について」（`about_screen.dart`）へ進む1行。行にはバージョンを表示（`package_info_plus` で実際の版を取得）
+- 「家計簿について」画面は FastNote と同じ構成: アイコン・バージョン・説明 / プライバシー / データ件数・保存場所 / 更新履歴 / オープンソースライセンス・開発者・パッケージ名（Androidのみ）
+- 版を上げたら `pubspec.yaml` の `version` と `about_screen.dart` の `changelog` を両方更新する
 
 ---
 
@@ -261,7 +286,7 @@ lib/
   core/
     constants/      app_strings.dart, category_icons.dart
     theme/          app_theme.dart
-    utils/          passcode_hash.dart（PBKDF2-SHA256）, format.dart（formatWan）,
+    utils/          passcode_hash.dart（PBKDF2-SHA256）, format.dart（formatYen）,
                     file_export.dart（書き出し後の共有シート／パス表示の出し分け）
   domain/
     entities/       expense.dart, category.dart, budget.dart, recurring_expense.dart
@@ -282,16 +307,23 @@ lib/
     providers/      isar_provider, app_init_provider, repository_providers,
                     expense_providers, category_providers, budget_providers,
                     recurring_expense_providers, expense_table_provider,
-                    passcode_provider
+                    passcode_provider, search_providers
     router/         app_router.dart
     widgets/        month_switcher_bar.dart, pin_pad.dart
-    screens/        home/ expense/ stats/ table/ budget/ recurring/ settings/
+    screens/        home/ expense/ search/ stats/ table/ budget/ recurring/ settings/
                     category/ calculator/ lock/
 ```
 
 ---
 
 ## 6. 実装メモ
+
+### 日本語カレンダー（`widgets/japanese_date_picker.dart` / `core/utils/japanese_holidays.dart`）
+- 支出の登録・編集と検索の日付は `showJapaneseDatePicker` で選ぶ（標準の `showDatePicker` は日ごとの色分けができないため自前）
+- 日曜始まり。**日曜・祝日・振替休日・国民の休日は赤**（祝日は太字）、**土曜は青**、今日は枠、選んだ日は塗りつぶし
+- 上部に選んだ日と祝日名、下部に表示中の月の祝日一覧。月名タップで年・月の一覧、左右になぞっても月を切り替えられる。「今日」ボタンあり
+- 祝日は通信せずに計算する（2000年以降の祝日法。春分・秋分は2099年まで有効な近似式。2019年の即位関連と2020・2021年の五輪特例を反映）。**将来の法改正には追従できない**ので、変わったら `_compute` を直す
+- テストは `test/japanese_holidays_test.dart`（2024〜2026年の全祝日などと照合）と `integration_test/date_picker_test.dart`
 
 - **Isar 初期化**: `Isar.open([ExpenseModelSchema, CategoryModelSchema, BudgetModelSchema, RecurringExpenseModelSchema])`。DBパスは `path_provider` で取得
 - **ファイル保存先**: `getApplicationDocumentsDirectory()`（Windows では `C:\Users\<user>\Documents\`。
@@ -341,6 +373,10 @@ Playwrightはブラウザ専用でネイティブWindowsアプリを操作でき
 | リリース署名 | `android/key.properties` があれば使用、無ければデバッグ署名にフォールバック |
 
 セットアップと配布の全手順は `docs/android-setup.md` を参照。
+
+### アイコン
+- 原本は `icon/*.svg`（背景・前景・単色・旧形式）。白を基調に、薄い黄緑の家計簿ノートと ¥ の金貨
+- `flutter test icon/render_icons_test.dart` で Android の mipmap（アダプティブアイコン＋Android 13 のテーマアイコン）・Windows の `app_icon.ico`・アプリ内の `assets/icon/app_icon.png`（512px）をまとめて作る。切り抜きを再現したプレビューが `build/icon_preview/` に出る
 
 ### Isar 3.1.0 に対する回避策（`android/build.gradle.kts`）
 

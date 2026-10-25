@@ -37,7 +37,7 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('支出一覧'),
-        bottom: const MonthSwitcherBar(),
+        actions: const [MonthSwitcherBar(), SizedBox(width: 4)],
       ),
       body: Column(
         children: [
