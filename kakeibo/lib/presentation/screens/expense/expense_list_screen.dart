@@ -52,6 +52,7 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
                 suffixIcon: searchQuery.isEmpty
                     ? null
                     : IconButton(
+                        tooltip: '検索語を消す',
                         icon: const Icon(Icons.close, size: 18),
                         onPressed: () {
                           _searchController.clear();

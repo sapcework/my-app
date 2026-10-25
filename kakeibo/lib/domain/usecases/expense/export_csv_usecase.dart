@@ -22,9 +22,9 @@ String buildExpenseDetailCsv(List<Expense> expenses, List<Category> categories) 
   for (final e in sorted) {
     buf.writeln([
       dateFmt.format(e.date),
-      _escapeCsv(catMap[e.categoryId]?.name ?? '不明'),
-      _escapeCsv(e.itemName ?? ''),
-      _escapeCsv(e.memo ?? ''),
+      escapeCsvCell(catMap[e.categoryId]?.name ?? '不明'),
+      escapeCsvCell(e.itemName ?? ''),
+      escapeCsvCell(e.memo ?? ''),
       e.amount.toStringAsFixed(0),
       tsFmt.format(e.createdAt),
     ].join(','));
@@ -40,11 +40,15 @@ Future<String> writeCsvToDocuments(String fileName, String csv) async {
   return file.path;
 }
 
-String _escapeCsv(String value) {
-  if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-    return '"${value.replaceAll('"', '""')}"';
+String escapeCsvCell(String value) { // CSVの1セル分。全明細・月別支出表の両方で使う
+  var v = value;
+  if (v.isNotEmpty && '=+-@\t\r'.contains(v[0])) {
+    v = "'$v"; // Excel で開いたときに数式として実行されないようにする（CSVインジェクション対策。OWASP の推奨）
   }
-  return value;
+  if (v.contains(',') || v.contains('"') || v.contains('\n') || v.contains('\r')) {
+    return '"${v.replaceAll('"', '""')}"';
+  }
+  return v;
 }
 
 class ExportCsvUseCase {

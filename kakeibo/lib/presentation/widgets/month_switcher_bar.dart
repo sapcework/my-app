@@ -64,6 +64,7 @@ class MonthSwitcherBar extends ConsumerWidget { // ホーム・支出・統計�
       mainAxisSize: MainAxisSize.min, // タイトルの横に収まるよう幅を詰める（幅360dpの端末でも1行に入る）
       children: [
         IconButton(
+          tooltip: '前の月',
           style: _arrowStyle,
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
@@ -87,6 +88,7 @@ class MonthSwitcherBar extends ConsumerWidget { // ホーム・支出・統計�
           ),
         ),
         IconButton(
+          tooltip: '次の月',
           style: _arrowStyle,
           icon: const Icon(Icons.chevron_right),
           onPressed: isCurrentMonth

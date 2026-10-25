@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,8 +7,10 @@ import '../screens/budget/budget_setting_screen.dart';
 import '../screens/calculator/calculator_screen.dart';
 import '../screens/category/category_screen.dart';
 import '../screens/expense/expense_form_screen.dart';
+import '../providers/passcode_provider.dart';
 import '../screens/expense/expense_list_screen.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/lock/passcode_lock_screen.dart';
 import '../screens/recurring/recurring_expense_screen.dart';
 import '../screens/search/search_result_screen.dart';
 import '../screens/search/search_screen.dart';
@@ -44,6 +47,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/budget', builder: (context, state) => const BudgetSettingScreen()),
       GoRoute(path: '/recurring', builder: (context, state) => const RecurringExpenseScreen()),
       GoRoute(path: '/about', builder: (context, state) => const AboutScreen()),
+      GoRoute(
+        path: '/lock', // 使っている途中の再ロック。下の画面（入力途中のフォームなど）を残したまま重ねる
+        builder: (context, state) => PopScope(
+          canPop: false, // 戻るボタンでロックを外せないようにする
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) SystemNavigator.pop(); // 戻るボタンではアプリを閉じる
+          },
+          child: const PasscodeLockScreen(),
+        ),
+      ),
       GoRoute(path: '/search/results', builder: (context, state) => const SearchResultScreen()), // 戻ると検索条件の画面に戻る
       GoRoute(
         path: '/calculator',
@@ -51,6 +64,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+});
+
+final lockRouteSyncProvider = Provider<void>((ref) { // 再ロックされたら /lock を重ね、解錠されたら外す
+  final router = ref.watch(appRouterProvider);
+  var shown = false;
+  ref.listen(passcodeControllerProvider, (_, controller) {
+    if (controller.needsRelock && !shown) {
+      shown = true;
+      router.push('/lock');
+    } else if (!controller.needsRelock && shown) {
+      shown = false;
+      router.pop();
+    }
+  });
 });
 
 class _AppShell extends StatelessWidget {

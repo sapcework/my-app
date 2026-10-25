@@ -187,6 +187,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context); // 画面を閉じた後に戻り先で知らせるため先に取っておく
     try {
       final amount = double.parse(_amountController.text.trim());
       final itemName = _itemNameController.text.trim().isEmpty
@@ -198,17 +199,20 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
 
       if (_isEditMode) {
         final existing = await ref.read(expenseRepositoryProvider).findById(_editIdInt!);
-        if (existing != null) {
-          await ref.read(updateExpenseUseCaseProvider).call(
-            existing.copyWith(
-              amount: amount,
-              categoryId: _selectedCategoryId!,
-              itemName: itemName,
-              memo: memo,
-              date: _selectedDate,
-            ),
-          );
+        if (existing == null) { // 編集中に別の画面で削除された
+          messenger.showSnackBar(const SnackBar(content: Text('この支出は削除されているため保存できませんでした')));
+          if (mounted) context.pop();
+          return;
         }
+        await ref.read(updateExpenseUseCaseProvider).call(
+          existing.copyWith(
+            amount: amount,
+            categoryId: _selectedCategoryId!,
+            itemName: itemName,
+            memo: memo,
+            date: _selectedDate,
+          ),
+        );
       } else {
         await ref.read(addExpenseUseCaseProvider).call(
           amount: amount,
@@ -220,6 +224,13 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       }
 
       if (mounted) context.pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text(_isEditMode ? '支出を更新しました' : '支出を追加しました'),
+        duration: const Duration(seconds: 2),
+      ));
+    } catch (e, st) {
+      debugPrint('支出を保存できませんでした: $e\n$st'); // 内部のエラー内容は開発用のログにだけ出す
+      messenger.showSnackBar(const SnackBar(content: Text('保存できませんでした。入力内容はそのままなので、もう一度「保存」を押してください')));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -257,6 +268,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         actions: [
           if (_isEditMode) // 編集モード時のみ削除ボタンを表示
             IconButton(
+              tooltip: '削除',
               icon: const Icon(Icons.delete_outline),
               onPressed: _delete,
             ),

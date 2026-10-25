@@ -24,12 +24,14 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
     final start = DateTime(year, month);
     final end = DateTime(year, month + 1); // Dartは月オーバーフローを自動処理（12月→翌年1月）
     return _isar.expenseModels
-        .filter()
-        .dateGreaterThan(start, include: true)
-        .dateLessThan(end)
+        .where()
+        .dateBetween(start, end, includeUpper: false) // date の索引を使う（以前の filter() は全件を走査していた）
         .watch(fireImmediately: true)
         .map((models) {
-      models.sort((a, b) => b.date.compareTo(a.date));
+      models.sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        return byDate != 0 ? byDate : b.createdAt.compareTo(a.createdAt); // 同じ日は後から登録したものを上に（並びがぶれないように）
+      });
       return models.map((m) => m.toEntity()).toList();
     });
   }

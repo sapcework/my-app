@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/theme/status_colors.dart';
 import '../../../core/utils/file_export.dart';
 import '../../../data/backup/backup_parser.dart';
 import '../../../data/backup/backup_serializer.dart';
@@ -16,7 +17,7 @@ import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/expense_model.dart';
 import '../../../data/models/recurring_expense_model.dart';
-import '../../../domain/usecases/expense/export_csv_usecase.dart' show buildExpenseDetailCsv, writeCsvToDocuments;
+import '../../../domain/usecases/expense/export_csv_usecase.dart' show buildExpenseDetailCsv, escapeCsvCell, writeCsvToDocuments;
 import '../../providers/category_providers.dart';
 import '../../providers/isar_provider.dart';
 import '../../providers/passcode_provider.dart';
@@ -24,6 +25,12 @@ import '../../providers/recurring_expense_providers.dart';
 import '../../providers/repository_providers.dart';
 import '../../widgets/pin_pad.dart';
 import 'about_screen.dart';
+
+const _maxBackupBytes = 20 * 1024 * 1024; // 復元で読むファイルの上限。極端に大きいファイルでメモリを使い切らないようにする（支出10万件でも届かない大きさ）
+
+class _TooLargeException implements Exception {
+  const _TooLargeException();
+}
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -62,42 +69,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     setState(() => _working = true);
     try {
-      final expenseRepo = ref.read(expenseRepositoryProvider);
-      final categoryRepo = ref.read(categoryRepositoryProvider);
-      final budgetRepo = ref.read(budgetRepositoryProvider);
-      final isar = ref.read(isarProvider).requireValue;
-
-      final expenses = await expenseRepo.watchAll().first;
-      final categories = await categoryRepo.watchAll().first;
-      final budgets = await budgetRepo.getAll();
-      // 定期支出は「最後に自動登録した年月」まで書き出すためモデルのまま取得する
-      final recurring = await isar.recurringExpenseModels.where().findAll();
-
-      // Web版でもそのまま復元できる共通形式（v2）で書き出す
-      final data = buildBackup(
-        expenses: expenses,
-        categories: categories,
-        budgets: budgets,
-        recurring: recurring,
-      );
-
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}${Platform.pathSeparator}$fileName'); // Windowsで「\」と「/」が混ざらないようにする
-      await file.writeAsString(jsonEncode(data));
-
+      final path = await _writeBackupFile(fileName);
       if (mounted) {
-        await notifyExported(context, file.path,
-            label: 'バックアップ完了', subject: fileName);
+        await notifyExported(context, path, label: 'バックアップ完了', subject: fileName);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('バックアップに失敗しました: $e')),
-        );
-      }
+    } catch (e, st) {
+      _showError('バックアップを書き出せませんでした。端末の空き容量を確認して、もう一度お試しください', e, st);
     } finally {
       if (mounted) setState(() => _working = false);
     }
+  }
+
+  Future<String> _writeBackupFile(String fileName) async { // 全データを Web版でもそのまま復元できる共通形式（v2）で Documents に書き出し、パスを返す
+    final isar = ref.read(isarProvider).requireValue;
+    final expenses = await ref.read(expenseRepositoryProvider).watchAll().first;
+    final categories = await ref.read(categoryRepositoryProvider).watchAll().first;
+    final budgets = await ref.read(budgetRepositoryProvider).getAll();
+    final recurring = await isar.recurringExpenseModels.where().findAll(); // 「最後に自動登録した年月」まで書き出すためモデルのまま取得する
+    final data = buildBackup(expenses: expenses, categories: categories, budgets: budgets, recurring: recurring);
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}${Platform.pathSeparator}$fileName'); // Windowsで「\」と「/」が混ざらないようにする
+    await file.writeAsString(jsonEncode(data));
+    return file.path;
+  }
+
+  void _showError(String message, Object error, StackTrace stack) { // 画面には次にすることだけを出し、内部のエラー内容は開発用のログに残す
+    debugPrint('$message: $error\n$stack');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ============================================================
@@ -170,19 +169,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
         final file = await openFile(acceptedTypeGroups: const [typeGroup]);
         if (file == null) return;
+        if (await file.length() > _maxBackupBytes) throw const _TooLargeException();
         source = file.name;
         content = await file.readAsString();
       } else {
         final file = picked as File;
+        if (await file.length() > _maxBackupBytes) throw const _TooLargeException();
         source = file.uri.pathSegments.last;
         content = await file.readAsString();
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ファイルを読み込めませんでした: $e')),
-        );
-      }
+    } on _TooLargeException catch (e, st) {
+      _showError('ファイルが大きすぎます（${_maxBackupBytes ~/ (1024 * 1024)}MBまで）。家計簿のバックアップファイルか確認してください', e, st);
+      return;
+    } catch (e, st) {
+      _showError('ファイルを読み込めませんでした。家計簿のバックアップ（.json）を選んでいるか確認してください', e, st);
       return;
     }
     if (!mounted) return;
@@ -209,7 +209,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             '支出: ${data.expenses.length}件\n'
             'カテゴリ: ${data.categories.length}件\n'
             '予算: ${data.budgets.length}件\n'
-            '定期支出: ${data.recurring.length}件'),
+            '定期支出: ${data.recurring.length}件\n\n'
+            '復元の前に、今のデータを自動でバックアップします（元に戻したいときは、それを選んで復元してください）。'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
           FilledButton(
@@ -223,6 +224,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _working = true);
+    final safetyName = 'kakeibo_backup_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}_before_restore.json';
+    try { // 復元は取り消せないので、先に今のデータを書き出しておく（書き出せなければ復元しない）
+      await _writeBackupFile(safetyName);
+    } catch (e, st) {
+      if (mounted) setState(() => _working = false);
+      _showError('今のデータを退避できなかったため、復元を中止しました。端末の空き容量を確認してください', e, st);
+      return;
+    }
     try {
       final isar = ref.read(isarProvider).requireValue;
 
@@ -240,15 +249,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('復元が完了しました')),
+          SnackBar(content: Text('復元が完了しました（以前のデータは「$safetyName」に保存しました）')),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('復元に失敗しました: $e')),
-        );
-      }
+    } catch (e, st) {
+      _showError('復元に失敗しました。データは復元前のままです。もう一度お試しください', e, st); // 1つのトランザクションなので途中で失敗しても元のまま
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -296,12 +301,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         await notifyExported(context, path, subject: fileName);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('出力に失敗しました: $e')),
-        );
-      }
+    } catch (e, st) {
+      _showError('CSVを書き出せませんでした。端末の空き容量を確認して、もう一度お試しください', e, st);
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -354,7 +355,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ..sort();
 
       final buf = StringBuffer();
-      buf.writeln(['年月', ...cols.map((c) => _csv(c.name)), '合計'].join(',')); // カテゴリ名に「,」があっても列がずれないようにする
+      buf.writeln(['年月', ...cols.map((c) => escapeCsvCell(c.name)), '合計'].join(',')); // カテゴリ名に「,」があっても列がずれないようにする
 
       for (final month in months) {
         final mes = expenses.where((e) {
@@ -372,22 +373,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         await notifyExported(context, path, subject: fileName);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('出力に失敗しました: $e')),
-        );
-      }
+    } catch (e, st) {
+      _showError('CSVを書き出せませんでした。端末の空き容量を確認して、もう一度お試しください', e, st);
     } finally {
       if (mounted) setState(() => _working = false);
     }
-  }
-
-  String _csv(String v) {
-    if (v.contains(',') || v.contains('"') || v.contains('\n')) {
-      return '"${v.replaceAll('"', '""')}"';
-    }
-    return v;
   }
 
   // ============================================================
@@ -419,7 +409,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (controller.enabled) { // 有効→現在のPINを検証してから解除
       if (controller.isLocked) {
         messenger.showSnackBar(SnackBar(
-            content: Text('ロック中です。${controller.lockRemainingSeconds}秒後に再試行してください')));
+            content: Text('ロック中です。${controller.lockRemainingLabel}後に再試行してください')));
         return;
       }
       final pin = await _promptPin('現在のパスコードを入力');
@@ -431,7 +421,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!ok) {
         messenger.showSnackBar(SnackBar(
             content: Text(controller.isLocked
-                ? '5回連続で間違えたため30秒間ロックされました'
+                ? '5回連続で間違えたため、${controller.lockRemainingLabel}ロックされました'
                 : 'パスコードが違います')));
         return;
       }
@@ -657,10 +647,10 @@ class _SettingsTile extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: iconBgColor,
+          color: tonalIconColors(context, lightBackground: iconBgColor, color: iconColor).$1,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, size: 18, color: iconColor),
+        child: Icon(icon, size: 18, color: tonalIconColors(context, lightBackground: iconBgColor, color: iconColor).$2),
       ),
       title: Text(title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),

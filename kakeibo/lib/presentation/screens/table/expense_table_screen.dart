@@ -391,15 +391,17 @@ Widget _cell({
   required Color color,
   required Widget child,
 }) {
-  return Container(
-    width: w,
-    height: h,
-    decoration: BoxDecoration(
-      color: color,
-      border: Border.all(color: Colors.black12, width: 0.5),
+  return Builder( // 罫線の色をテーマから取るため（以前の black12 はダークモードで見えなかった）
+    builder: (context) => Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        color: color,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6), width: 0.5),
+      ),
+      alignment: Alignment.center,
+      child: child,
     ),
-    alignment: Alignment.center,
-    child: child,
   );
 }
 
@@ -428,7 +430,7 @@ class _DataCell extends StatelessWidget {
       width: w, height: h,
       decoration: BoxDecoration(
         color: bgColor,
-        border: Border.all(color: Colors.black12, width: 0.5),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6), width: 0.5),
       ),
       child: InkWell(
         onTap: onTap,
@@ -522,6 +524,7 @@ class _MonthAllExpenseListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
+          tooltip: '閉じる',
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/status_colors.dart';
 import '../../providers/budget_providers.dart';
 import '../../providers/expense_providers.dart';
 import '../../widgets/month_switcher_bar.dart';
@@ -225,7 +226,7 @@ class _BudgetSettingScreenState extends ConsumerState<BudgetSettingScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: isOver ? Colors.red.shade50 : Colors.green.shade50,
+                        color: StatusColors.of(context, danger: isOver).background,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -233,7 +234,7 @@ class _BudgetSettingScreenState extends ConsumerState<BudgetSettingScreen> {
                           Icon(
                             isOver ? Icons.warning_rounded : Icons.trending_up,
                             size: 16,
-                            color: isOver ? Colors.red.shade600 : Colors.green.shade600,
+                            color: StatusColors.of(context, danger: isOver).icon,
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -242,7 +243,7 @@ class _BudgetSettingScreenState extends ConsumerState<BudgetSettingScreen> {
                                 : '残り ¥${fmt.format(remaining)}',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: isOver ? Colors.red.shade700 : Colors.green.shade700,
+                                  color: StatusColors.of(context, danger: isOver).foreground,
                                 ),
                           ),
                         ],

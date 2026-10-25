@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/utils/format.dart';
+import '../../../../core/theme/status_colors.dart';
 
 class MonthlySummaryCard extends StatelessWidget {
   final double total;
@@ -93,11 +94,9 @@ class MonthlySummaryCard extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 Builder(builder: (context) {
                                   final diff = total - prevTotal!;
-                                  final diffColor = diff > 0
-                                      ? Colors.red.shade600 // 増加は赤
-                                      : diff < 0
-                                          ? Colors.green.shade600 // 減少は緑
-                                          : colorScheme.onSurfaceVariant;
+                                  final diffColor = diff == 0
+                                      ? colorScheme.onSurfaceVariant
+                                      : StatusColors.of(context, danger: diff > 0).icon; // 増加は赤・減少は緑（ダークでは明るめ）
                                   return Text(
                                     '前月${diff >= 0 ? '+' : '-'}¥${fmt.format(diff.abs())}',
                                     style: textTheme.bodySmall?.copyWith(
@@ -117,9 +116,7 @@ class MonthlySummaryCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: isOver
-                              ? Colors.red.shade50
-                              : Colors.green.shade50,
+                          color: StatusColors.of(context, danger: isOver).background,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -128,7 +125,7 @@ class MonthlySummaryCard extends StatelessWidget {
                             Icon(
                               isOver ? Icons.warning_rounded : Icons.trending_up,
                               size: 13,
-                              color: isOver ? Colors.red.shade600 : Colors.green.shade600,
+                              color: StatusColors.of(context, danger: isOver).icon,
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -136,7 +133,7 @@ class MonthlySummaryCard extends StatelessWidget {
                                   ? '¥${fmt.format(-remaining)} 超過'
                                   : '残り ¥${fmt.format(remaining)}',
                               style: textTheme.labelSmall?.copyWith(
-                                color: isOver ? Colors.red.shade700 : Colors.green.shade700,
+                                color: StatusColors.of(context, danger: isOver).foreground,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),

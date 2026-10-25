@@ -98,6 +98,7 @@ class ExpenseListTile extends ConsumerWidget {
           ),
           if (showDeleteButton) // Web版の支出一覧と同じクイック削除ボタン（ホームの最近の支出では非表示）
             IconButton(
+              tooltip: '削除',
               icon: const Icon(Icons.delete_outline, size: 18),
               color: Theme.of(context).colorScheme.outline,
               visualDensity: VisualDensity.compact,

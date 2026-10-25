@@ -1,0 +1,42 @@
+name: kakeibo CI
+
+on:
+  push:
+    branches: [master]
+    paths: ['kakeibo/**', '.github/workflows/kakeibo-ci.yml']
+  pull_request:
+    paths: ['kakeibo/**', '.github/workflows/kakeibo-ci.yml']
+
+# 同じブランチで新しい push があれば古い実行は打ち切る
+concurrency:
+  group: kakeibo-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kakeibo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Flutter を準備（開発 PC と同じ版）
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: 依存を取得
+        run: flutter pub get
+
+      - name: 静的解析（指摘ゼロ必須）
+        run: flutter analyze
+
+      # test/ の単体テスト（検索・祝日・パスコード・CSV・バックアップ）。実アプリを動かす integration_test/ は Windows 実機で手元実行する
+      - name: テスト
+        run: flutter test

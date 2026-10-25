@@ -81,6 +81,7 @@ class _PinPadState extends State<PinPad> {
                     height: 60,
                     child: isBackspace
                         ? IconButton(
+                            tooltip: '1文字消す',
                             onPressed: _backspace,
                             icon: const Icon(Icons.backspace_outlined),
                           )

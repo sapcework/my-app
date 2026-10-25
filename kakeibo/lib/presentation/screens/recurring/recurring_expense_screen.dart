@@ -173,6 +173,7 @@ class _RecurringExpenseTile extends ConsumerWidget {
                     ),
               ),
               IconButton(
+                tooltip: '編集',
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 visualDensity: VisualDensity.compact,
                 onPressed: () => showDialog<void>(
@@ -181,6 +182,7 @@ class _RecurringExpenseTile extends ConsumerWidget {
                 ),
               ),
               IconButton(
+                tooltip: '削除',
                 icon: const Icon(Icons.delete_outline, size: 18),
                 color: colorScheme.error,
                 visualDensity: VisualDensity.compact,

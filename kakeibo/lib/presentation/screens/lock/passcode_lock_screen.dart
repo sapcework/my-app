@@ -7,7 +7,7 @@ import '../../providers/passcode_provider.dart';
 import '../../widgets/pin_pad.dart';
 
 // アプリ起動時のパスコードロック画面（Web版 PasscodeLock.tsx に対応）
-// 5回連続失敗で30秒ロックし、カウントダウンを表示する
+// 5回連続失敗で一時ロック（回数を重ねるほど長く、最大30分）し、カウントダウンを表示する
 class PasscodeLockScreen extends ConsumerStatefulWidget {
   const PasscodeLockScreen({super.key});
 
@@ -107,7 +107,7 @@ class _PasscodeLockScreenState extends ConsumerState<PasscodeLockScreen> {
                             color: Theme.of(context).colorScheme.error),
                         const SizedBox(height: 12),
                         Text(
-                          '${controller.lockRemainingSeconds}秒後に再試行できます',
+                          '${controller.lockRemainingLabel}後に再試行できます',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Theme.of(context).colorScheme.error,
                               ),

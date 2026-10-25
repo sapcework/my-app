@@ -60,12 +60,14 @@ class CategoryListTile extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  tooltip: '編集',
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   color: colorScheme.onSurfaceVariant,
                   visualDensity: VisualDensity.compact,
                   onPressed: onTap,
                 ),
                 IconButton(
+                  tooltip: '削除',
                   icon: const Icon(Icons.delete_outline, size: 18),
                   color: colorScheme.error,
                   visualDensity: VisualDensity.compact,

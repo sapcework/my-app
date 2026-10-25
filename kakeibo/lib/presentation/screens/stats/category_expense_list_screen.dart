@@ -31,6 +31,7 @@ class CategoryExpenseListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
+          tooltip: '閉じる',
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),

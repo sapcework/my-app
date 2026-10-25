@@ -122,6 +122,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       appBar: AppBar(
         title: const Text('電卓'),
         leading: IconButton(
+          tooltip: '閉じる',
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(null),
         ),

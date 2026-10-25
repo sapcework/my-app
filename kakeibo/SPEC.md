@@ -4,7 +4,7 @@ Flutter 製の支出管理（家計簿）アプリ。ローカルDB（Isar）に
 Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えている。
 
 - 最終更新: 2026-10-25
-- バージョン: 1.2.0+3（更新履歴は「家計簿について」画面の `changelog` に記載）
+- バージョン: 1.3.0+4（更新履歴は「家計簿について」画面の `changelog` に記載）
 
 ---
 
@@ -244,7 +244,7 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 
 **データ管理**（バックアップ・CSV出力とも、書き出し前に対象ファイル名を表示する確認ダイアログを挟む。Web版と同じ）
 - バックアップ: 全データ（支出・カテゴリ・予算・定期支出）を JSON で Documents に保存。ファイル名 `kakeibo_backup_yyyyMMdd_HHmmss.json`（復元時に一覧から選べるよう日時まで含める。Web版はブラウザダウンロードのため日付のみ）。形式は **Web版と共通の v2**（`data/backup/backup_serializer.dart`）で、そのまま Web版で復元できる
-- 復元: **「ファイルを選ぶ…」（file_selector）または Documents 内のバックアップ一覧**から選択 → **全行を型検証**（`data/backup/backup_parser.dart`。金額が数値でない・日付形式不正・範囲外の値などが1件でもあればファイル全体を拒否し、何件目が不正かを表示）→ **確認ダイアログにファイル名と各データの件数を表示** → 全テーブルをクリアして復元。**v2（Web版と共通）と v1（このアプリの旧形式）の両方を読める**
+- 復元: **「ファイルを選ぶ…」（file_selector）または Documents 内のバックアップ一覧**から選択 → **全行を型検証**（`data/backup/backup_parser.dart`。金額が数値でない・日付形式不正・範囲外の値などが1件でもあればファイル全体を拒否し、何件目が不正かを表示）→ **確認ダイアログにファイル名と各データの件数を表示** → **復元の直前に今のデータを `kakeibo_backup_<日時>_before_restore.json` へ自動で書き出す**（書き出せなければ復元を中止。一覧に出るので、それを選べば元に戻せる）→ 1つのトランザクションで全テーブルをクリアして復元（途中で失敗しても元のまま）。**v2（Web版と共通）と v1（このアプリの旧形式）の両方を読める**。読むファイルは20MBまで
   - Android ではダウンロードフォルダ等をアプリから直接見られないため、Web版から持ってきた JSON は「ファイルを選ぶ…」で取り込む
   - 形式の詳細・ID の振り直し規則・変換で失われる項目は `docs/backup-format-v2.md` を参照
 - 全明細CSV: 全期間の明細を `kakeibo_all_yyyy-MM-dd.csv` に出力（ヘッダー: 日付,カテゴリ,項目名,メモ,金額,登録日時）
@@ -268,7 +268,9 @@ Web版（kakeiboWeb）とデザイン・タブ構成・主要機能を揃えて�
 - パスコードロック: 4桁PINでアプリ起動時にロック画面を表示（`passcode_lock_screen.dart` / `pin_pad.dart`）
   - ハッシュ化は PBKDF2-SHA256・20万回イテレーション（`core/utils/passcode_hash.dart`、isolateで実行）
   - 設定は `getApplicationSupportDirectory()/passcode.json` に保存（enabled / salt / hash / failedAttempts / lockedUntil）
-  - **5回連続で間違えると30秒間ロック**し、カウントダウンを表示（ブルートフォース対策）
+  - **5回連続で間違えると一時ロック**し、カウントダウンを表示。待ち時間はロックされるたびに 30秒→1分→5分→15分→30分（以後30分）と延び、解錠に成功すると最初に戻る（FastNote と同じ。4桁PINの総当たり対策）
+  - **アプリを1分以上裏に回して戻ると再ロック**（`AppLifecycleListener` の onHide/onShow）。起動直後のロックは専用の MaterialApp、使っている途中の再ロックは `/lock` ルートを上に重ねるので、入力途中のフォームなどは消えない。`/lock` では戻るボタンでロックを外せない（アプリを閉じる）
+  - パスコードはのぞき見防止で、DB自体は暗号化していない（Windows では Documents の DB ファイルを直接読める）
   - 設定画面から有効化（新PINを2回入力）・解除（現PINを検証）
 
 **このアプリについて**
@@ -395,6 +397,17 @@ root の `subprojects` ブロックで次の2点を補っている。
 長期的にはメンテされている fork（isar_community 等）への移行を検討する価値がある。
 
 ---
+
+## 8.5 セキュリティ・エラー処理の方針（2026-10-25 の総合レビューで整理）
+
+- 通信しない（INTERNET 権限なし）。サーバー・認証・Cookie が無いので XSS / CSRF / SQLi / SSRF / JWT などは対象外。Isar は型付きクエリで文字列からクエリを組み立てない
+- Android の自動バックアップ・端末間転送から除外（`allowBackup="false"` と `res/xml/data_extraction_rules.xml`）。機種変更は「バックアップ」で書き出したファイルで移す
+- CSV は `escapeCsvCell`（`export_csv_usecase.dart`）1つで書き出す。カンマ・引用符・改行（\n と \r）を引用符で囲み、`= + - @ タブ CR` で始まる値は先頭に `'` を付けて Excel の数式実行を防ぐ（CSV インジェクション対策）
+- エラーは、画面に「次にすること」が分かる文だけを出し、内部の例外は `debugPrint` で開発用ログに出す。起動に失敗したときは `StartupErrorScreen`（もう一度試す）
+- 支出の保存は成功時に「追加しました／更新しました」、失敗時は入力を残したまま理由を表示
+- アイコンだけのボタンには `tooltip` を付ける（TalkBack の読み上げ名になる）
+- 予算の超過／残り・前月比の色は `core/theme/status_colors.dart` を使う（ダークモード対応。色を直書きしない）
+- CI: `.github/workflows/kakeibo-ci.yml`（`flutter analyze` と `flutter test`）。`integration_test/` は Windows 実機で手元実行
 
 ## 9. 今後の候補
 
