@@ -42,6 +42,7 @@ class SettingsController extends ChangeNotifier {
   double _detailPadding = defaultPadding;
   ThemeMode _themeMode = ThemeMode.system; // ナイトモードを一度も切り替えていなければ端末の設定に合わせる
   int _appColor = defaultAppColor;
+  bool _openInReadMode = false; // 既存のメモをキーボードを出さない「読むモード」で開くか（初期値は高速メモ帳と同じく書くモード）
 
   SortMode get sort => _sort;
   double get listFontSize => _listFontSize;
@@ -52,6 +53,7 @@ class SettingsController extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   int get appColorIndex => _appColor;
   Color get appColor => appColors[_appColor].$2;
+  bool get openInReadMode => _openInReadMode;
 
   Future<void> load() async {
     final m = await _store.read();
@@ -66,6 +68,7 @@ class SettingsController extends ChangeNotifier {
     _themeMode = ThemeMode.values.asNameMap()[m['themeMode']] ?? ThemeMode.system;
     final c = (m['appColor'] as num?)?.toInt() ?? defaultAppColor;
     _appColor = c >= 0 && c < appColors.length ? c : defaultAppColor;
+    _openInReadMode = m['openInReadMode'] == true;
     notifyListeners();
   }
 
@@ -78,6 +81,7 @@ class SettingsController extends ChangeNotifier {
         'detailPadding': _detailPadding,
         'themeMode': _themeMode.name,
         'appColor': _appColor,
+        'openInReadMode': _openInReadMode,
       });
 
   Future<void> setSort(SortMode v) async {
@@ -122,6 +126,12 @@ class SettingsController extends ChangeNotifier {
     _lineHeight = defaultLineHeight;
     _letterSpacing = defaultLetterSpacing;
     _detailPadding = defaultPadding;
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> setOpenInReadMode(bool v) async {
+    _openInReadMode = v;
     notifyListeners();
     await _save();
   }

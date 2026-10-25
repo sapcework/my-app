@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus;
 
@@ -13,7 +14,8 @@ import 'note_actions.dart';
 import 'widgets/color_sheet.dart';
 import 'widgets/max_width.dart';
 
-// メモの編集画面。入力は少し間を置いて自動保存し、画面を離れるときとアプリが裏に回るときにも保存する
+// メモの編集画面。入力は少し間を置いて自動保存し、画面を離れるときとアプリが裏に回るときにも保存する。
+// 「読むモード」ではキーボードを出さずに表示する（長いメモを選んでコピーするときに、キーボードがメニューや本文をふさがないように）
 class NoteEditScreen extends ConsumerStatefulWidget {
   final String? noteId; // null なら新規（何か書くまで保存しない）
   final String? folderId; // 新規メモを入れるフォルダ
@@ -23,7 +25,7 @@ class NoteEditScreen extends ConsumerStatefulWidget {
   ConsumerState<NoteEditScreen> createState() => _NoteEditScreenState();
 }
 
-enum _Menu { star, reminder, undo, redo, end, move, share, delete }
+enum _Menu { star, reminder, copyAll, undo, redo, top, end, move, share, delete }
 
 class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBindingObserver {
   static const _debounce = Duration(milliseconds: 700);
@@ -38,6 +40,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
   bool _dirty = false;
   bool _saved = false; // この画面で一度でも保存したか（閉じるときに「保存されました」を出す）
   bool _deleted = false;
+  late bool _readOnly; // 読むモード（キーボードを出さない）
   Future<void> _saving = Future.value(); // 保存を直列にする（新規作成が二重にならないように）
 
   @override
@@ -45,6 +48,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
     super.initState();
     _notes = ref.read(notesProvider);
     _id = widget.noteId;
+    _readOnly = widget.noteId != null && ref.read(settingsProvider).openInReadMode; // 新しいメモはすぐ書けるよう常に書くモード
     _text = TextEditingController(text: _id == null ? '' : _notes.byId(_id!)?.body ?? '');
     WidgetsBinding.instance.addObserver(this);
   }
@@ -118,12 +122,27 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
     await showColorSheet(context, bg: n.bgColor, fg: n.textColor, onChanged: (bg, fg) => _notes.updateColors(id, bg: bg, fg: fg));
   }
 
-  void _toEnd() { // 末尾へカーソルを移して、そこまでスクロールする
-    _focus.requestFocus();
-    _text.selection = TextSelection.collapsed(offset: _text.text.length);
+  void _scrollTo({required bool end}) { // 先頭・末尾へスクロールする。書くモードではカーソルも動かす（読むモードではキーボードを出さない）
+    if (!_readOnly) {
+      _focus.requestFocus();
+      _text.selection = TextSelection.collapsed(offset: end ? _text.text.length : 0);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (_scroll.hasClients) _scroll.jumpTo(end ? _scroll.position.maxScrollExtent : 0);
     });
+  }
+
+  void _setReadOnly(bool v) {
+    if (v) _flush(); // 読むモードに入る前に保存しておく
+    _focus.unfocus(); // キーボードを閉じる（書くモードに戻すときは、付け直してキーボードを出す）
+    setState(() => _readOnly = v);
+    if (!v) WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
+
+  Future<void> _copyAll() async {
+    if (_text.text.isEmpty) return showMessage('コピーする本文がありません');
+    await Clipboard.setData(ClipboardData(text: _text.text));
+    showMessage('全文をコピーしました');
   }
 
   Future<void> _onMenu(_Menu m) async {
@@ -132,8 +151,12 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
         _undo.undo();
       case _Menu.redo:
         _undo.redo();
+      case _Menu.top:
+        _scrollTo(end: false);
       case _Menu.end:
-        _toEnd();
+        _scrollTo(end: true);
+      case _Menu.copyAll:
+        await _copyAll();
       case _Menu.share:
         final text = _text.text;
         if (text.trim().isEmpty) return showMessage('共有する本文がありません');
@@ -184,6 +207,9 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
         title: Text(notes.scopeName(NoteScope.folder(note?.folderId ?? widget.folderId)), maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           if (note?.starred ?? false) const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: Icon(Icons.star, semanticLabel: '☆付き')),
+          _readOnly
+              ? IconButton(tooltip: '書く', icon: const Icon(Icons.edit_outlined), onPressed: () => _setReadOnly(false))
+              : IconButton(tooltip: '読むモード（キーボードを出さない）', icon: const Icon(Icons.chrome_reader_mode_outlined), onPressed: () => _setReadOnly(true)),
           IconButton(tooltip: '色', icon: const Icon(Icons.contrast), onPressed: _colors),
           ValueListenableBuilder<UndoHistoryValue>(
             valueListenable: _undo,
@@ -193,8 +219,10 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
               itemBuilder: (_) => [
                 item(_Menu.star, note?.starred ?? false ? Icons.star : Icons.star_border, note?.starred ?? false ? '☆を外す' : '☆を付ける'),
                 item(_Menu.reminder, upcoming ? Icons.alarm_on : Icons.alarm, upcoming ? 'リマインダー（${formatReminder(note.reminderAt!)}）' : 'リマインダー'),
-                item(_Menu.undo, Icons.undo, '編集を元に戻す', enabled: undo.canUndo),
-                item(_Menu.redo, Icons.redo, 'やり直す', enabled: undo.canRedo),
+                item(_Menu.copyAll, Icons.copy_all_outlined, '全文をコピー'),
+                item(_Menu.undo, Icons.undo, '編集を元に戻す', enabled: undo.canUndo && !_readOnly),
+                item(_Menu.redo, Icons.redo, 'やり直す', enabled: undo.canRedo && !_readOnly),
+                item(_Menu.top, Icons.vertical_align_top, '最初へ'),
                 item(_Menu.end, Icons.vertical_align_bottom, '最後へ'),
                 item(_Menu.move, Icons.drive_file_move_outlined, 'フォルダへ移動'),
                 item(_Menu.share, Icons.share_outlined, '共有'),
@@ -212,6 +240,8 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
           focusNode: _focus,
           onChanged: _onChanged,
           autofocus: widget.noteId == null,
+          readOnly: _readOnly, // 読むモードではキーボードを出さない（長押しでの選択とコピーはできる）
+          showCursor: !_readOnly,
           expands: true,
           maxLines: null,
           keyboardType: TextInputType.multiline,

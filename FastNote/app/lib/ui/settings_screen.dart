@@ -317,6 +317,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         absorbing: _busy,
         child: ListView(children: [
           header('表示'),
+          SwitchListTile(
+            secondary: const Icon(Icons.chrome_reader_mode_outlined),
+            title: const Text('メモを読むモードで開く'),
+            subtitle: const Text('キーボードを出さずに表示するので、長いメモを選んでコピーしやすくなります。書くときは上のペンのボタンを押します'),
+            value: settings.openInReadMode,
+            onChanged: settings.setOpenInReadMode,
+          ),
           ListTile(
             leading: const Icon(Icons.format_size),
             title: const Text('文字の大きさ・行間'),

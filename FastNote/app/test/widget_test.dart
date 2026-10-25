@@ -16,6 +16,7 @@ import 'package:fastnote/ui/settings_screen.dart';
 import 'package:fastnote/ui/text_layout_screen.dart';
 import 'package:fastnote/ui/widgets/backup_password_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -436,5 +437,58 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Drawer), findsNothing);
     expect(listedTitles(tester), ['マイノートのメモ']);
+  });
+
+  bool fieldReadOnly(WidgetTester tester) => tester.widget<TextField>(find.byType(TextField)).readOnly;
+
+  testWidgets('読むモード：設定がオフなら書くモードで開き、オンなら読むモードで開いてペンのボタンで書ける', (tester) async {
+    await start(tester, bodies: ['長いメモ']);
+    await tester.tap(find.text('長いメモ'));
+    await tester.pumpAndSettle();
+    expect(fieldReadOnly(tester), isFalse, reason: '初期値は今までどおり書くモード');
+    await tester.tap(find.byTooltip('読むモード（キーボードを出さない）'));
+    await tester.pumpAndSettle();
+    expect(fieldReadOnly(tester), isTrue);
+    await back(tester);
+
+    await settings.setOpenInReadMode(true);
+    await tester.tap(find.text('長いメモ'));
+    await tester.pumpAndSettle();
+    expect(fieldReadOnly(tester), isTrue, reason: '設定がオンなら読むモードで開く');
+    expect(tester.widget<TextField>(find.byType(TextField)).showCursor, isFalse);
+    await tester.tap(find.byTooltip('書く'));
+    await tester.pumpAndSettle();
+    expect(fieldReadOnly(tester), isFalse);
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus, isTrue, reason: '書くモードに戻すとすぐ書ける');
+    await back(tester);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    expect(fieldReadOnly(tester), isFalse, reason: '新しいメモは設定に関係なく書くモード');
+  });
+
+  testWidgets('「全文をコピー」で本文がクリップボードに入り、「最初へ」「最後へ」でスクロールする', (tester) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String?;
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    final long = ['長い本文', for (var i = 1; i <= 80; i++) '$i 行目'].join('\n');
+    await start(tester, bodies: [long]);
+    await settings.setOpenInReadMode(true);
+    await tester.tap(find.text('長い本文'));
+    await tester.pumpAndSettle();
+
+    await editorMenu(tester, '全文をコピー');
+    expect(copied, long);
+    expect(find.text('全文をコピーしました'), findsOneWidget);
+
+    final scroll = tester.widget<TextField>(find.byType(TextField)).scrollController!;
+    await editorMenu(tester, '最後へ');
+    expect(scroll.offset, greaterThan(0));
+    expect(fieldReadOnly(tester), isTrue, reason: '読むモードのままキーボードを出さない');
+    await editorMenu(tester, '最初へ');
+    expect(scroll.offset, 0);
   });
 }

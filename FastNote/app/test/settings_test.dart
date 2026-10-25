@@ -50,4 +50,14 @@ void main() {
       SettingsController.defaultLetterSpacing,
     ]);
   });
+
+  test('「メモを読むモードで開く」は初期値オフで、保存される', () async {
+    final a = SettingsController(JsonFile(file));
+    await a.load();
+    expect(a.openInReadMode, isFalse, reason: '旧版の設定ファイル（項目なし）でもオフ');
+    await a.setOpenInReadMode(true);
+    final b = SettingsController(JsonFile(file));
+    await b.load();
+    expect(b.openInReadMode, isTrue);
+  });
 }
