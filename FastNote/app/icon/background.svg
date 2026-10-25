@@ -1,0 +1,21 @@
+<!-- FastNote のアイコン（背景）。108x108 の全面を塗り、端末がこれを丸・角丸などに切り抜く -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="108" y2="108" gradientUnits="userSpaceOnUse"> <!-- 左上から右下への3色 -->
+      <stop offset="0" stop-color="#FF2E93"/> <!-- マゼンタ -->
+      <stop offset="0.5" stop-color="#8A3FFC"/> <!-- 紫 -->
+      <stop offset="1" stop-color="#00A8FF"/> <!-- 青 -->
+    </linearGradient>
+    <radialGradient id="glow" cx="92" cy="14" r="62" gradientUnits="userSpaceOnUse"> <!-- 右上の淡い光で奥行きを出す -->
+      <stop offset="0" stop-color="#6FF7FF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#5EF2FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="warm" cx="10" cy="100" r="50" gradientUnits="userSpaceOnUse"> <!-- 左下の暖色 -->
+      <stop offset="0" stop-color="#FFB03A" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FF9A5A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#base)"/>
+  <rect width="108" height="108" fill="url(#warm)"/>
+  <rect width="108" height="108" fill="url(#glow)"/>
+</svg>

@@ -1,20 +1,49 @@
-<!-- Android 7 以前の旧形式のアイコンと、アプリ内（FastNote について）に出すアイコン。角丸の背景込み。前景は foreground.svg と同じ形を少し大きくしたもの -->
+<!-- Android 7 以前の旧形式のアイコンと、アプリ内（FastNote について）に出すアイコン。角丸の背景込み。背景は background.svg、前景は foreground.svg と同じ絵柄を少し大きくしたもの -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#7D8BF5"/>
-      <stop offset="1" stop-color="#5F6FEF"/>
+    <linearGradient id="base" x1="4" y1="4" x2="104" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF2E93"/>
+      <stop offset="0.5" stop-color="#8A3FFC"/>
+      <stop offset="1" stop-color="#00A8FF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="90" cy="16" r="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FF7FF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#5EF2FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="warm" cx="14" cy="96" r="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB03A" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FF9A5A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="paper" x1="0" y1="30" x2="0" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9E3FF"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="62" y1="30" x2="72" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4C6FF"/>
+      <stop offset="1" stop-color="#B9C8FF"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="41" y1="0" x2="62" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4FB0"/>
+      <stop offset="1" stop-color="#3D8BFF"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="49" x2="0" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE259"/>
+      <stop offset="1" stop-color="#FF8A3D"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="100" height="100" rx="24" fill="url(#bg)"/>
+  <rect x="4" y="4" width="100" height="100" rx="24" fill="url(#base)"/>
+  <rect x="4" y="4" width="100" height="100" rx="24" fill="url(#warm)"/>
+  <rect x="4" y="4" width="100" height="100" rx="24" fill="url(#glow)"/>
   <g transform="translate(54 54) scale(1.3) translate(-54 -54)">
-    <path d="M38 30 H62 L72 40 V74 Q72 78 68 78 H38 Q34 78 34 74 V34 Q34 30 38 30 Z" fill="#FFFFFF"/>
-    <path d="M62 30 V36 Q62 40 66 40 H72 Z" fill="#D5DAFB"/>
-    <g stroke="#B8C0F8" stroke-width="3" stroke-linecap="round">
+    <path d="M40 33 H64 L74 43 V77 Q74 81 70 81 H40 Q36 81 36 77 V37 Q36 33 40 33 Z" fill="#2A1450" fill-opacity="0.28"/>
+    <path d="M38 30 H62 L72 40 V74 Q72 78 68 78 H38 Q34 78 34 74 V34 Q34 30 38 30 Z" fill="url(#paper)"/>
+    <path d="M62 30 V36 Q62 40 66 40 H72 Z" fill="url(#fold)"/>
+    <g stroke="url(#rule)" stroke-width="3.5" stroke-linecap="round">
       <line x1="41" y1="47" x2="62" y2="47"/>
       <line x1="41" y1="55" x2="58" y2="55"/>
       <line x1="41" y1="63" x2="52" y2="63"/>
     </g>
-    <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="#FFC83D" stroke="#6A79F1" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="url(#bolt)" stroke="#3B1D6E" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M71.8 52.4 L66.4 60.6" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="1.4" stroke-linecap="round"/>
   </g>
 </svg>

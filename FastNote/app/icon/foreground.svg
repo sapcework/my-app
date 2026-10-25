@@ -1,14 +1,31 @@
-<!-- FastNote のアイコン（前景）。108x108 の座標で、絵柄は中心から半径33以内（どの形に切り抜かれても残る範囲）に収める -->
+<!-- FastNote のアイコン（前景）。108x108 の座標で、絵柄は中心から半径33以内（どの形に切り抜かれても残る範囲）に収める。形を変えたら legacy.svg・monochrome.svg も直す -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
-  <!-- メモ用紙（右上を折り返している） -->
-  <path d="M38 30 H62 L72 40 V74 Q72 78 68 78 H38 Q34 78 34 74 V34 Q34 30 38 30 Z" fill="#FFFFFF"/>
-  <path d="M62 30 V36 Q62 40 66 40 H72 Z" fill="#D5DAFB"/>
-  <!-- 罫線 -->
-  <g stroke="#B8C0F8" stroke-width="3" stroke-linecap="round">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="30" x2="0" y2="78" gradientUnits="userSpaceOnUse"> <!-- 用紙：白から淡いラベンダー -->
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9E3FF"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="62" y1="30" x2="72" y2="40" gradientUnits="userSpaceOnUse"> <!-- 折り返し -->
+      <stop offset="0" stop-color="#F4C6FF"/>
+      <stop offset="1" stop-color="#B9C8FF"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="41" y1="0" x2="62" y2="0" gradientUnits="userSpaceOnUse"> <!-- 罫線：ピンクから青 -->
+      <stop offset="0" stop-color="#FF4FB0"/>
+      <stop offset="1" stop-color="#3D8BFF"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="49" x2="0" y2="84" gradientUnits="userSpaceOnUse"> <!-- 稲妻：黄からオレンジ -->
+      <stop offset="0" stop-color="#FFE259"/>
+      <stop offset="1" stop-color="#FF8A3D"/>
+    </linearGradient>
+  </defs>
+  <path d="M40 33 H64 L74 43 V77 Q74 81 70 81 H40 Q36 81 36 77 V37 Q36 33 40 33 Z" fill="#2A1450" fill-opacity="0.28"/> <!-- 影（ぼかしは使えないので半透明の図形をずらす） -->
+  <path d="M38 30 H62 L72 40 V74 Q72 78 68 78 H38 Q34 78 34 74 V34 Q34 30 38 30 Z" fill="url(#paper)"/> <!-- メモ用紙（右上を折り返している） -->
+  <path d="M62 30 V36 Q62 40 66 40 H72 Z" fill="url(#fold)"/>
+  <g stroke="url(#rule)" stroke-width="3.5" stroke-linecap="round"> <!-- 罫線 -->
     <line x1="41" y1="47" x2="62" y2="47"/>
     <line x1="41" y1="55" x2="58" y2="55"/>
     <line x1="41" y1="63" x2="52" y2="63"/>
   </g>
-  <!-- 稲妻（すぐ書ける）。背景色の縁取りで用紙と切り離して見せる -->
-  <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="#FFC83D" stroke="#6D7CF2" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M71 49 L58 68 H66 L61 84 L79 62 H70 L75 49 Z" fill="url(#bolt)" stroke="#3B1D6E" stroke-width="2.4" stroke-linejoin="round"/> <!-- 稲妻（すぐ書ける）。濃い紫の縁取りで用紙と背景から切り離す -->
+  <path d="M71.8 52.4 L66.4 60.6" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="1.4" stroke-linecap="round"/> <!-- 稲妻のつや -->
 </svg>

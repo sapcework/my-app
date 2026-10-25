@@ -11,6 +11,9 @@ const appDeveloper = 'sapcework';
 const appCopyright = '© 2026 $appDeveloper';
 
 const changelog = <(String version, String date, List<String> items)>[ // 新しい版を先頭に足していく
+  ('1.4.1', '2026-10-25', [
+    'アイコンをカラフルなグラデーションのデザインに変え、高解像度にしました',
+  ]),
   ('1.4.0', '2026-10-19', [
     'キーボードを出さずにメモを表示する「読むモード」を追加しました（上のボタンで切り替え。長いメモを選んでコピーしやすくなります）',
     '設定で、メモを読むモードで開くかどうかを選べるようにしました',
