@@ -65,7 +65,7 @@ class RecurringExpenseRepositoryImpl implements RecurringExpenseRepository {
         final expense = ExpenseModel()
           ..amount = model.amount
           ..categoryId = model.categoryId
-          ..memo = model.name
+          ..itemName = model.name // 名前は項目名に入れる（Web版の itemName と同じ）
           ..date = date
           ..createdAt = now;
         await _isar.expenseModels.put(expense);

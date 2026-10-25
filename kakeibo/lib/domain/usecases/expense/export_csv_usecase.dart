@@ -4,8 +4,48 @@ import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../entities/category.dart';
+import '../../entities/expense.dart';
 import '../../repositories/category_repository.dart';
 import '../../repositories/expense_repository.dart';
+
+/// 支出明細CSV（ヘッダー＋日付昇順の明細行）を組み立てる。
+/// 全明細CSVと統計の選択月CSVで同じ形式にする（Web版の expenseDetailRows と同じ列構成）。
+String buildExpenseDetailCsv(List<Expense> expenses, List<Category> categories) {
+  final catMap = {for (final c in categories) if (c.id != null) c.id!: c};
+  final sorted = [...expenses]..sort((a, b) => a.date.compareTo(b.date));
+
+  final buf = StringBuffer();
+  buf.writeln('日付,カテゴリ,項目名,メモ,金額,登録日時');
+  final dateFmt = DateFormat('yyyy/MM/dd');
+  final tsFmt = DateFormat('yyyyMMddHHmmss');
+  for (final e in sorted) {
+    buf.writeln([
+      dateFmt.format(e.date),
+      _escapeCsv(catMap[e.categoryId]?.name ?? '不明'),
+      _escapeCsv(e.itemName ?? ''),
+      _escapeCsv(e.memo ?? ''),
+      e.amount.toStringAsFixed(0),
+      tsFmt.format(e.createdAt),
+    ].join(','));
+  }
+  return buf.toString();
+}
+
+/// BOM付きUTF-8でExcelが文字化けしないように、Documents直下へ書き出してパスを返す
+Future<String> writeCsvToDocuments(String fileName, String csv) async {
+  final dir = await getApplicationDocumentsDirectory();
+  final file = File('${dir.path}${Platform.pathSeparator}$fileName'); // Windowsで「\」と「/」が混ざらないようにする
+  await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
+  return file.path;
+}
+
+String _escapeCsv(String value) {
+  if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+    return '"${value.replaceAll('"', '""')}"';
+  }
+  return value;
+}
 
 class ExportCsvUseCase {
   final ExpenseRepository _expenseRepo;
@@ -15,30 +55,7 @@ class ExportCsvUseCase {
   Future<String> call(int year, int month) async {
     final expenses = await _expenseRepo.watchByMonth(year, month).first;
     final categories = await _categoryRepo.watchAll().first;
-    final categoryMap = {for (final c in categories) if (c.id != null) c.id!: c};
-
-    final buffer = StringBuffer();
-    buffer.writeln('日付,金額,カテゴリ,メモ');
-    final fmt = DateFormat('yyyy/MM/dd');
-    for (final e in expenses) {
-      final date = fmt.format(e.date);
-      final category = _escapeCsv(categoryMap[e.categoryId]?.name ?? '');
-      final memo = _escapeCsv(e.memo ?? '');
-      buffer.writeln('$date,${e.amount.toStringAsFixed(0)},$category,$memo');
-    }
-
-    final dir = await getApplicationDocumentsDirectory();
     final fileName = 'kakeibo_${year}_${month.toString().padLeft(2, '0')}.csv';
-    final file = File('${dir.path}/$fileName');
-    // BOM付きUTF-8でExcelが文字化けしないように書き出す
-    await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buffer.toString())]);
-    return file.path;
-  }
-
-  String _escapeCsv(String value) {
-    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-      return '"${value.replaceAll('"', '""')}"';
-    }
-    return value;
+    return writeCsvToDocuments(fileName, buildExpenseDetailCsv(expenses, categories));
   }
 }

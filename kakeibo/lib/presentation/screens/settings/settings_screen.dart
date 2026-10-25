@@ -16,6 +16,7 @@ import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/expense_model.dart';
 import '../../../data/models/recurring_expense_model.dart';
+import '../../../domain/usecases/expense/export_csv_usecase.dart' show buildExpenseDetailCsv, writeCsvToDocuments;
 import '../../providers/category_providers.dart';
 import '../../providers/isar_provider.dart';
 import '../../providers/passcode_provider.dart';
@@ -80,7 +81,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/$fileName');
+      final file = File('${dir.path}${Platform.pathSeparator}$fileName'); // Windowsで「\」と「/」が混ざらないようにする
       await file.writeAsString(jsonEncode(data));
 
       if (mounted) {
@@ -289,31 +290,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _working = true);
     try {
       final categories = await categoryRepo.watchAll().first;
-      final catMap = {for (final c in categories) if (c.id != null) c.id!: c};
-
-      final sorted = [...expenses]..sort((a, b) => a.date.compareTo(b.date));
-
-      final buf = StringBuffer();
-      buf.writeln('日付,カテゴリ,項目名,メモ,金額,登録日時');
-      final dateFmt = DateFormat('yyyy/MM/dd');
-      final tsFmt = DateFormat('yyyyMMddHHmmss');
-      for (final e in sorted) {
-        buf.writeln([
-          dateFmt.format(e.date),
-          _csv(catMap[e.categoryId]?.name ?? '不明'),
-          _csv(e.itemName ?? ''),
-          _csv(e.memo ?? ''),
-          e.amount.toStringAsFixed(0),
-          tsFmt.format(e.createdAt),
-        ].join(','));
-      }
-
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buf.toString())]);
+      final path = await writeCsvToDocuments(fileName, buildExpenseDetailCsv(expenses, categories));
 
       if (mounted) {
-        await notifyExported(context, file.path, subject: fileName);
+        await notifyExported(context, path, subject: fileName);
       }
     } catch (e) {
       if (mounted) {
@@ -373,7 +353,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ..sort();
 
       final buf = StringBuffer();
-      buf.writeln(['年月', ...cols.map((c) => c.name), '合計'].join(','));
+      buf.writeln(['年月', ...cols.map((c) => _csv(c.name)), '合計'].join(',')); // カテゴリ名に「,」があっても列がずれないようにする
 
       for (final month in months) {
         final mes = expenses.where((e) {
@@ -386,12 +366,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         buf.writeln([month, ...catTotals.map((v) => v.toStringAsFixed(0)), total.toStringAsFixed(0)].join(','));
       }
 
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(buf.toString())]);
+      final path = await writeCsvToDocuments(fileName, buf.toString());
 
       if (mounted) {
-        await notifyExported(context, file.path, subject: fileName);
+        await notifyExported(context, path, subject: fileName);
       }
     } catch (e) {
       if (mounted) {
