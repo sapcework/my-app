@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui show BoxWidthStyle;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -13,6 +14,7 @@ import '../state/settings.dart';
 import 'note_actions.dart';
 import 'widgets/color_sheet.dart';
 import 'widgets/max_width.dart';
+import 'widgets/selection_tools.dart';
 
 // メモの編集画面。入力は少し間を置いて自動保存し、画面を離れるときとアプリが裏に回るときにも保存する。
 // 「読むモード」ではキーボードを出さずに表示する（長いメモを選んでコピーするときに、キーボードがメニューや本文をふさがないように）
@@ -233,27 +235,34 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> with WidgetsBin
         ],
       ),
       body: SafeArea(
-        child: MaxWidth(child: TextField( // タブレットでは読みやすい幅に収める
-          controller: _text,
-          undoController: _undo,
-          scrollController: _scroll,
-          focusNode: _focus,
-          onChanged: _onChanged,
-          autofocus: widget.noteId == null,
-          readOnly: _readOnly, // 読むモードではキーボードを出さない（長押しでの選択とコピーはできる）
-          showCursor: !_readOnly,
-          expands: true,
-          maxLines: null,
-          keyboardType: TextInputType.multiline,
-          textAlignVertical: TextAlignVertical.top,
-          cursorColor: c.fg,
-          style: TextStyle(fontSize: settings.detailFontSize, height: settings.lineHeight, letterSpacing: settings.letterSpacing, color: c.fg),
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.fromLTRB(settings.detailPadding, 8, settings.detailPadding, 24), // 左右の余白は設定で変えられる
-            hintText: '1行目がタイトルになります',
+        child: Column(children: [
+          Expanded(
+            child: MaxWidth(child: TextField( // タブレットでは読みやすい幅に収める
+              controller: _text,
+              undoController: _undo,
+              scrollController: _scroll,
+              focusNode: _focus,
+              onChanged: _onChanged,
+              autofocus: widget.noteId == null,
+              readOnly: _readOnly, // 読むモードではキーボードを出さない（長押しでの選択とコピーはできる）
+              showCursor: !_readOnly,
+              expands: true,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              textAlignVertical: TextAlignVertical.top,
+              cursorColor: c.fg,
+              selectionWidthStyle: ui.BoxWidthStyle.tight, // 既定では短い行の選択が一番長い行の幅まで塗られ、空白まで選んだように見える
+              magnifierConfiguration: NoteMagnifier.configuration, // 指に隠れない位置に大きく出す
+              style: TextStyle(fontSize: settings.detailFontSize, height: settings.lineHeight, letterSpacing: settings.letterSpacing, color: c.fg),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.fromLTRB(settings.detailPadding, 8, settings.detailPadding, 24), // 左右の余白は設定で変えられる
+                hintText: '1行目がタイトルになります',
+              ),
+            )),
           ),
-        )),
+          SelectionBar(controller: _text, focusNode: _focus), // 文字を選んでいる間だけ出る
+        ]),
       ),
     );
   }

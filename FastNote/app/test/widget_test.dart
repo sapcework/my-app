@@ -15,6 +15,7 @@ import 'package:fastnote/ui/widgets/max_width.dart';
 import 'package:fastnote/ui/settings_screen.dart';
 import 'package:fastnote/ui/text_layout_screen.dart';
 import 'package:fastnote/ui/widgets/backup_password_dialog.dart';
+import 'package:fastnote/ui/widgets/selection_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -490,5 +491,46 @@ void main() {
     expect(fieldReadOnly(tester), isTrue, reason: '読むモードのままキーボードを出さない');
     await editorMenu(tester, '最初へ');
     expect(scroll.offset, 0);
+  });
+
+  testWidgets('メモの文字を選ぶと、短い行の右の空白までは塗られず、微調整のバーが出る', (tester) async {
+    await start(tester, bodies: ['長い行のメモです\n短い\n終わり']); // 短=9、い=10、改行=11
+    await settings.setOpenInReadMode(true);
+    await tester.tap(find.text('長い行のメモです'));
+    await tester.pumpAndSettle();
+    expect(find.text('始点'), findsNothing);
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    field.controller!.selection = const TextSelection(baseOffset: 10, extentOffset: 11);
+    await tester.pump();
+    final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
+    final long = render.getBoxesForSelection(const TextSelection(baseOffset: 0, extentOffset: 8)).last.right;
+    final short = render.getBoxesForSelection(field.controller!.selection).map((b) => b.right).reduce((a, b) => a > b ? a : b);
+    expect(short, lessThan(long / 2), reason: '「短い」の右端で止まり、長い行の幅までは伸びない');
+
+    await tester.tap(find.byTooltip('始点を行の先頭へ'));
+    await tester.pump();
+    expect(field.controller!.selection.textInside(field.controller!.text), '短い');
+    expect(fieldReadOnly(tester), isTrue, reason: 'バーを押してもキーボードは出さない');
+  });
+
+  testWidgets('メモを長押しして指を動かすと、大きい拡大鏡が出て、離すと微調整のバーが残る', (tester) async {
+    await start(tester, bodies: ['見出し\n${List.filled(12, 'abcdefgh ijklmnop qrstuvwx').join('\n')}']);
+    await settings.setOpenInReadMode(true);
+    await tester.tap(find.text('見出し'));
+    await tester.pumpAndSettle();
+
+    final at = tester.getTopLeft(find.byType(EditableText)) + const Offset(40, 150); // 上から数行目
+    final gesture = await tester.startGesture(at);
+    await tester.pump(const Duration(milliseconds: 600)); // 長押し
+    await gesture.moveBy(const Offset(60, 0));
+    await tester.pump();
+    expect(find.byType(NoteMagnifier), findsOneWidget);
+    expect(tester.getRect(find.byType(RawMagnifier)).bottom, lessThan(at.dy - 10), reason: '指より上に出る');
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.byType(NoteMagnifier), findsNothing);
+    expect(find.text('終点'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
